@@ -1,0 +1,89 @@
+import type { ConnectionsResult, FramingResult, HardwareItem, JoineryItem, ProjectState } from '@/types';
+import { ROOF_COVERING_LOAD } from '../statics/materials';
+
+/**
+ * Derives connector quantities (hardware mode) or traditional carpentry joints
+ * (Zimmermannsverbindungen) from the generated framing.
+ */
+export function computeConnections(project: ProjectState, framing: FramingResult): ConnectionsResult {
+  const { params } = project;
+  const { timber } = params;
+  const members = framing.members;
+  const count = (pred: (m: (typeof members)[number]) => boolean): number => members.filter(pred).length;
+
+  const nPosts = count((m) => m.category === 'post');
+  const nRowPosts = framing.grid.xPositions.length * 2;
+  const nSidePosts = nPosts - nRowPosts;
+  const nRafters = count((m) => m.category === 'rafter');
+  const nBraces = count((m) => m.category === 'brace');
+  const nStuds = count((m) => m.category === 'stud');
+  const nPlates = count((m) => m.category === 'plate');
+  const plateLengthM = members.filter((m) => m.category === 'plate').reduce((s, m) => s + m.length, 0) / 1000;
+  const nHeaders = count((m) => m.category === 'header');
+  const nSills = count((m) => m.category === 'sill');
+  const nPurlinPieces = count((m) => m.group.startsWith('Purlin'));
+  const nSplices = Math.max(nPurlinPieces - 2, 0);
+  const nRails = count((m) => m.group.startsWith('Side rail'));
+  const claddingArea = framing.panels.filter((p) => p.kind === 'cladding').reduce((s, p) => s + p.areaM2, 0);
+  const roofArea = framing.roof.areaM2;
+  const covering = ROOF_COVERING_LOAD[params.loads.roofCovering];
+
+  const hardware: HardwareItem[] = [];
+  const joinery: JoineryItem[] = [];
+  const hw = (id: string, name: string, nameDe: string, spec: string, quantity: number, note?: string): void => {
+    if (quantity > 0) hardware.push({ id, name, nameDe, spec, quantity: Math.ceil(quantity), unit: 'pcs', note });
+  };
+  const jn = (id: string, name: string, nameDe: string, quantity: number, note?: string): void => {
+    if (quantity > 0) joinery.push({ id, name, nameDe, quantity: Math.ceil(quantity), note });
+  };
+
+  // Post bases are needed in both modes (timber must not touch concrete)
+  hw('post-base', 'Adjustable post base, hot-dip galvanised', 'Pfostenträger höhenverstellbar', `for ${timber.post.width}×${timber.post.height} mm`, nPosts);
+  hw('anchor', 'Heavy-duty concrete anchor', 'Schwerlastanker', 'M16 × 145 mm', nPosts, '1 per post base, min. 100 mm embedment');
+  hw('post-bolt', 'Hex bolt with nut & washers', 'Sechskantschraube', `M12 × ${timber.post.width + 40} mm`, nPosts * 2, '2 per post base');
+
+  if (params.connectionMode === 'hardware') {
+    hw('bracket', 'Angle bracket with rib 90×90×65', 'Winkelverbinder mit Rippe', '90×90×65×2.5 mm', nRowPosts * 2, '2 per post–purlin connection');
+    hw('bracket-nails', 'Connector nails', 'Kammnägel', '4.0 × 40 mm', nRowPosts * 2 * 20);
+    hw('rafter-anchor', 'Rafter–purlin anchor', 'Sparrenpfettenanker', '170 mm, left/right alternating', nRafters * 2, '1 per rafter bearing');
+    hw('rafter-anchor-nails', 'Connector nails', 'Kammnägel', '4.0 × 50 mm', nRafters * 2 * 12);
+    hw('brace-screws', 'Structural screws, countersunk', 'Konstruktionsschrauben', '8 × 240 mm', nBraces * 4, '2 per brace end');
+    hw('side-post-screws', 'Structural screws (side posts → rail)', 'Konstruktionsschrauben', '8 × 200 mm', nSidePosts * 2 + nRails * 4);
+    hw('stud-screws', 'Wood screws (toe-screwed studs)', 'Holzbauschrauben', '6 × 140 mm', nStuds * 4, '2 per stud end');
+    hw('header-screws', 'Structural screws (headers & sills)', 'Konstruktionsschrauben', '8 × 200 mm', nHeaders * 6 + nSills * 4);
+    hw('plate-anchor', 'Frame anchors (bottom plate → slab)', 'Rahmendübel', '10 × 135 mm', Math.max(nPlates * 2, plateLengthM / 0.8));
+    hw('splice-bolt', 'Splice bolts with washers', 'Stoßverschraubung', 'M12 × 200 mm', nSplices * 2);
+    hw('splice-plate', 'Flat connector plates', 'Flachverbinder', '300 × 40 × 3 mm', nSplices * 2);
+  } else {
+    jn('tenon-post', 'Mortise & tenon post → purlin', 'Zapfenverbindung Pfosten–Pfette', nRowPosts, 'Tenon 40 mm thick, 60 mm long, secured with oak peg');
+    jn('peg-post', 'Oak pegs Ø 20 mm', 'Holznägel', nRowPosts + nBraces * 2);
+    jn('birdsmouth', 'Birdsmouth seat (rafter on purlin)', 'Kerve', nRafters * 2, `${framing.roof.birdsmouthDepth} mm deep`);
+    jn('brace-tenon', 'Knee brace tenons (both ends)', 'Kopfband-Zapfen', nBraces * 2, 'Stub tenon with peg');
+    jn('scarf', 'Hooked scarf joint (purlin splice)', 'Hakenblatt', nSplices, 'Located over a post, bolted M12');
+    jn('lap-rail', 'Half-lap side rail → post', 'Überblattung Rähm–Pfosten', nRails * 2 + nSidePosts);
+    jn('stud-tenon', 'Stud tenons into plate & rail', 'Ständerzapfen', nStuds * 2);
+    jn('housing', 'Housed headers & sills', 'Eingelassene Stürze/Riegel', nHeaders * 2 + nSills * 2);
+    hw('rafter-screw', 'Rafter screws (secures birdsmouth)', 'Sparrenschrauben', '8 × 280 mm', nRafters * 2, '1 per rafter bearing');
+    hw('splice-bolt', 'Scarf joint bolts', 'Stoßverschraubung', 'M12 × 200 mm', nSplices * 2);
+    hw('plate-anchor', 'Frame anchors (bottom plate → slab)', 'Rahmendübel', '10 × 135 mm', Math.max(nPlates * 2, plateLengthM / 0.8));
+  }
+
+  // Cladding & roofing fixings (both modes)
+  if (claddingArea > 0) {
+    hw('cladding-screws', 'Stainless cladding screws', 'Fassadenschrauben A2', '4.5 × 50 mm', claddingArea * 25, '≈ 25 per m²');
+  }
+  if (roofArea > 0) {
+    if (params.loads.roofCovering === 'trapezoidal-sheet') {
+      hw('roof-screws', 'Self-drilling sheet screws with EPDM washer', 'Bohrschrauben mit Dichtscheibe', '6.3 × 45 mm', roofArea * 8, '≈ 8 per m²');
+    } else if (params.loads.roofCovering === 'polycarbonate') {
+      hw('roof-screws', 'Panel fixings with sealing caps', 'Stegplatten-Befestiger', '5 × 60 mm', roofArea * 6, '≈ 6 per m²');
+    } else if (params.loads.roofCovering === 'bitumen-shingles') {
+      hw('roof-nails', 'Roofing nails, galvanised', 'Dachpappnägel', '2.8 × 25 mm', roofArea * 50, '≈ 50 per m²');
+      hw('deck-screws', 'OSB deck screws', 'Holzbauschrauben', '4.5 × 60 mm', roofArea * 15);
+    } else {
+      hw('deck-screws', 'OSB deck screws', 'Holzbauschrauben', '4.5 × 60 mm', roofArea * 15, `${covering.label}: battens/counter battens not itemised`);
+    }
+  }
+
+  return { mode: params.connectionMode, hardware, joinery };
+}

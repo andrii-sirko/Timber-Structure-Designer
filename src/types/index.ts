@@ -1,0 +1,558 @@
+/**
+ * Core domain types for the Parametric Timber Structure Designer.
+ *
+ * Units: all lengths are millimetres (mm) unless stated otherwise.
+ * World coordinate system (right-handed, Y up):
+ *   X → structure length (left ↔ right)
+ *   Z → structure width (front ↔ rear) — the roof slopes down from front (H1) to rear (H2)
+ *   Y → up
+ * Length (L) and width (W) are OUTER dimensions of the post frame.
+ */
+
+export type Millimeters = number;
+
+export type WallId = 'front' | 'rear' | 'left' | 'right';
+export const WALL_IDS: readonly WallId[] = ['front', 'rear', 'left', 'right'] as const;
+
+/** Rectangular timber cross-section. `width` is the thickness, `height` the depth in bending. */
+export interface TimberSection {
+  width: Millimeters;
+  height: Millimeters;
+}
+
+export type StrengthClass = 'C16' | 'C24' | 'C30' | 'GL24h' | 'GL28c';
+
+export interface TimberSpecs {
+  /** Pfosten – square posts, e.g. 120×120 */
+  post: TimberSection;
+  /** Pfette / Rähm – purlins and top rails, e.g. 120×200 */
+  beam: TimberSection;
+  /** Sparren – rafters, e.g. 80×160 */
+  rafter: TimberSection;
+  /** Wandständer – wall studs, width along the wall, height = wall depth, e.g. 60×120 */
+  stud: TimberSection;
+  /** Kopfband – knee braces, e.g. 80×100 */
+  brace: TimberSection;
+  strengthClass: StrengthClass;
+}
+
+export interface Overhangs {
+  front: Millimeters;
+  rear: Millimeters;
+  left: Millimeters;
+  right: Millimeters;
+}
+
+export type RoofCovering =
+  | 'trapezoidal-sheet'
+  | 'polycarbonate'
+  | 'bitumen-shingles'
+  | 'roof-tiles'
+  | 'green-roof';
+
+export interface LoadSettings {
+  /** Characteristic ground snow load s_k in kN/m² (DE Zone 1 ≈ 0.65, Zone 2 ≈ 0.85, Zone 3 ≈ 1.10) */
+  snowLoad: number;
+  roofCovering: RoofCovering;
+  /** EC5 service class (1 = heated interior, 2 = covered exterior, 3 = fully exposed) */
+  serviceClass: 1 | 2 | 3;
+}
+
+export type OpeningType = 'door' | 'window' | 'passage';
+
+export interface Opening {
+  id: string;
+  type: OpeningType;
+  /** Offset of the rough opening's left edge along the wall, measured from the wall start corner */
+  x: Millimeters;
+  /** Sill height of the rough opening above the base (0 for doors and passages) */
+  y: Millimeters;
+  width: Millimeters;
+  height: Millimeters;
+  label?: string;
+}
+
+export interface Wall {
+  id: WallId;
+  /** true → wall is framed with studs and clad; false → open bay (carport style) */
+  closed: boolean;
+  openings: Opening[];
+}
+
+export type PartitionAxis = 'x' | 'z';
+
+/** Interior stud wall (Trennwand) under the roof that divides the footprint into sections. */
+export interface Partition {
+  id: string;
+  label: string;
+  /** 'x' – runs along the length (parallel to front/rear) at Z = offset; 'z' – runs across the width at X = offset */
+  axis: PartitionAxis;
+  /** World position of the wall's centre plane along the perpendicular axis */
+  offset: Millimeters;
+  /** Extent along the running axis in world coordinates (start < end) */
+  start: Millimeters;
+  end: Millimeters;
+  openings: Opening[];
+}
+
+/** Anything that can carry openings: an outer wall or a partition. */
+export interface OpeningHost {
+  closed: boolean;
+  openings: Opening[];
+}
+
+/** Selects either an outer wall (one of WALL_IDS) or a partition wall (its id). */
+export type WallKey = string;
+export const isOuterWall = (key: string): key is WallId => (WALL_IDS as readonly string[]).includes(key);
+
+export type VehicleBodyStyle = 'city' | 'compact' | 'sedan' | 'estate' | 'suv' | 'van' | 'pickup' | 'camper' | 'motorcycle';
+
+/** Catalogue entry with real-world exterior dimensions (approximate manufacturer data). */
+export interface VehicleModel {
+  id: string;
+  name: string;
+  style: VehicleBodyStyle;
+  length: Millimeters;
+  /** Body width without mirrors */
+  width: Millimeters;
+  /** Width including folded-out mirrors */
+  mirrorWidth: Millimeters;
+  height: Millimeters;
+}
+
+/** A vehicle placed on the ground plane. */
+export interface Vehicle {
+  id: string;
+  modelId: string;
+  /** World X/Z of the vehicle centre (mm) */
+  x: Millimeters;
+  z: Millimeters;
+  /** Rotation about the vertical axis in degrees; 0 = length axis along X, front pointing +X */
+  rotationDeg: number;
+  color: string;
+}
+
+export interface VehicleFit {
+  vehicleId: string;
+  /** Footprint incl. mirrors lies fully under the roof outline */
+  covered: boolean;
+  /** How far the footprint sticks out of the roof outline (0 when covered) */
+  uncoveredMm: Millimeters;
+  /** Headroom between the vehicle roof and the lowest roof member above it (negative = collision); Infinity when not under the roof */
+  clearance: Millimeters;
+  postCollision: boolean;
+  /** Labels of closed outer walls / partitions the footprint crosses */
+  wallCollisions: string[];
+  status: 'ok' | 'warning' | 'fail';
+  messages: string[];
+}
+
+export type ConnectionMode = 'hardware' | 'traditional';
+
+export interface StructureParams {
+  length: Millimeters;
+  width: Millimeters;
+  /** H1 – top of front purlin (high eave) */
+  frontHeight: Millimeters;
+  /** H2 – top of rear purlin (low eave) */
+  rearHeight: Millimeters;
+  overhangs: Overhangs;
+  /** Maximum clear post spacing along purlin rows (default 3000) – used when postsPerRow is null */
+  maxPostSpacing: Millimeters;
+  /** Explicit number of posts per purlin row (≥ 2); null = automatic from maxPostSpacing */
+  postsPerRow: number | null;
+  /** Maximum rafter centre spacing (default 800) */
+  maxRafterSpacing: Millimeters;
+  /** Maximum stud centre spacing in closed walls (default 625) */
+  maxStudSpacing: Millimeters;
+  /** Maximum purchasable stock length – longer purlins are spliced over a post */
+  maxStockLength: Millimeters;
+  /** Generate 45° knee braces (Kopfbänder) between posts and purlins */
+  braces: boolean;
+  /** Knee brace leg length (horizontal = vertical projection) */
+  braceLeg: Millimeters;
+  connectionMode: ConnectionMode;
+  timber: TimberSpecs;
+  loads: LoadSettings;
+}
+
+export interface ProjectState {
+  id: string;
+  name: string;
+  params: StructureParams;
+  walls: Record<WallId, Wall>;
+  partitions: Partition[];
+  vehicles: Vehicle[];
+  postOverrides: Record<string, PostOverride>;
+}
+
+export interface PostOverride {
+  position?: Millimeters;
+  removed?: boolean;
+}
+
+export interface SavedProject {
+  id: string;
+  name: string;
+  savedAt: string; // ISO date
+  project: ProjectState;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Framing output
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export type MemberCategory =
+  | 'post'
+  | 'beam'
+  | 'rafter'
+  | 'stud'
+  | 'plate'
+  | 'header'
+  | 'sill'
+  | 'brace';
+
+/** Angle of each end cut in degrees measured from a square (90°) cut. 0 = square. */
+export interface EndCuts {
+  start: number;
+  end: number;
+}
+
+/** A 2D point in a member's local profile plane: u along the length axis, v along the `up` axis. */
+export interface ProfilePoint {
+  u: number;
+  v: number;
+}
+
+/**
+ * A single solid timber member. Geometry is described by a local frame:
+ *  - `start`      world position (mm) of the member axis at its start end
+ *  - `direction`  unit vector along the member length (local +u)
+ *  - `up`         unit vector along the section height (local +v)
+ *  - the section width is extruded symmetrically along direction × up
+ * `profile` is the exact outline in the (u, v) plane, including end cuts and notches.
+ */
+export interface Member {
+  id: string;
+  category: MemberCategory;
+  /** English display name, e.g. "Rafter" */
+  name: string;
+  /** German trade term, e.g. "Sparren" */
+  nameDe: string;
+  /** Grouping label for the cut list, e.g. "Rafter (Sparren)" */
+  group: string;
+  section: TimberSection;
+  /** Overall cut length: the longest edge of the piece (mm) */
+  length: Millimeters;
+  start: Vec3;
+  direction: Vec3;
+  up: Vec3;
+  cuts: EndCuts;
+  profile: ProfilePoint[];
+  wallId?: WallId;
+  /** Set for members of an interior partition wall */
+  partitionId?: string;
+  notes?: string;
+}
+
+/** Flat sheet-like element (cladding panel, roof deck) — rendered as an oriented slab. */
+export interface Panel {
+  id: string;
+  kind: 'cladding' | 'roof';
+  wallId?: WallId;
+  partitionId?: string;
+  /** Box centre when `size` is used; outline origin when `outline` is used (mm) */
+  anchor: Vec3;
+  /** Local +u axis */
+  direction: Vec3;
+  /** Local +v axis */
+  up: Vec3;
+  /** Extrusion / thickness axis */
+  normal: Vec3;
+  /** Box dimensions [along direction, along up, thickness along normal] in mm */
+  size?: [number, number, number];
+  /** Outline with holes in (u, v) relative to anchor, extruded along normal by thickness */
+  outline?: { outer: ProfilePoint[]; holes: ProfilePoint[][]; thickness: number };
+  /** Net area in m² (openings subtracted) */
+  areaM2: number;
+}
+
+export interface RoofGeometry {
+  /** Roof pitch angle in degrees (positive, sloping down towards the rear) */
+  pitchDeg: number;
+  pitchRad: number;
+  /** Birdsmouth (Kerve) depth perpendicular to the rafter */
+  birdsmouthDepth: Millimeters;
+  /** Number of rafters and their centre spacing */
+  rafterCount: number;
+  rafterSpacing: Millimeters;
+  /** Horizontal run of the rafters (W + overhangs) */
+  rafterRun: Millimeters;
+  /** Sloped length of the rafters */
+  rafterLength: Millimeters;
+  /** Highest point of the roof (top of roof deck at the front) */
+  ridgeHeight: Millimeters;
+  /** Lowest eave height at the rear (underside of rafter tail) */
+  eaveHeight: Millimeters;
+  /** Gross roof area in m² (sloped) */
+  areaM2: number;
+}
+
+export interface PostGrid {
+  /** Post axis positions along X for the front & rear rows */
+  xPositions: Millimeters[];
+  frontXPositions: Millimeters[];
+  frontXKeys: string[];
+  rearXPositions: Millimeters[];
+  rearXKeys: string[];
+  /** Post axis positions along Z for side rows (only when side walls are closed and W > max spacing) */
+  zPositions: Millimeters[];
+  leftZPositions: Millimeters[];
+  leftZKeys: string[];
+  rightZPositions: Millimeters[];
+  rightZKeys: string[];
+  postSpacing: Millimeters;
+}
+
+export interface FramingWarning {
+  level: 'info' | 'warning' | 'error';
+  message: string;
+  wallId?: WallId;
+  partitionId?: string;
+  openingId?: string;
+}
+
+export interface FramingResult {
+  members: Member[];
+  panels: Panel[];
+  roof: RoofGeometry;
+  grid: PostGrid;
+  warnings: FramingWarning[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Statics
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type StaticsStatus = 'ok' | 'warning' | 'fail';
+
+export interface StaticsCheck {
+  id: string;
+  element: string;
+  elementDe: string;
+  section: TimberSection;
+  /** Effective span in mm */
+  span: Millimeters;
+  /** Design line load in kN/m (ULS) */
+  loadUls: number;
+  /** Characteristic line load in kN/m (SLS) */
+  loadSls: number;
+  /** Bending utilisation σ_m,d / f_m,d (or compression for posts) */
+  stressUtil: number;
+  /** Deflection utilisation w_fin / w_limit */
+  deflectionUtil: number;
+  /** Final deflection in mm */
+  deflection: Millimeters;
+  deflectionLimit: Millimeters;
+  utilisation: number;
+  status: StaticsStatus;
+  recommendation?: string;
+  detail: string;
+}
+
+export interface StaticsResult {
+  status: StaticsStatus;
+  checks: StaticsCheck[];
+  loads: {
+    deadLoad: number; // kN/m² on plan (covering + deck + rafters)
+    snowLoadRoof: number; // kN/m² on plan (μ·s_k)
+    totalCharacteristic: number;
+    totalDesign: number;
+    kmod: number;
+    kdef: number;
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bill of materials / cut list / hardware
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BomLine {
+  category: MemberCategory | 'sheathing' | 'roofing';
+  label: string;
+  labelDe: string;
+  section?: TimberSection;
+  count: number;
+  totalLengthM: number;
+  volumeM3: number;
+  areaM2?: number;
+  /** Estimated timber mass in kg (density from strength class) */
+  massKg: number;
+}
+
+export interface BomResult {
+  lines: BomLine[];
+  totalVolumeM3: number;
+  totalLengthM: number;
+  totalMassKg: number;
+}
+
+export interface CutListItem {
+  pos: number;
+  group: string;
+  name: string;
+  nameDe: string;
+  section: TimberSection;
+  length: Millimeters;
+  cuts: EndCuts;
+  quantity: number;
+  notes?: string;
+  memberIds: string[];
+  /** Walls the grouped pieces belong to (for display) */
+  walls?: string[];
+}
+
+export interface HardwareItem {
+  id: string;
+  name: string;
+  nameDe: string;
+  spec: string;
+  quantity: number;
+  unit: 'pcs' | 'm';
+  note?: string;
+}
+
+export interface JoineryItem {
+  id: string;
+  name: string;
+  nameDe: string;
+  quantity: number;
+  note?: string;
+}
+
+export interface ConnectionsResult {
+  mode: ConnectionMode;
+  hardware: HardwareItem[];
+  joinery: JoineryItem[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pricing
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * User-editable unit prices (EUR) used to cost out the BOM and hardware list.
+ * Stored per member category so the price stays valid when a section's dimensions change;
+ * the UI shows and edits the equivalent EUR-per-running-metre price for the project's
+ * current section (matching how timber yards actually quote — EUR/lfm, not EUR/m³).
+ */
+export interface MaterialPrices {
+  /** Sawn/glulam timber, EUR per m³, keyed by member category (post, beam, rafter, …) */
+  timberPerM3: Record<MemberCategory, number>;
+  /** Wall cladding boards, EUR per m² of coverage */
+  claddingBoardPerM2: number;
+  /** Roof deck boarding (OSB) under heavy coverings, EUR per m² of coverage */
+  roofDeckPerM2: number;
+  /** Roof covering material, EUR per m², keyed by covering type */
+  roofingPerM2: Record<RoofCovering, number>;
+  /** Hardware & fixings, EUR per piece (or per metre for 'm'-unit items), keyed by HardwareItem.id */
+  hardwarePerUnit: Record<string, number>;
+}
+
+export interface PricingLine {
+  /** Stable key identifying which price field this line edits (see PriceFieldRef) */
+  id: string;
+  label: string;
+  labelDe?: string;
+  quantity: number;
+  unit: 'm' | 'm²' | 'pcs';
+  unitPrice: number;
+  lineTotal: number;
+  /** How to look up / write back the editable price for this line */
+  priceRef: PriceFieldRef;
+}
+
+/** Points at one field inside MaterialPrices so the UI can read/write it generically. */
+export type PriceFieldRef =
+  | { kind: 'timber'; category: MemberCategory; section: TimberSection }
+  | { kind: 'claddingBoard' }
+  | { kind: 'roofDeck' }
+  | { kind: 'roofing'; covering: RoofCovering }
+  | { kind: 'hardware'; hardwareId: string };
+
+export interface PricingResult {
+  timberLines: PricingLine[];
+  hardwareLines: PricingLine[];
+  materialTotal: number;
+  hardwareTotal: number;
+  grandTotal: number;
+}
+
+export interface DerivedModel {
+  framing: FramingResult;
+  statics: StaticsResult;
+  bom: BomResult;
+  cutList: CutListItem[];
+  connections: ConnectionsResult;
+  vehicles: VehicleFit[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// View state
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CameraPreset = 'iso' | 'top' | 'front' | 'rear' | 'left' | 'right' | 'wall';
+export type HighlightMode = 'solid' | 'edges' | 'wireframe';
+
+export interface LayerVisibility {
+  frame: boolean;
+  cladding: boolean;
+  roof: boolean;
+  dimensions: boolean;
+  grid: boolean;
+  vehicles: boolean;
+}
+
+export interface ViewSettings {
+  layers: LayerVisibility;
+  highlight: HighlightMode;
+  cameraPreset: CameraPreset;
+  orthographic: boolean;
+  measureMode: boolean;
+  /** Show distances from the clicked member to its surrounding members */
+  neighbourMode: boolean;
+  /** Largest clear gap (mm) still reported as a neighbour */
+  neighbourRadius: Millimeters;
+  /** Maximum number of neighbours shown at once */
+  neighbourLimit: number;
+}
+
+/** One measured relation between the inspected member and a nearby member. */
+export interface NeighbourLink {
+  memberId: string;
+  name: string;
+  nameDe: string;
+  category: MemberCategory;
+  /** Clear gap between the two timbers, face to face (mm); 0 when they touch */
+  gap: Millimeters;
+  /** Axis-to-axis spacing (mm) — centre distance, perpendicular for parallel members */
+  axisDistance: Millimeters;
+  /** true when both members run in the same direction (stud / rafter spacing applies) */
+  parallel: boolean;
+  /** Closest point on the inspected member (mm, world) */
+  a: Vec3;
+  /** Closest point on the neighbour (mm, world) */
+  b: Vec3;
+}
+
+export interface Measurement {
+  id: string;
+  a: Vec3;
+  b: Vec3;
+}

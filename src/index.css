@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-timber-50: #fbf6ee;
+  --color-timber-200: #e9d3ab;
+  --color-timber-400: #c9995a;
+  --color-timber-600: #9a6a34;
+  --color-timber-800: #5d3d1c;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-950 text-slate-100 antialiased;
+  overscroll-behavior: none;
+}
+
+/* Thin scrollbars for sidebars */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: theme(--color-slate-700) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: theme(--color-slate-700);
+  border-radius: 9999px;
+}
+
+/* Remove number input spinners for a cleaner parametric UI */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Prevent text selection while dragging in the 3D viewport */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
