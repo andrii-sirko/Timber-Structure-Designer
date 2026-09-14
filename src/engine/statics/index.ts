@@ -746,19 +746,28 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
 
   // ── Roof uplift → anchor tension ─────────────────────────────────────────
   {
+    // Post self-weight (kN) hangs on the anchor too: section area × tallest post of the row.
+    const postSelf = (height: number): number => (ctx.density * Apost * height) / 1e9;
     let worstRow = purlinLoads[0];
     let worstUtil = 0;
     let worstNet = 0;
-    for (const load of purlinLoads) {
+    let worstG = 0;
+    let worstPostG = 0;
+    for (const post of postRows) {
+      const load = post.load;
       const { span: gap, cantilever: gapCantilever } = load.row.supports;
       const spanM = (gap + gapCantilever) / 1000;
       const up = GAMMA_Q * load.qvUp * spanM;
-      const down = GAMMA_G_FAVOURABLE * load.qvG * spanM;
+      const roofG = load.qvG * spanM;
+      const postG = postSelf(post.height);
+      const down = GAMMA_G_FAVOURABLE * (roofG + postG);
       const util = down > 0 ? up / down : 0;
       if (util > worstUtil) {
         worstUtil = util;
         worstRow = load;
         worstNet = up - down;
+        worstG = down;
+        worstPostG = postG;
       }
     }
     const spanM = (worstRow.row.supports.span + worstRow.row.supports.cantilever) / 1000;
@@ -781,7 +790,7 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
         worstUtil > 1
           ? `Every post anchor and purlin-to-post joint must resist ${kn(worstNet)} tension (net uplift). Use tension-rated post shoes and screw / bolt the purlins and rafters down.`
           : undefined,
-      detail: `Canopy suction c_f = ${fmt(ctx.canopy.up, 2)} → ${fmt(windUp, 2)} kN/m² plan (q_p = ${fmt(q, 2)} kN/m²). ${worstRow.row.label}: uplift 1.5·W = ${kn(GAMMA_Q * worstRow.qvUp * spanM)} vs. dead load 1.0·G = ${kn(GAMMA_G_FAVOURABLE * worstRow.qvG * spanM)} per post (${pct(worstUtil)}). ${worstUtil > 1 ? `Net ${kn(worstNet)} tension per post.` : 'Dead load holds the roof down; anchors take shear only.'} Light coverings (${ROOF_COVERING_LOAD[loads.roofCovering].label}) are governed by uplift, not snow.`,
+      detail: `Canopy suction c_f = ${fmt(ctx.canopy.up, 2)} → ${fmt(windUp, 2)} kN/m² plan (q_p = ${fmt(q, 2)} kN/m²). ${worstRow.row.label}: uplift 1.5·W = ${kn(GAMMA_Q * worstRow.qvUp * spanM)} vs. dead load 1.0·G = ${kn(worstG)} per post (roof + purlin ${kn(GAMMA_G_FAVOURABLE * worstRow.qvG * spanM)}, post ${kn(GAMMA_G_FAVOURABLE * worstPostG)}) (${pct(worstUtil)}). ${worstUtil > 1 ? `Net ${kn(worstNet)} tension per post.` : 'Dead load holds the roof down; anchors take shear only.'} Light coverings (${ROOF_COVERING_LOAD[loads.roofCovering].label}) are governed by uplift, not snow.`,
     });
   }
 

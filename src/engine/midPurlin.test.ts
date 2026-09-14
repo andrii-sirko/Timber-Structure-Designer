@@ -13,22 +13,47 @@ function params(overrides: Partial<ReturnType<typeof createDefaultProject>['para
 test('classic: automatic mid purlin is replaced by a manual position', () => {
   const auto = computeRoofLines(params().params);
   assert.equal(auto.midPurlinZ.length, 1);
-  const manual = computeRoofLines(params({ midPurlinPositions: [3000] }).params);
-  assert.deepEqual(manual.midPurlinZ, [3000]);
-  assert.equal(manual.purlins[1].z, 3000);
+  const manual = computeRoofLines(params({ midPurlinPositions: [3500] }).params);
+  assert.deepEqual(manual.midPurlinZ, [3500]);
+  assert.equal(manual.purlins[1].z, 3500);
 });
 
-test('manual position is clamped clear of the eave purlins', () => {
+test('manual position is clamped clear of the eave purlins and within the rafter length', () => {
   const p = params({ midPurlinPositions: [50] }).params;
   const b = midPurlinBounds(p);
-  assert.deepEqual(computeRoofLines(p).midPurlinZ, [b.lo]);
-  assert.deepEqual(computeRoofLines({ ...p, midPurlinPositions: [99999] }).midPurlinZ, [b.hi]);
+  const { cos } = computeRoofLines(p);
+  const reach = p.maxRafterLength * cos;
+  const lo = Math.round(Math.max(b.lo, p.width + p.overhangs.rear - reach));
+  const hi = Math.round(Math.min(b.hi, -p.overhangs.front + reach));
+  assert.ok(lo > b.lo && hi < b.hi, 'the rafter length is the binding limit on a 9 m roof');
+  assert.deepEqual(computeRoofLines(p).midPurlinZ, [lo]);
+  assert.deepEqual(computeRoofLines({ ...p, midPurlinPositions: [99999] }).midPurlinZ, [hi]);
 });
 
 test('null keeps the automatic split; neighbours keep their order', () => {
   assert.deepEqual(applyMidPurlinOverrides([3000, 6000], [null, 3100], { lo: 500, hi: 8500, minGap: 220 }), [3000, 3220]);
   assert.deepEqual(applyMidPurlinOverrides([3000, 6000], [7000, null], { lo: 500, hi: 8500, minGap: 220 }), [5780, 6000]);
   assert.deepEqual(applyMidPurlinOverrides([3000], undefined, { lo: 500, hi: 8500, minGap: 220 }), [3000]);
+});
+
+test('manual position is clamped so no rafter piece exceeds the max rafter length', () => {
+  const span = { start: -200, end: 9000, maxPiece: 6000 };
+  assert.deepEqual(applyMidPurlinOverrides([4400], [2110], { lo: 500, hi: 8500, minGap: 220 }, span), [3000]);
+  assert.deepEqual(applyMidPurlinOverrides([4400], [7000], { lo: 500, hi: 8500, minGap: 220 }, span), [5800]);
+  assert.deepEqual(applyMidPurlinOverrides([4400], [4000], { lo: 500, hi: 8500, minGap: 220 }, span), [4000]);
+  // the length limit is dropped when it cannot be met, the row still stays inside the bounds
+  assert.deepEqual(applyMidPurlinOverrides([4400], [50], { lo: 500, hi: 8500, minGap: 220 }, { ...span, maxPiece: 2000 }), [500]);
+
+  const sloped = params({ roofScheme: 'sloped-purlins', width: 5700, length: 8800, midPurlinPositions: [2110] }).params;
+  const roof = computeRoofLines(sloped);
+  assert.deepEqual(roof.midPurlinX, [8800 + sloped.overhangs.right - 6000]);
+  const framing = buildFraming({ ...params(), params: sloped });
+  assert.ok(framing.warnings.every((w) => !w.message.includes('exceeds the max rafter length')));
+
+  const classic = params({ midPurlinPositions: [1000] }).params;
+  const lines = computeRoofLines(classic);
+  const rear = classic.width + classic.overhangs.rear;
+  assert.ok((rear - lines.midPurlinZ[0]) / lines.cos <= 6000 + 1);
 });
 
 test('framing: mid purlin members and their posts follow the manual position', () => {

@@ -183,9 +183,9 @@ export function WallEditor() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <NumberField label="X offset" value={o.x} min={olim.minX} max={olim.maxRight - o.width} step={10} compact hint={`${Math.round(olim.minX)}–${Math.round(olim.maxRight - o.width)}`} onChange={(x) => updateOpening(selectedWallId, o.id, { x })} />
-                  <NumberField label="Y (sill)" value={o.y} min={0} step={10} compact disabled={o.type !== 'window'} onChange={(y) => updateOpening(selectedWallId, o.id, { y })} />
-                  <NumberField label="Width" value={o.width} min={300} step={10} compact onChange={(width) => updateOpening(selectedWallId, o.id, { width })} />
-                  <NumberField label="Height" value={o.height} min={300} step={10} compact onChange={(height) => updateOpening(selectedWallId, o.id, { height })} />
+                  <NumberField label="Y (sill)" value={o.y} min={0} step={10} range={[0, 2500]} compact disabled={o.type !== 'window'} onChange={(y) => updateOpening(selectedWallId, o.id, { y })} />
+                  <NumberField label="Width" value={o.width} min={300} step={10} range={[300, 5000]} compact onChange={(width) => updateOpening(selectedWallId, o.id, { width })} />
+                  <NumberField label="Height" value={o.height} min={300} step={10} range={[300, 3500]} compact onChange={(height) => updateOpening(selectedWallId, o.id, { height })} />
                 </div>
               </div>
             );

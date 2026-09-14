@@ -21,6 +21,7 @@ import { PanelMesh } from './PanelMesh';
 import { TimberMember } from './TimberMember';
 import { VehicleMesh } from './VehicleMesh';
 import { PavedAreaMesh } from './PavedAreaMesh';
+import { WallResizeHandles } from './WallResizeHandles';
 
 function HoverTooltip({ members }: { members: Member[] }) {
   const hoveredId = useProjectStore((s) => s.hoveredMemberId);
@@ -331,6 +332,7 @@ export function Scene({ model }: { model: DerivedModel }) {
         {layers.dimensions && <DimensionLines model={model} />}
         {draggingPartition && <PartitionDragDistances partition={draggingPartition} params={project.params} />}
         {draggingMidPurlin !== null && <MidPurlinDragDistances index={draggingMidPurlin} model={model} params={project.params} />}
+        <WallResizeHandles params={project.params} />
         <OpeningsEditor />
         <MeasureTool />
         <NeighbourDistances subject={subject} links={links} members={model.framing.members} />

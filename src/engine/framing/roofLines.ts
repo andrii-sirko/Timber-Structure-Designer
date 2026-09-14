@@ -72,6 +72,7 @@ export function computeRoofLines(params: StructureParams): RoofLines {
       computeMidRows(params.length + params.overhangs.left + params.overhangs.right, params.maxRafterLength, MAX_MID_PURLINS, { ...xBounds, origin: -params.overhangs.left }),
       params.midPurlinPositions,
       xBounds,
+      { start: -params.overhangs.left, end: params.length + params.overhangs.right, maxPiece: params.maxRafterLength },
     );
     return {
       scheme,
@@ -150,6 +151,7 @@ export function computeMidPurlinZ(params: StructureParams, cos: number): number[
     computeMidRows((z1 - z0) / cos, params.maxRafterLength, MAX_MID_PURLINS, { ...bounds, origin: z0, cos }),
     params.midPurlinPositions,
     bounds,
+    { start: z0, end: z1, maxPiece: params.maxRafterLength * cos },
   );
 }
 
@@ -164,19 +166,43 @@ export function midPurlinBounds(params: StructureParams): { lo: number; hi: numb
   return { lo: pw / 2 + minGap, hi: span - pw / 2 - minGap, minGap };
 }
 
+/** Plan-axis extent of the rafter run and the longest piece (plan projection) a split may leave. */
+export interface RafterSpan {
+  start: number;
+  end: number;
+  maxPiece: number;
+}
+
 /**
  * Replace automatic split positions by the user's manual ones (index-matched). Each override is
  * clamped inside the bounds and kept `minGap` clear of the neighbouring rows so the row order
- * (and with it the `mid<i>` post override keys) never changes.
+ * (and with it the `mid<i>` post override keys) never changes. With a `span` the override is
+ * additionally clamped so that neither adjacent rafter piece exceeds `maxPiece`; when the two
+ * constraints cannot both be met the length limit is dropped (the framing generator warns).
  */
-export function applyMidPurlinOverrides(defaults: number[], overrides: (number | null)[] | undefined, bounds: { lo: number; hi: number; minGap: number }): number[] {
+export function applyMidPurlinOverrides(
+  defaults: number[],
+  overrides: (number | null)[] | undefined,
+  bounds: { lo: number; hi: number; minGap: number },
+  span?: RafterSpan,
+): number[] {
   if (!overrides?.length) return defaults;
   const out = defaults.slice();
   for (let i = 0; i < out.length; i++) {
     const o = overrides[i];
     if (o === null || o === undefined || !Number.isFinite(o)) continue;
-    const min = i > 0 ? out[i - 1] + bounds.minGap : bounds.lo;
-    const max = i < out.length - 1 ? out[i + 1] - bounds.minGap : bounds.hi;
+    let min = i > 0 ? out[i - 1] + bounds.minGap : bounds.lo;
+    let max = i < out.length - 1 ? out[i + 1] - bounds.minGap : bounds.hi;
+    if (span) {
+      const left = i > 0 ? out[i - 1] : span.start;
+      const right = i < out.length - 1 ? out[i + 1] : span.end;
+      const lengthMin = Math.max(min, right - span.maxPiece);
+      const lengthMax = Math.min(max, left + span.maxPiece);
+      if (lengthMin <= lengthMax) {
+        min = lengthMin;
+        max = lengthMax;
+      }
+    }
     out[i] = Math.round(Math.min(Math.max(o, min), Math.max(min, max)));
   }
   return out;

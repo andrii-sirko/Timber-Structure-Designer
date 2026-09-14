@@ -8,8 +8,9 @@ import { edgeMidpoint, offsetEdge } from '@/engine/paving';
 import { MM } from './materials';
 import { Dimension } from './DimensionLines';
 import { useMeasureStore } from './MeasureTool';
+import { DRAG_SNAP } from '@/engine/postDrag';
 
-const SNAP = 50;
+const SNAP = DRAG_SNAP;
 const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 /** Slab top sits just above the ground grid so it never z-fights with it. */
 const TOP_Y = 0.006;

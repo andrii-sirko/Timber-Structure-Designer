@@ -156,11 +156,11 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
       <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
         {activeTab === 'dimensions' && <>
         <Section title="Structure shape" icon={Ruler}>
-          <div className="grid grid-cols-2 gap-2">
-            <NumberField label="Length L" value={params.length} min={MIN_PLAN_DIM} step={100} onChange={(v) => setParam('length', v)} />
-            <NumberField label="Width W" value={params.width} min={MIN_PLAN_DIM} step={100} onChange={(v) => setParam('width', v)} />
-            <NumberField label={`High eave H1 (${highWall})`} value={params.frontHeight} min={minWallHeight(params)} step={50} onChange={(v) => setParam('frontHeight', v)} />
-            <NumberField label={`Low eave H2 (${lowWall})`} value={params.rearHeight} min={minWallHeight(params)} max={params.frontHeight} step={50} onChange={(v) => setParam('rearHeight', v)} />
+          <div className="grid grid-cols-1 gap-2">
+            <NumberField label="Length L" value={params.length} min={MIN_PLAN_DIM} step={100} range={[MIN_PLAN_DIM, 20000]} onChange={(v) => setParam('length', v)} />
+            <NumberField label="Width W" value={params.width} min={MIN_PLAN_DIM} step={100} range={[MIN_PLAN_DIM, 15000]} onChange={(v) => setParam('width', v)} />
+            <NumberField label={`High eave H1 (${highWall})`} value={params.frontHeight} min={minWallHeight(params)} step={50} range={[minWallHeight(params), 6000]} onChange={(v) => setParam('frontHeight', v)} />
+            <NumberField label={`Low eave H2 (${lowWall})`} value={params.rearHeight} min={minWallHeight(params)} max={params.frontHeight} step={50} range={[minWallHeight(params), 6000]} onChange={(v) => setParam('rearHeight', v)} />
           </div>
           <SelectField<RoofDirection>
             label="Roof slopes down towards"

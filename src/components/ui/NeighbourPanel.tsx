@@ -20,7 +20,7 @@ export function NeighbourPanel({ model }: { model: DerivedModel }) {
   if (!neighbourMode || !subject) return null;
 
   return (
-    <div className="pointer-events-auto absolute bottom-3 left-3 w-72 rounded-lg border border-cyan-500/40 bg-slate-950/90 shadow-xl backdrop-blur">
+    <div className="pointer-events-auto absolute w-72 rounded-lg border border-cyan-500/40 bg-slate-950/90 shadow-xl backdrop-blur" style={{ left: 'calc(var(--panel-l, 0px) + 0.75rem)', bottom: 'calc(var(--sheet-h, 0px) + 0.75rem)' }}>
       <div className="flex items-start gap-2 border-b border-slate-800 px-3 py-2">
         <Ruler className="mt-0.5 h-4 w-4 shrink-0 text-cyan-400" />
         <div className="min-w-0 flex-1">

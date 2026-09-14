@@ -74,11 +74,11 @@ export function ViewportControls({ canvasContainer }: { canvasContainer: React.R
     a.click();
   };
 
-  const group = 'flex flex-col gap-1 rounded-lg border border-slate-800 bg-slate-950/80 p-1 backdrop-blur';
+  const group = 'flex flex-col flex-wrap gap-1 rounded-lg border border-slate-800 bg-slate-950/80 p-1 backdrop-blur';
 
   return (
-    <div className="pointer-events-none absolute inset-0 flex justify-between p-3">
-      <div className="pointer-events-auto flex flex-col gap-2 self-start">
+    <div className="pointer-events-none absolute inset-0 flex justify-between p-3" style={{ paddingLeft: 'calc(var(--panel-l, 0px) + 0.75rem)', paddingBottom: 'calc(var(--sheet-h, 0px) + 0.75rem)' }}>
+      <div className="pointer-events-auto flex max-h-full flex-col gap-2 self-start overflow-y-auto scroll-thin">
         <div className={group} title="Camera presets">
           {PRESETS.map((p) => (
             <IconButton key={p.id} icon={p.icon} title={p.label} active={view.cameraPreset === p.id} onClick={() => setCameraPreset(p.id)} />
@@ -98,7 +98,7 @@ export function ViewportControls({ canvasContainer }: { canvasContainer: React.R
         </div>
       </div>
 
-      <div className="pointer-events-auto flex flex-col items-end gap-2 self-start">
+      <div className="pointer-events-auto flex max-h-full max-w-[60%] flex-col items-end gap-2 self-start overflow-y-auto scroll-thin">
         <div className={cx(group, 'flex-row')} title="Render mode">
           {HIGHLIGHTS.map((h) => (
             <IconButton key={h.id} icon={h.icon} title={h.label} active={view.highlight === h.id} onClick={() => setHighlight(h.id)} />

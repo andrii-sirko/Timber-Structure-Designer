@@ -9,8 +9,9 @@ import { toRad } from '@/engine/geometry';
 import { MM } from './materials';
 import { clipSilhouette, GLASS, SILHOUETTES, WHEELS } from './vehicleShapes';
 import { useMeasureStore } from './MeasureTool';
+import { DRAG_SNAP } from '@/engine/postDrag';
 
-const SNAP = 50;
+const SNAP = DRAG_SNAP;
 const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
 let glassMaterial: THREE.MeshStandardMaterial | null = null;

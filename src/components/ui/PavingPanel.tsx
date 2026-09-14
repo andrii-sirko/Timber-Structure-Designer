@@ -78,8 +78,8 @@ export function PavingPanel({ model }: { model: DerivedModel }) {
             {summary?.selfIntersecting && <p className="text-[11px] text-rose-300">Edges cross each other – untangle the corners, the area figure is not reliable.</p>}
 
             <div className="grid grid-cols-2 gap-2">
-              <NumberField label="Extent X" value={width} min={100} step={100} compact onChange={(v) => resizePavedArea(a.id, v, depth)} />
-              <NumberField label="Extent Z" value={depth} min={100} step={100} compact onChange={(v) => resizePavedArea(a.id, width, v)} />
+              <NumberField label="Extent X" value={width} min={100} step={100} range={[100, 30000]} compact onChange={(v) => resizePavedArea(a.id, v, depth)} />
+              <NumberField label="Extent Z" value={depth} min={100} step={100} range={[100, 30000]} compact onChange={(v) => resizePavedArea(a.id, width, v)} />
               <NumberField label="Origin X" value={summary?.bounds.minX ?? 0} step={50} compact onChange={(v) => translatePavedArea(a.id, v - (summary?.bounds.minX ?? 0), 0)} />
               <NumberField label="Origin Z" value={summary?.bounds.minZ ?? 0} step={50} compact onChange={(v) => translatePavedArea(a.id, 0, v - (summary?.bounds.minZ ?? 0))} />
             </div>
