@@ -15,9 +15,10 @@ export function StaticsBadge({ statics }: { statics: StaticsResult }) {
   const openResults = useUiStore((s) => s.openResults);
   const runAutoFix = useAutoFixStatics();
   const { run: runCostOptimization, available: costOptimizationAvailable } = useCostOptimizationStatics();
-  const worst = statics.checks.reduce(
+  const members = statics.checks.filter((c) => c.kind !== "uplift");
+  const worst = members.reduce(
     (m, c) => (c.utilisation > m.utilisation ? c : m),
-    statics.checks[0],
+    members[0],
   );
   const Icon =
     statics.status === "ok"

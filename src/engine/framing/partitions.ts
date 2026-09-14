@@ -2,7 +2,8 @@ import type { Partition, PartitionAxis, StructureParams } from '@/types';
 import { clamp, roundTo } from '../geometry';
 import { canonicalDims, isSideDirection } from '../orientation';
 
-export const MIN_PARTITION_LENGTH = 600;
+/** Shortest partition (mm): room for the two end studs and one bay between them. */
+export const MIN_PARTITION_LENGTH = 200;
 const SNAP = 10;
 
 export interface PartitionLimits {

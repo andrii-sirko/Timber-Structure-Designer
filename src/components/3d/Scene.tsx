@@ -170,6 +170,13 @@ export function Scene({ model }: { model: DerivedModel }) {
   }, [removePartition, selectMember, selectedWallId]);
 
   const centre: [number, number, number] = [(bounds.min.x + bounds.max.x) / 2, 0, (bounds.min.z + bounds.max.z) / 2];
+  // Scene dressing scales with the structure so very large footprints are neither fogged out nor
+  // cut off by the shadow frustum / ground plane (sizes in metres, sized for the default 6×3 m).
+  const extent = Math.max(12, bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z, bounds.max.y - bounds.min.y);
+  const fogNear = extent * 3;
+  const fogFar = extent * 9;
+  const shadowHalf = extent * 1.2;
+  const groundSize = extent * 7;
 
   return (
     <Canvas
@@ -187,25 +194,25 @@ export function Scene({ model }: { model: DerivedModel }) {
       className={measureMode ? 'cursor-crosshair' : undefined}
     >
       <color attach="background" args={['#0b1220']} />
-      <fog attach="fog" args={['#0b1220', 35, 110]} />
+      <fog attach="fog" args={['#0b1220', fogNear, fogFar]} />
       {orthographic ? (
-        <OrthographicCamera makeDefault position={[8, 8, -8]} near={0.01} far={500} zoom={60} />
+        <OrthographicCamera makeDefault position={[8, 8, -8]} near={0.01} far={Math.max(500, extent * 40)} zoom={60} />
       ) : (
-        <PerspectiveCamera makeDefault position={[8, 6, -9]} fov={42} near={0.05} far={500} />
+        <PerspectiveCamera makeDefault position={[8, 6, -9]} fov={42} near={0.05} far={Math.max(500, extent * 40)} />
       )}
       <hemisphereLight args={['#dbeafe', '#3b2a17', 0.55]} />
       <directionalLight
-        position={[9, 14, -7]}
+        position={[centre[0] + extent * 0.75, extent * 1.2, centre[2] - extent * 0.6]}
         intensity={1.7}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
-        shadow-camera-left={-14}
-        shadow-camera-right={14}
-        shadow-camera-top={14}
-        shadow-camera-bottom={-14}
+        shadow-camera-left={-shadowHalf}
+        shadow-camera-right={shadowHalf}
+        shadow-camera-top={shadowHalf}
+        shadow-camera-bottom={-shadowHalf}
         shadow-camera-near={0.5}
-        shadow-camera-far={60}
+        shadow-camera-far={extent * 5}
         shadow-bias={-0.0004}
       />
       <directionalLight position={[-8, 6, 9]} intensity={0.45} />
@@ -220,7 +227,7 @@ export function Scene({ model }: { model: DerivedModel }) {
           sectionSize={2}
           sectionThickness={1.1}
           sectionColor="#334155"
-          fadeDistance={45}
+          fadeDistance={extent * 4}
           fadeStrength={1.5}
           infiniteGrid
         />
@@ -236,7 +243,7 @@ export function Scene({ model }: { model: DerivedModel }) {
           }
         }}
       >
-        <planeGeometry args={[80, 80]} />
+        <planeGeometry args={[groundSize, groundSize]} />
         <shadowMaterial transparent opacity={0.3} />
       </mesh>
 
@@ -296,7 +303,7 @@ export function Scene({ model }: { model: DerivedModel }) {
         dampingFactor={0.1}
         maxPolarAngle={Math.PI / 2 - 0.01}
         minDistance={1}
-        maxDistance={120}
+        maxDistance={Math.max(120, extent * 12)}
         mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
       />
     </Canvas>

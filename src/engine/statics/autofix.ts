@@ -1,6 +1,6 @@
 import type { ProjectState, StaticsCheck, StaticsResult, StaticsStatus, StructureParams, TimberSection } from '@/types';
 import { buildFramingCanonical, canonicalProject } from '../framing';
-import { computeStatics, STANDARD_DEPTHS } from './index';
+import { BRACE_SECTIONS, computeStatics, STANDARD_DEPTHS } from './index';
 import { findSmallestValidSection, findSmallestValidSquareSize } from './costOptimizationHelpers';
 
 /**
@@ -13,6 +13,9 @@ import { findSmallestValidSection, findSmallestValidSquareSize } from './costOpt
  *  - Purlin:  deeper purlin section → more posts (postsPerRow + 1 / smaller max spacing)
  *  - Post:    larger square post   → more posts
  *  - Header:  deeper wall studs (the header width equals the wall depth)
+ *  - Bracing: enable knee braces → bigger brace section → braces on both sides → more posts
+ *             (a direction without purlin rows can only be helped by bigger posts / more posts)
+ *  - Uplift:  no lever – anchors are a hardware choice, reported as unresolved
  */
 
 const POST_SIZES = [100, 120, 140, 160, 180, 200, 220, 240];
@@ -102,6 +105,20 @@ function applyFix(params: StructureParams, check: StaticsCheck): StructureParams
     const deeper = nextUp(STUD_DEPTHS, timber.stud.height);
     return deeper ? { ...params, timber: { ...timber, stud: { ...timber.stud, height: deeper } } } : undefined;
   }
+  if (check.id.startsWith('bracing')) {
+    if (check.element.startsWith('Knee braces')) {
+      const area = timber.brace.width * timber.brace.height;
+      const bigger = BRACE_SECTIONS.find((s) => s.width * s.height > area);
+      if (bigger) return { ...params, timber: { ...timber, brace: bigger } };
+      if (params.braceDirection !== 'both') return { ...params, braceDirection: 'both' };
+      return addPosts(params);
+    }
+    // sway posts: knee braces act only in the purlin-row direction
+    if (!params.braces && check.element.includes(params.roofScheme === 'sloped-purlins' ? '(Z)' : '(X)')) return { ...params, braces: true };
+    const bigger = nextUp(POST_SIZES, Math.min(timber.post.width, timber.post.height));
+    if (bigger) return { ...params, timber: { ...timber, post: { width: bigger, height: bigger } } };
+    return addPosts(params);
+  }
   return undefined;
 }
 
@@ -116,6 +133,9 @@ function diffParams(before: StructureParams, after: StructureParams): AutoFixCha
   push('Purlins (Pfetten)', sec(before.timber.beam), sec(after.timber.beam));
   push('Posts (Pfosten)', sec(before.timber.post), sec(after.timber.post));
   push('Wall studs (Ständer)', sec(before.timber.stud), sec(after.timber.stud));
+  push('Knee braces (Kopfbänder)', sec(before.timber.brace), sec(after.timber.brace));
+  push('Knee braces enabled', before.braces ? 'yes' : 'no', after.braces ? 'yes' : 'no');
+  push('Brace direction', before.braceDirection, after.braceDirection);
   push('Max rafter spacing', `${before.maxRafterSpacing} mm`, `${after.maxRafterSpacing} mm`);
   push('Max rafter length', `${before.maxRafterLength} mm`, `${after.maxRafterLength} mm`);
   push('Max post spacing', `${before.maxPostSpacing} mm`, `${after.maxPostSpacing} mm`);
@@ -123,8 +143,14 @@ function diffParams(before: StructureParams, after: StructureParams): AutoFixCha
   return changes;
 }
 
+/** Overall status ignoring the uplift advisory (anchors are hardware, not a section choice). */
+function structuralStatus(statics: StaticsResult): StaticsStatus {
+  const s = statics.checks.filter((c) => c.kind !== 'uplift').map((c) => c.status);
+  return s.includes('fail') ? 'fail' : s.includes('warning') ? 'warning' : 'ok';
+}
+
 function isStaticsOk(project: ProjectState, params: StructureParams): boolean {
-  return staticsOf({ ...project, params }).status === 'ok';
+  return structuralStatus(staticsOf({ ...project, params })) === 'ok';
 }
 
 function replaceSection(params: StructureParams, key: 'rafter' | 'beam' | 'stud', section: TimberSection): StructureParams {
@@ -140,8 +166,8 @@ function finalResult<T extends StaticsAction>(project: ProjectState, params: Str
   return {
     params,
     changes: diffParams(project.params, params),
-    status: finalStatics.status,
-    unresolved: finalStatics.checks.filter((c) => c.status !== 'ok').map((c) => c.element),
+    status: structuralStatus(finalStatics),
+    unresolved: finalStatics.checks.filter((c) => c.status !== 'ok' && c.kind !== 'uplift').map((c) => c.element),
     action,
   };
 }
@@ -187,7 +213,7 @@ export function autoFixStatics(project: ProjectState): AutoFixResult {
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const checks = evaluate({ ...project, params });
     const pending = checks
-      .filter((c) => c.status !== 'ok' && !exhausted.has(c.id))
+      .filter((c) => c.status !== 'ok' && c.kind !== 'uplift' && !exhausted.has(c.id))
       .sort((a, b) => b.utilisation - a.utilisation);
     if (pending.length === 0) break;
 
@@ -200,12 +226,5 @@ export function autoFixStatics(project: ProjectState): AutoFixResult {
     params = next;
   }
 
-  const finalStatics = staticsOf({ ...project, params });
-  return {
-    params,
-    changes: diffParams(project.params, params),
-    status: finalStatics.status,
-    unresolved: finalStatics.checks.filter((c) => c.status !== 'ok').map((c) => c.element),
-    action: 'auto-fix',
-  };
+  return finalResult(project, params, 'auto-fix');
 }

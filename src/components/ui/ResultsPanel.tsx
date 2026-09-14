@@ -399,10 +399,18 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
             )}
             <p className="text-[11px] text-slate-500">
               Simplified EN 1995-1-1 pre-design: bending, shear, deflection
-              (w_inst ≤ L/300, w_fin ≤ L/200) and post buckling. k_mod{" "}
-              {statics.loads.kmod}, k_def {statics.loads.kdef}, γ_G 1.35 / γ_Q
-              1.5. Wind, uplift, bracing and connections are not verified – have
-              a structural engineer confirm the design.
+              (w_inst ≤ L/300, w_fin ≤ L/200), post buckling with the actual
+              bracing system, knee braces / boarded walls / sway posts under
+              wind, and roof uplift. k_mod {statics.loads.kmod} (snow) /{" "}
+              {statics.loads.kmod < 0.75 ? 0.7 : 0.9} (wind), k_def{" "}
+              {statics.loads.kdef}, γ_G 1.35 / γ_Q 1.5, ψ₀ snow 0.5 / wind 0.6.
+              Wind q_p {statics.loads.windPressure.toFixed(2)} kN/m² (≈{" "}
+              {Math.round(statics.loads.gustSpeed)} m/s gust).{" "}
+              {statics.collapseGustSpeed !== undefined
+                ? `First failure at ≈ ${Math.round(statics.collapseGustSpeed)} m/s (${Math.round(statics.collapseGustSpeed * 3.6)} km/h): ${statics.collapseElement}.`
+                : "Gravity checks already exceed 100 % – no wind margin."}{" "}
+              Connections, foundations and fire are not verified – have a
+              structural engineer confirm the design.
             </p>
             {statics.checks.map((c) => (
               <div

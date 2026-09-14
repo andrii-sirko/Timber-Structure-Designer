@@ -18,13 +18,21 @@ export { clampOpening, openingLimits, headerHeight, OPENING_DEFAULTS, MIN_OPENIN
 export { CLADDING_THICKNESS } from './walls';
 
 /** Guard against geometrically impossible input without mutating the store. */
+/** Smallest plan dimension (mm) the post grid can still frame: two posts plus a bay. */
+export const MIN_PLAN_DIM = 500;
+
+/** Smallest eave height (mm): the purlin plus a usable post stub. No upper limit – any size is allowed. */
+export function minWallHeight(params: StructureParams): number {
+  return params.timber.beam.height + 300;
+}
+
 export function sanitizeParams(params: StructureParams): StructureParams {
   const rear = Math.min(params.rearHeight, params.frontHeight);
-  const minHeight = params.timber.beam.height + 300;
+  const minHeight = minWallHeight(params);
   return {
     ...params,
-    length: Math.max(params.length, 1000),
-    width: Math.max(params.width, 1000),
+    length: Math.max(params.length, MIN_PLAN_DIM),
+    width: Math.max(params.width, MIN_PLAN_DIM),
     frontHeight: Math.max(params.frontHeight, minHeight),
     rearHeight: Math.max(rear, minHeight),
   };

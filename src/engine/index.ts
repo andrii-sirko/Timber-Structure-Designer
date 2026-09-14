@@ -39,7 +39,7 @@ export function buildModel(project: ProjectState): DerivedModel {
   };
 }
 
-export { buildFraming, buildFramingCanonical, canonicalProject, computeAllWallFrames, openingHost, clampOpening, openingLimits, OPENING_DEFAULTS, sanitizeParams, clampPartition, defaultPartition, partitionLimits } from './framing';
+export { buildFraming, buildFramingCanonical, canonicalProject, computeAllWallFrames, openingHost, clampOpening, openingLimits, OPENING_DEFAULTS, sanitizeParams, MIN_PLAN_DIM, minWallHeight, clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH } from './framing';
 export type { WallFrames } from './framing';
 export { computeStatics } from './statics';
 export { autoFixStatics, costOptimizeStatics } from './statics/autofix';

@@ -32,7 +32,7 @@ export const DEFAULT_PARAMS: StructureParams = {
     brace: { width: 80, height: 100 },
     strengthClass: 'C24',
   },
-  loads: { snowLoad: 0.85, roofCovering: 'trapezoidal-sheet', serviceClass: 2 },
+  loads: { snowLoad: 0.85, roofCovering: 'trapezoidal-sheet', serviceClass: 2, windLoad: 0.65 },
 };
 
 export function emptyWalls(closed = false): Record<WallId, Wall> {
@@ -133,7 +133,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
           rearHeight: 2200,
           overhangs: { front: 250, rear: 250, left: 150, right: 150 },
           braces: false,
-          loads: { snowLoad: 0.85, roofCovering: 'bitumen-shingles', serviceClass: 2 },
+          loads: { snowLoad: 0.85, roofCovering: 'bitumen-shingles', serviceClass: 2, windLoad: 0.65 },
         },
         walls,
         partitions: [],
@@ -158,7 +158,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
         rearHeight: 2400,
         overhangs: { front: 400, rear: 100, left: 250, right: 250 },
         maxRafterSpacing: 700,
-        loads: { snowLoad: 0.85, roofCovering: 'polycarbonate', serviceClass: 3 },
+        loads: { snowLoad: 0.85, roofCovering: 'polycarbonate', serviceClass: 3, windLoad: 0.65 },
       },
       walls: emptyWalls(false),
       partitions: [],

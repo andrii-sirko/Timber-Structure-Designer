@@ -1,15 +1,17 @@
-import { Cable, CloudSnow, Ruler, Settings2, TreePine, Triangle } from 'lucide-react';
+import { Cable, CloudSnow, MapPinned, Ruler, Settings2, TreePine, Triangle } from 'lucide-react';
+import { useState } from 'react';
 import type { BraceDirection, DerivedModel, RoofCovering, RoofDirection, RoofScheme, TimberSection, WallId } from '@/types';
-import { gridPostCount } from '@/engine/framing';
+import { gridPostCount, MIN_PLAN_DIM, minWallHeight } from '@/engine/framing';
 import { midPurlinBounds } from '@/engine/framing/roofLines';
 import { worldWall } from '@/engine/orientation';
 import { useProjectStore } from '@/store';
-import { ROOF_COVERING_LOAD, SNOW_ZONE_PRESETS, STRENGTH_CLASSES } from '@/engine/statics/materials';
+import { gustSpeedToPressure, pressureToGustSpeed, ROOF_COVERING_LOAD, SNOW_ZONE_PRESETS, STRENGTH_CLASSES, WIND_ZONE_PRESETS } from '@/engine/statics/materials';
 import { NumberField, Section, SelectField, Toggle } from './primitives';
 import { StaticsBadge } from './StaticsBadge';
 import { WallEditor } from './WallEditor';
 import { VehiclesPanel } from './VehiclesPanel';
 import { PavingPanel } from './PavingPanel';
+import { SIDEBAR_TABS, type SidebarTabId } from './sidebarNavigation';
 
 const ROOF_DIRECTION_OPTIONS: { value: RoofDirection; label: string }[] = [
   { value: 'rear', label: 'Rear – high eave at the front' },
@@ -39,6 +41,7 @@ function SectionPair({ label, value, onChange, hint }: { label: string; value: T
 }
 
 export function ParameterSidebar({ model }: { model: DerivedModel }) {
+  const [activeTab, setActiveTab] = useState<SidebarTabId>('dimensions');
   const params = useProjectStore((s) => s.project.params);
   const setParam = useProjectStore((s) => s.setParam);
   const moveMidPurlin = useProjectStore((s) => s.moveMidPurlin);
@@ -55,16 +58,33 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-slate-800 p-3">
-        <StaticsBadge statics={model.statics} />
+      <div className="border-b border-slate-800 bg-slate-950">
+        <div className="grid grid-cols-5 gap-1 px-2 py-2" role="tablist" aria-label="Designer sections">
+          {SIDEBAR_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`rounded-md px-1 py-1.5 text-[11px] font-medium transition-colors ${activeTab === tab.id ? 'bg-timber-600 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="px-3 pb-3">
+          <StaticsBadge statics={model.statics} />
+        </div>
       </div>
       <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
-        <Section title="Dimensions" icon={Ruler}>
+        {activeTab === 'dimensions' && <>
+        <Section title="Structure shape" icon={Ruler}>
           <div className="grid grid-cols-2 gap-2">
-            <NumberField label="Length L" value={params.length} min={1500} max={20000} step={100} onChange={(v) => setParam('length', v)} />
-            <NumberField label="Width W" value={params.width} min={1500} max={12000} step={100} onChange={(v) => setParam('width', v)} />
-            <NumberField label={`High eave H1 (${highWall})`} value={params.frontHeight} min={1800} max={5000} step={50} onChange={(v) => setParam('frontHeight', v)} />
-            <NumberField label={`Low eave H2 (${lowWall})`} value={params.rearHeight} min={1500} max={5000} step={50} onChange={(v) => setParam('rearHeight', v)} />
+            <NumberField label="Length L" value={params.length} min={MIN_PLAN_DIM} step={100} onChange={(v) => setParam('length', v)} />
+            <NumberField label="Width W" value={params.width} min={MIN_PLAN_DIM} step={100} onChange={(v) => setParam('width', v)} />
+            <NumberField label={`High eave H1 (${highWall})`} value={params.frontHeight} min={minWallHeight(params)} step={50} onChange={(v) => setParam('frontHeight', v)} />
+            <NumberField label={`Low eave H2 (${lowWall})`} value={params.rearHeight} min={minWallHeight(params)} max={params.frontHeight} step={50} onChange={(v) => setParam('rearHeight', v)} />
           </div>
           <SelectField<RoofDirection>
             label="Roof slopes down towards"
@@ -93,8 +113,19 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
             </div>
           </dl>
         </Section>
+        <Section title="Post layout" icon={Settings2} defaultOpen={false}>
+          <Toggle
+            label="Automatic post count"
+            description={params.postsPerRow === null ? `${gridPostCount(model.framing.grid)} posts at ${Math.round(model.framing.grid.postSpacing)} mm centres` : 'Set the number of posts manually'}
+            checked={params.postsPerRow === null}
+            onChange={(auto) => setParam('postsPerRow', auto ? null : gridPostCount(model.framing.grid))}
+          />
+          {params.postsPerRow !== null && <NumberField label="Posts per row" value={params.postsPerRow} min={2} max={40} step={1} unit="pcs" hint={`${Math.round(model.framing.grid.postSpacing)} mm centres`} onChange={(v) => setParam('postsPerRow', Math.max(2, Math.round(v)))} />}
+          <NumberField label="Maximum post spacing" value={params.maxPostSpacing} min={1000} max={6000} step={100} onChange={(v) => setParam('maxPostSpacing', v)} />
+        </Section>
+        </>}
 
-        <Section title="Roof (Pultdach)" icon={Triangle}>
+        {activeTab === 'roof' && <Section title="Mono-pitch roof" icon={Triangle}>
           <div className="grid grid-cols-2 gap-2">
             <NumberField label="Overhang front" value={params.overhangs.front} min={0} max={2500} step={50} onChange={(v) => setOverhang('front', v)} />
             <NumberField label="Overhang rear" value={params.overhangs.rear} min={0} max={2500} step={50} onChange={(v) => setOverhang('rear', v)} />
@@ -157,8 +188,9 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
               <dd className="font-mono text-slate-200">{roof.rafterLength} mm{roof.rafterPieces > 1 ? ` (${roof.rafterPieces}× ≤ ${roof.rafterPieceLength})` : ''}</dd>
             </div>
           </dl>
-        </Section>
+        </Section>}
 
+        {activeTab === 'structure' && <>
         <Section title="Timber sections" icon={TreePine}>
           <SelectField
             label="Strength class"
@@ -173,26 +205,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
           <SectionPair label="Knee braces (Kopfbänder)" value={params.timber.brace} onChange={(s) => setTimber('brace', s)} />
         </Section>
 
-        <Section title="Structural grid" icon={Settings2} defaultOpen={false}>
-          <Toggle
-            label="Post count per row: automatic"
-            description={params.postsPerRow === null ? `From max spacing → ${gridPostCount(model.framing.grid)} posts @ ${Math.round(model.framing.grid.postSpacing)} mm` : 'Off – set the number of posts manually'}
-            checked={params.postsPerRow === null}
-            onChange={(auto) => setParam('postsPerRow', auto ? null : gridPostCount(model.framing.grid))}
-          />
-          {params.postsPerRow !== null && (
-            <NumberField
-              label="Posts per row"
-              value={params.postsPerRow}
-              min={2}
-              max={40}
-              step={1}
-              unit="pcs"
-              hint={`→ spacing ${Math.round(model.framing.grid.postSpacing)} mm`}
-              onChange={(v) => setParam('postsPerRow', Math.max(2, Math.round(v)))}
-            />
-          )}
-          <NumberField label="Max post spacing" value={params.maxPostSpacing} min={1000} max={6000} step={100} hint={params.postsPerRow === null ? 'drives the post count' : 'recommended limit'} onChange={(v) => setParam('maxPostSpacing', v)} />
+        <Section title="Framing rules" icon={Settings2} defaultOpen={false}>
           <NumberField label="Max stud spacing" value={params.maxStudSpacing} min={300} max={1000} step={25} onChange={(v) => setParam('maxStudSpacing', v)} />
           <NumberField label="Max stock length" value={params.maxStockLength} min={3000} max={13000} step={500} hint="purlins spliced above" onChange={(v) => setParam('maxStockLength', v)} />
           <Toggle label="Knee braces (Kopfbänder)" description="45° braces post ↔ purlin for longitudinal stiffness" checked={params.braces} onChange={(v) => setParam('braces', v)} />
@@ -223,6 +236,24 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
           />
           <NumberField label="Ground snow load s_k" value={params.loads.snowLoad} min={0} max={5} step={0.05} unit="kN/m²" onChange={(v) => setLoad('snowLoad', v)} />
           <SelectField
+            label="Wind zone preset"
+            value={String(WIND_ZONE_PRESETS.find((p) => Math.abs(p.value - params.loads.windLoad) < 0.001)?.value ?? 'custom')}
+            onChange={(v) => {
+              if (v !== 'custom') setLoad('windLoad', Number(v));
+            }}
+            options={[...WIND_ZONE_PRESETS.map((p) => ({ value: String(p.value), label: p.label })), { value: 'custom', label: 'Custom' }]}
+          />
+          <NumberField label="Peak velocity pressure q_p" value={params.loads.windLoad} min={0} max={50} step={0.05} unit="kN/m²" onChange={(v) => setLoad('windLoad', v)} />
+          <NumberField
+            label="Equivalent gust speed"
+            value={Math.round(pressureToGustSpeed(params.loads.windLoad) * 10) / 10}
+            min={0}
+            max={300}
+            step={1}
+            unit="m/s"
+            onChange={(v) => setLoad('windLoad', Math.round(gustSpeedToPressure(v) * 1000) / 1000)}
+          />
+          <SelectField
             label="Service class (EC5)"
             value={String(params.loads.serviceClass)}
             onChange={(v) => setLoad('serviceClass', Number(v) as 1 | 2 | 3)}
@@ -244,12 +275,26 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
           <p className="flex items-start gap-1.5 text-[11px] text-slate-500">
             <Cable className="mt-0.5 h-3 w-3 shrink-0" />
             Dead load {model.statics.loads.deadLoad.toFixed(2)} + snow {model.statics.loads.snowLoadRoof.toFixed(2)} = {model.statics.loads.totalCharacteristic.toFixed(2)} kN/m² (design {model.statics.loads.totalDesign.toFixed(2)}).
+            Wind q_p {model.statics.loads.windPressure.toFixed(2)} kN/m² ≈ {Math.round(model.statics.loads.gustSpeed * 3.6)} km/h gust: W_k {model.statics.loads.windForce.x.toFixed(1)} kN along X / {model.statics.loads.windForce.z.toFixed(1)} kN across, uplift {model.statics.loads.upliftPressure.toFixed(2)} kN/m².
+          </p>
+          <p className="flex items-start gap-1.5 text-[11px] text-slate-500">
+            <CloudSnow className="mt-0.5 h-3 w-3 shrink-0" />
+            {model.statics.collapseGustSpeed !== undefined
+              ? `First element gives way at ≈ ${Math.round(model.statics.collapseGustSpeed)} m/s (${Math.round(model.statics.collapseGustSpeed * 3.6)} km/h) gust: ${model.statics.collapseElement}.`
+              : 'The structure already exceeds 100 % without wind – fix the gravity checks first.'}
           </p>
         </Section>
+        </>}
 
-        <WallEditor />
-        <VehiclesPanel model={model} />
-        <PavingPanel model={model} />
+        {activeTab === 'walls' && <>
+          <div className="border-b border-slate-800 px-3 py-2.5 text-xs text-slate-500">Close walls, add partitions, then position doors and windows.</div>
+          <WallEditor />
+        </>}
+        {activeTab === 'site' && <>
+          <div className="flex items-center gap-2 border-b border-slate-800 px-3 py-2.5 text-xs text-slate-500"><MapPinned className="h-3.5 w-3.5 text-timber-400" /> Add objects and ground finishes to check clearances in context.</div>
+          <VehiclesPanel model={model} />
+          <PavingPanel model={model} />
+        </>}
       </div>
     </div>
   );

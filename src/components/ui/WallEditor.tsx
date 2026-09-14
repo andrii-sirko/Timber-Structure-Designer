@@ -2,7 +2,7 @@ import { DoorOpen, PanelsTopLeft, RectangleHorizontal, Trash2, Move3d, SplitSqua
 import type { OpeningType, WallId } from '@/types';
 import { isOuterWall, WALL_IDS } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
-import { openingHost, openingLimits, partitionLimits } from '@/engine';
+import { MIN_PARTITION_LENGTH, openingHost, openingLimits, partitionLimits } from '@/engine';
 import { Button, NumberField, Section, SelectField, Toggle, cx } from './primitives';
 
 const WALL_LABEL: Record<WallId, string> = { front: 'Front (H1)', rear: 'Rear (H2)', left: 'Left', right: 'Right' };
@@ -126,8 +126,8 @@ export function WallEditor() {
                   hint={`${Math.round(lim.offsetMin)}–${Math.round(lim.offsetMax)}`}
                   onChange={(offset) => updatePartition(partition.id, { offset })}
                 />
-                <NumberField label="From" value={partition.start} min={lim.runMin} max={partition.end - 600} step={50} compact onChange={(start) => updatePartition(partition.id, { start })} />
-                <NumberField label="To" value={partition.end} min={partition.start + 600} max={lim.runMax} step={50} compact onChange={(end) => updatePartition(partition.id, { end })} />
+                <NumberField label="From" value={partition.start} min={lim.runMin} max={partition.end - MIN_PARTITION_LENGTH} step={50} compact onChange={(start) => updatePartition(partition.id, { start })} />
+                <NumberField label="To" value={partition.end} min={partition.start + MIN_PARTITION_LENGTH} max={lim.runMax} step={50} compact onChange={(end) => updatePartition(partition.id, { end })} />
               </div>
               <p className="text-[11px] text-slate-500">
                 Stud wall {params.timber.stud.height} mm thick, {Math.round(partition.end - partition.start)} mm long, boarded on one side, top plate under the rafters.

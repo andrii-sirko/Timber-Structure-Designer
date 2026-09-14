@@ -86,6 +86,8 @@ export interface LoadSettings {
   roofCovering: RoofCovering;
   /** EC5 service class (1 = heated interior, 2 = covered exterior, 3 = fully exposed) */
   serviceClass: 1 | 2 | 3;
+  /** Peak velocity pressure q_p in kN/m² (DE zone 1 ≈ 0.50, zone 2 ≈ 0.65, zone 3 ≈ 0.80, zone 4 ≈ 0.95 for h ≤ 10 m) */
+  windLoad: number;
 }
 
 export type OpeningType = 'door' | 'window' | 'passage';
@@ -466,8 +468,12 @@ export interface FramingResult {
 
 export type StaticsStatus = 'ok' | 'warning' | 'fail';
 
+export type StaticsCheckKind = 'vertical' | 'lateral' | 'uplift';
+
 export interface StaticsCheck {
   id: string;
+  /** vertical = gravity member check, lateral = wind / sway bracing, uplift = anchoring against suction */
+  kind: StaticsCheckKind;
   element: string;
   elementDe: string;
   section: TimberSection;
@@ -500,7 +506,19 @@ export interface StaticsResult {
     totalDesign: number;
     kmod: number;
     kdef: number;
+    /** Peak velocity pressure q_p in kN/m² */
+    windPressure: number;
+    /** Gust speed equivalent to q_p in m/s */
+    gustSpeed: number;
+    /** Characteristic horizontal wind force per direction in kN (x = along the length, z = across) */
+    windForce: { x: number; z: number };
+    /** Characteristic roof uplift (suction) in kN/m² of plan */
+    upliftPressure: number;
   };
+  /** Gust speed (m/s) at which the first lateral / roof check reaches 100 % – undefined when the structure already fails without wind */
+  collapseGustSpeed?: number;
+  /** Element that gives way first as the wind increases */
+  collapseElement?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -322,13 +322,51 @@ export function braceSides(direction: BraceDirection, i: number, n: number): num
   return wanted.filter((s) => (s < 0 ? canLeft : canRight));
 }
 
+/** One knee brace of the layout: post `postIndex` of row `rowKey`, leaning towards `side`. */
+export interface BracePlacement {
+  rowKey: string;
+  postIndex: number;
+  /** Post axis position along the row */
+  pos: number;
+  /** -1 = towards the row start, +1 = towards the row end */
+  side: number;
+  /** Underside of the purlin where the brace top lands */
+  top: number;
+}
+
+/**
+ * Where knee braces actually end up: every wanted brace whose post is tall enough
+ * (post top ≥ leg + 400 mm). Shared by the member generator and the statics engine so
+ * both see the same braces.
+ */
+export function braceLayout(params: StructureParams, roof: RoofLines, grid: PostGrid): BracePlacement[] {
+  if (!params.braces) return [];
+  const pw = params.timber.post.width;
+  const leg = Math.max(300, params.braceLeg);
+  const sloped = grid.scheme === 'sloped-purlins';
+  const out: BracePlacement[] = [];
+  for (const row of grid.rows) {
+    const positions = row.positions;
+    positions.forEach((pos, i) => {
+      for (const side of braceSides(params.braceDirection, i, positions.length)) {
+        const topPos = pos + side * (pw / 2 + leg);
+        const top = sloped ? roof.railBottomAt(topPos) : rowPostTop(row, roof, params, pos);
+        if (top < leg + 400) continue; // post too short for a brace
+        out.push({ rowKey: row.key, postIndex: i, pos, side, top });
+      }
+    });
+  }
+  return out;
+}
+
 /**
  * 45° knee braces (Kopfbänder) between posts and purlins in the plane of every purlin row.
  * Under a sloped purlin the brace top lands on the purlin underside at the brace's own Z, so
  * the upper cut deviates from 45° by the roof pitch (noted on the member).
  */
 export function generateBraces(params: StructureParams, roof: RoofLines, grid: PostGrid): Member[] {
-  if (!params.braces) return [];
+  const layout = braceLayout(params, roof, grid);
+  if (layout.length === 0) return [];
   const { timber } = params;
   const pw = timber.post.width;
   const section = { width: timber.brace.width, height: timber.brace.height };
@@ -336,41 +374,35 @@ export function generateBraces(params: StructureParams, roof: RoofLines, grid: P
   const axisLength = leg * SQRT2;
   const members: Member[] = [];
   const sloped = grid.scheme === 'sloped-purlins';
+  const rows = new Map(grid.rows.map((r) => [r.key, r]));
 
-  for (const row of grid.rows) {
+  for (const brace of layout) {
+    const row = rows.get(brace.rowKey);
+    if (!row) continue;
+    const { pos, side: s, top, postIndex: i } = brace;
     const rowWord = row.wallId ?? row.name.replace('Purlin ', '');
     const nameDe = row.wallId ? `Kopfband ${SIDE_DE[row.wallId]}` : 'Kopfband mitte';
-    const positions = row.positions;
-    positions.forEach((pos, i) => {
-      const dirs = braceSides(params.braceDirection, i, positions.length);
-      for (const s of dirs) {
-        // underside of the purlin where the brace top lands
-        const topPos = pos + s * (pw / 2 + leg);
-        const top = sloped ? roof.railBottomAt(topPos) : rowPostTop(row, roof, params, pos);
-        if (top < leg + 400) continue; // post too short for a brace
-        const along = pos + s * (pw / 2);
-        const p = rowPoint(row, along);
-        const start = { x: p.x, y: top - leg, z: p.z };
-        const direction = row.axis === 'x' ? { x: s / SQRT2, y: 1 / SQRT2, z: 0 } : { x: 0, y: 1 / SQRT2, z: s / SQRT2 };
-        const up = row.axis === 'x' ? { x: s / SQRT2, y: -1 / SQRT2, z: 0 } : { x: 0, y: -1 / SQRT2, z: s / SQRT2 };
-        const endCut = sloped ? round1(45 - s * roof.pitchDeg) : 45;
-        members.push({
-          id: nextId('brace'),
-          category: 'brace',
-          name: `Knee brace ${rowWord} ${i + 1}${s > 0 ? 'R' : 'L'}`,
-          nameDe,
-          group: 'Knee brace (Kopfband)',
-          section,
-          length: Math.round(axisLength + section.height),
-          start,
-          direction,
-          up,
-          cuts: { start: 45, end: endCut },
-          profile: cutProfile(axisLength, section.height, 45, endCut),
-          wallId: row.wallId,
-          notes: sloped ? `Upper cut ${endCut}° against the sloped purlin` : undefined,
-        });
-      }
+    const along = pos + s * (pw / 2);
+    const p = rowPoint(row, along);
+    const start = { x: p.x, y: top - leg, z: p.z };
+    const direction = row.axis === 'x' ? { x: s / SQRT2, y: 1 / SQRT2, z: 0 } : { x: 0, y: 1 / SQRT2, z: s / SQRT2 };
+    const up = row.axis === 'x' ? { x: s / SQRT2, y: -1 / SQRT2, z: 0 } : { x: 0, y: -1 / SQRT2, z: s / SQRT2 };
+    const endCut = sloped ? round1(45 - s * roof.pitchDeg) : 45;
+    members.push({
+      id: nextId('brace'),
+      category: 'brace',
+      name: `Knee brace ${rowWord} ${i + 1}${s > 0 ? 'R' : 'L'}`,
+      nameDe,
+      group: 'Knee brace (Kopfband)',
+      section,
+      length: Math.round(axisLength + section.height),
+      start,
+      direction,
+      up,
+      cuts: { start: 45, end: endCut },
+      profile: cutProfile(axisLength, section.height, 45, endCut),
+      wallId: row.wallId,
+      notes: sloped ? `Upper cut ${endCut}° against the sloped purlin` : undefined,
     });
   }
   return members;
