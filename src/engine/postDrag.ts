@@ -4,8 +4,19 @@ export function canMovePost(isDragging: boolean): boolean {
   return isDragging;
 }
 
-export function canDragMember(member: Pick<{ category: MemberCategory; partitionId?: string; group: string }, 'category' | 'partitionId' | 'group'>): boolean {
-  return member.category === 'post' || (member.category === 'stud' && Boolean(member.partitionId) && member.group === 'End stud (Eckständer)');
+export function canDragMember(member: Pick<{ category: MemberCategory; partitionId?: string; group: string; purlinRow?: string }, 'category' | 'partitionId' | 'group' | 'purlinRow'>): boolean {
+  return member.category === 'post' || isMidPurlin(member) || (member.category === 'stud' && Boolean(member.partitionId) && member.group === 'End stud (Eckständer)');
+}
+
+/** Intermediate purlins can be dragged across the slope; eave purlins sit on the walls. */
+export function isMidPurlin(member: { purlinRow?: string }): boolean {
+  return member.purlinRow?.startsWith('mid') ?? false;
+}
+
+/** 0-based intermediate row index of a purlin member (`mid2` → 2), or null for eave purlins. */
+export function midPurlinIndex(member: { purlinRow?: string }): number | null {
+  const m = member.purlinRow?.match(/^mid(\d+)$/);
+  return m ? Number(m[1]) : null;
 }
 
 export function partitionDragAxis(axis: PartitionAxis, point: { x: number; z: number }): number {

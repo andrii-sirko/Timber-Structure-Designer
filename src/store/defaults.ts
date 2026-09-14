@@ -1,22 +1,28 @@
-import type { LayerVisibility, Opening, Partition, ProjectState, StructureParams, Vehicle, ViewSettings, Wall, WallId } from '@/types';
-import { WALL_IDS } from '@/types';
+import type { BraceDirection, LayerVisibility, Opening, Partition, PavedArea, ProjectState, RoofDirection, RoofScheme, StructureParams, Vehicle, ViewSettings, Wall, WallId } from '@/types';
+import { BRACE_DIRECTIONS, ROOF_SCHEMES, WALL_IDS } from '@/types';
 import { uuid } from '@/engine/geometry';
 import { VEHICLE_CATALOG, VEHICLE_COLORS } from '@/engine/vehicles';
 import { NEIGHBOUR_DEFAULTS } from '@/engine/neighbours';
+import { PAVING_COLORS, PAVING_DEFAULTS, PAVING_PATTERNS } from '@/engine/paving';
 
 export const DEFAULT_PARAMS: StructureParams = {
   length: 6000,
   width: 3000,
   frontHeight: 2600,
   rearHeight: 2250,
+  roofDirection: 'rear',
+  roofScheme: 'classic',
   overhangs: { front: 300, rear: 300, left: 200, right: 200 },
   maxPostSpacing: 3000,
   postsPerRow: null,
   maxRafterSpacing: 800,
+  maxRafterLength: 6000,
+  midPurlinPositions: [],
   maxStudSpacing: 625,
   maxStockLength: 6000,
   braces: true,
   braceLeg: 600,
+  braceDirection: 'both',
   connectionMode: 'hardware',
   timber: {
     post: { width: 120, height: 120 },
@@ -42,6 +48,7 @@ export const DEFAULT_LAYERS: LayerVisibility = {
   dimensions: true,
   grid: true,
   vehicles: true,
+  paving: true,
 };
 
 export const DEFAULT_VIEW: ViewSettings = {
@@ -63,6 +70,7 @@ export function createDefaultProject(): ProjectState {
     walls: emptyWalls(false),
     partitions: [],
     vehicles: [{ id: uuid(), modelId: 'vw-golf', x: 3000, z: 1500, rotationDeg: 0, color: VEHICLE_COLORS[1] }],
+    pavedAreas: [],
     postOverrides: {},
   };
 }
@@ -102,6 +110,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
         { id: uuid(), modelId: 'vw-tiguan', x: 3000, z: 1500, rotationDeg: 0, color: VEHICLE_COLORS[0] },
         { id: uuid(), modelId: 'vw-passat-variant', x: 3000, z: 4000, rotationDeg: 0, color: VEHICLE_COLORS[4] },
       ],
+      pavedAreas: [],
       postOverrides: {},
     }),
   },
@@ -129,7 +138,8 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
         walls,
         partitions: [],
         vehicles: [],
-        postOverrides: {},
+        pavedAreas: [],
+      postOverrides: {},
       };
     },
   },
@@ -153,6 +163,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
       walls: emptyWalls(false),
       partitions: [],
       vehicles: [],
+      pavedAreas: [],
       postOverrides: {},
     }),
   },
@@ -178,6 +189,10 @@ export function normalizeProject(input: unknown): ProjectState {
       brace: { ...base.params.timber.brace, ...(p.timber?.brace ?? {}) },
     },
     loads: { ...base.params.loads, ...(p.loads ?? {}) },
+    midPurlinPositions: Array.isArray(p.midPurlinPositions) ? p.midPurlinPositions.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)) : [],
+    roofDirection: (WALL_IDS as readonly string[]).includes(p.roofDirection as string) ? (p.roofDirection as RoofDirection) : 'rear',
+    roofScheme: (ROOF_SCHEMES as readonly string[]).includes(p.roofScheme as string) ? (p.roofScheme as RoofScheme) : 'classic',
+    braceDirection: (BRACE_DIRECTIONS as readonly string[]).includes(p.braceDirection as string) ? (p.braceDirection as BraceDirection) : 'both',
   };
   const walls = emptyWalls(false);
   const srcWalls = (src.walls ?? {}) as Partial<Record<WallId, Partial<Wall>>>;
@@ -215,6 +230,27 @@ export function normalizeProject(input: unknown): ProjectState {
           color: typeof v.color === 'string' ? v.color : VEHICLE_COLORS[i % VEHICLE_COLORS.length],
         }))
     : [];
+  const pavedAreas: PavedArea[] = Array.isArray(src.pavedAreas)
+    ? src.pavedAreas
+        .filter((a) => a && typeof a === 'object')
+        .map((a, i) => {
+          const num = (v: unknown, fallback: number): number => (Number.isFinite(Number(v)) ? Number(v) : fallback);
+          const points = Array.isArray(a.points)
+            ? a.points.filter((p) => p && typeof p === 'object').map((p) => ({ x: num(p.x, 0), z: num(p.z, 0) }))
+            : [];
+          return {
+            id: typeof a.id === 'string' ? a.id : uuid(),
+            label: typeof a.label === 'string' && a.label.trim() ? a.label : `Paved floor ${i + 1}`,
+            points: points.length >= 3 ? points : [{ x: 0, z: 0 }, { x: params.length, z: 0 }, { x: params.length, z: params.width }, { x: 0, z: params.width }],
+            stoneLength: num(a.stoneLength, PAVING_DEFAULTS.stoneLength),
+            stoneWidth: num(a.stoneWidth, PAVING_DEFAULTS.stoneWidth),
+            jointWidth: num(a.jointWidth, PAVING_DEFAULTS.jointWidth),
+            stoneThickness: num(a.stoneThickness, PAVING_DEFAULTS.stoneThickness),
+            pattern: PAVING_PATTERNS.some((p) => p.id === a.pattern) ? (a.pattern as PavedArea['pattern']) : 'stretcher',
+            color: typeof a.color === 'string' ? a.color : PAVING_COLORS[i % PAVING_COLORS.length],
+          };
+        })
+    : [];
   const postOverrides = src.postOverrides && typeof src.postOverrides === 'object' ? Object.fromEntries(
     Object.entries(src.postOverrides as Record<string, unknown>).flatMap(([key, value]) => {
       if (!value || typeof value !== 'object') return [];
@@ -233,6 +269,7 @@ export function normalizeProject(input: unknown): ProjectState {
     walls,
     partitions,
     vehicles,
+    pavedAreas,
     postOverrides,
   };
 }

@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Edges, Html } from '@react-three/drei';
+import { Trash2 } from 'lucide-react';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { HighlightMode, Member, Vec3 } from '@/types';
 import { canDragMember, canMovePost } from '@/engine/postDrag';
@@ -142,14 +143,15 @@ export const TimberMember = memo(function TimberMember({
         >
           <button
             type="button"
-            className="rounded border border-rose-400/60 bg-rose-950/95 px-1.5 py-0.5 text-[11px] font-medium text-rose-100 shadow-lg hover:bg-rose-900"
+            className="rounded border border-rose-400/60 bg-rose-950/95 p-1 text-rose-100 shadow-lg hover:bg-rose-900"
             title="Remove post"
+            aria-label="Remove post"
             onClick={(e) => {
               e.stopPropagation();
               onRemovePost(member.id);
             }}
           >
-            Remove
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         </Html>
       )}

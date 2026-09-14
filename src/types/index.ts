@@ -4,15 +4,45 @@
  * Units: all lengths are millimetres (mm) unless stated otherwise.
  * World coordinate system (right-handed, Y up):
  *   X → structure length (left ↔ right)
- *   Z → structure width (front ↔ rear) — the roof slopes down from front (H1) to rear (H2)
+ *   Z → structure width (front ↔ rear)
  *   Y → up
  * Length (L) and width (W) are OUTER dimensions of the post frame.
+ *
+ * The framing engine always works in a CANONICAL frame in which the monopitch roof slopes
+ * down from the front purlin (H1, high eave) to the rear purlin (H2, low eave) along +Z.
+ * `StructureParams.roofDirection` names the world wall the roof slopes down towards; the
+ * engine rotates the project into the canonical frame and rotates the geometry back
+ * (see engine/orientation.ts). The rotation swaps L/W for 'left' / 'right'.
  */
 
 export type Millimeters = number;
 
 export type WallId = 'front' | 'rear' | 'left' | 'right';
 export const WALL_IDS: readonly WallId[] = ['front', 'rear', 'left', 'right'] as const;
+
+/** Outer wall the roof slopes DOWN towards (the low eave H2). The opposite wall carries the high eave H1. */
+export type RoofDirection = WallId;
+export const ROOF_DIRECTIONS: readonly RoofDirection[] = WALL_IDS;
+
+/**
+ * How the monopitch roof is framed (canonical frame, slope down towards +Z):
+ *  - 'classic'        level purlins along X on the front / rear post rows, rafters run DOWN the
+ *                     slope along Z (Pfettendach). Knee braces stand across the slope.
+ *  - 'sloped-purlins' post rows run along Z (down the slope) with stepped posts and SLOPED
+ *                     purlins; level rafters span across along X. Knee braces stand along the
+ *                     slope, so a car can drive in through the low or high eave without hitting
+ *                     a brace (gable-entry carport).
+ */
+export type RoofScheme = 'classic' | 'sloped-purlins';
+export const ROOF_SCHEMES: readonly RoofScheme[] = ['classic', 'sloped-purlins'] as const;
+
+/**
+ * Knee brace direction along a purlin row: 'both' = a pair per post (V shape),
+ * 'left' / 'right' = one brace per post leaning towards the left/right wall,
+ * 'alternating' = one brace per post, flipping side from post to post.
+ */
+export type BraceDirection = 'both' | 'left' | 'right' | 'alternating';
+export const BRACE_DIRECTIONS: readonly BraceDirection[] = ['both', 'left', 'right', 'alternating'] as const;
 
 /** Rectangular timber cross-section. `width` is the thickness, `height` the depth in bending. */
 export interface TimberSection {
@@ -147,15 +177,64 @@ export interface VehicleFit {
   messages: string[];
 }
 
+export type PavingPattern = 'stretcher' | 'stack' | 'herringbone';
+
+/** A 2D point on the ground plane in world X/Z (mm). */
+export interface GroundPoint {
+  x: Millimeters;
+  z: Millimeters;
+}
+
+/** A paved floor (Pflaster) – an arbitrary simple polygon on the ground plane laid with paving stones. */
+export interface PavedArea {
+  id: string;
+  label: string;
+  /** Polygon outline (≥ 3 vertices, world X/Z in mm, any winding) */
+  points: GroundPoint[];
+  /** Paving stone plan dimensions */
+  stoneLength: Millimeters;
+  stoneWidth: Millimeters;
+  /** Joint (gap) width between stones */
+  jointWidth: Millimeters;
+  /** Stone thickness – used for the volume / bedding estimate */
+  stoneThickness: Millimeters;
+  pattern: PavingPattern;
+  color: string;
+}
+
+export interface PavedAreaSummary {
+  id: string;
+  label: string;
+  areaM2: number;
+  perimeterM: number;
+  /** Estimated stone count incl. joints, without waste */
+  stoneCount: number;
+  /** Polygon edges cross each other – area figure is unreliable */
+  selfIntersecting: boolean;
+  /** Bounding box (mm) */
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
+}
+
+export interface PavingSummary {
+  areas: PavedAreaSummary[];
+  /** Sum of all paved floors (m²) */
+  totalAreaM2: number;
+  totalStoneCount: number;
+}
+
 export type ConnectionMode = 'hardware' | 'traditional';
 
 export interface StructureParams {
   length: Millimeters;
   width: Millimeters;
-  /** H1 – top of front purlin (high eave) */
+  /** H1 – top of the high-eave purlin (canonical front; the wall opposite `roofDirection`) */
   frontHeight: Millimeters;
-  /** H2 – top of rear purlin (low eave) */
+  /** H2 – top of the low-eave purlin (canonical rear; the `roofDirection` wall) */
   rearHeight: Millimeters;
+  /** World wall the roof slopes down towards. 'rear' is the classic layout (rafters span the width). */
+  roofDirection: RoofDirection;
+  /** Framing scheme – see `RoofScheme` */
+  roofScheme: RoofScheme;
   overhangs: Overhangs;
   /** Maximum clear post spacing along purlin rows (default 3000) – used when postsPerRow is null */
   maxPostSpacing: Millimeters;
@@ -163,6 +242,13 @@ export interface StructureParams {
   postsPerRow: number | null;
   /** Maximum rafter centre spacing (default 800) */
   maxRafterSpacing: Millimeters;
+  /** Maximum sloped rafter length (default 8000) – longer rafters are split over intermediate purlins */
+  maxRafterLength: Millimeters;
+  /**
+   * Manual axis position of intermediate purlin row `i` in the CANONICAL frame (classic: z from
+   * the high-eave wall, sloped-purlins: x from the left wall); null / missing = automatic equal split.
+   */
+  midPurlinPositions: (Millimeters | null)[];
   /** Maximum stud centre spacing in closed walls (default 625) */
   maxStudSpacing: Millimeters;
   /** Maximum purchasable stock length – longer purlins are spliced over a post */
@@ -171,6 +257,8 @@ export interface StructureParams {
   braces: boolean;
   /** Knee brace leg length (horizontal = vertical projection) */
   braceLeg: Millimeters;
+  /** Which way the knee braces lean along the purlin rows */
+  braceDirection: BraceDirection;
   connectionMode: ConnectionMode;
   timber: TimberSpecs;
   loads: LoadSettings;
@@ -183,6 +271,7 @@ export interface ProjectState {
   walls: Record<WallId, Wall>;
   partitions: Partition[];
   vehicles: Vehicle[];
+  pavedAreas: PavedArea[];
   postOverrides: Record<string, PostOverride>;
 }
 
@@ -258,6 +347,8 @@ export interface Member {
   wallId?: WallId;
   /** Set for members of an interior partition wall */
   partitionId?: string;
+  /** Purlins: key of the post row they sit on ('front', 'mid0', …) */
+  purlinRow?: string;
   notes?: string;
 }
 
@@ -294,8 +385,14 @@ export interface RoofGeometry {
   rafterSpacing: Millimeters;
   /** Horizontal run of the rafters (W + overhangs) */
   rafterRun: Millimeters;
-  /** Sloped length of the rafters */
+  /** Sloped length of the rafters (front tail to rear tail) */
   rafterLength: Millimeters;
+  /** Number of intermediate purlin rows the rafters are split over */
+  midPurlinCount: number;
+  /** Pieces per rafter (= midPurlinCount + 1) */
+  rafterPieces: number;
+  /** Longest single rafter piece (sloped) */
+  rafterPieceLength: Millimeters;
   /** Highest point of the roof (top of roof deck at the front) */
   ridgeHeight: Millimeters;
   /** Lowest eave height at the rear (underside of rafter tail) */
@@ -304,20 +401,47 @@ export interface RoofGeometry {
   areaM2: number;
 }
 
+/**
+ * Post grid in the CANONICAL frame. Post override keys (`<row>:<index>`) refer to these rows,
+ * so the grid is not rotated into world space.
+ *  - 'classic':        purlin rows run along X at z = front / mid… / rear; closed side walls get
+ *                      extra posts along Z.
+ *  - 'sloped-purlins': purlin rows run along Z at x = left / mid… / right; closed front / rear
+ *                      walls get extra posts along X.
+ */
 export interface PostGrid {
-  /** Post axis positions along X for the front & rear rows */
-  xPositions: Millimeters[];
-  frontXPositions: Millimeters[];
-  frontXKeys: string[];
-  rearXPositions: Millimeters[];
-  rearXKeys: string[];
-  /** Post axis positions along Z for side rows (only when side walls are closed and W > max spacing) */
-  zPositions: Millimeters[];
-  leftZPositions: Millimeters[];
-  leftZKeys: string[];
-  rightZPositions: Millimeters[];
-  rightZKeys: string[];
+  scheme: RoofScheme;
+  /** Purlin rows in order: classic front → rear, sloped-purlins left → right */
+  rows: PostRow[];
+  /** Intermediate posts of the closed walls that carry no purlin (classic: left / right, sloped-purlins: front / rear) */
+  wallPosts: Partial<Record<WallId, WallPosts>>;
+  /** Nominal post spacing along a purlin row */
   postSpacing: Millimeters;
+}
+
+/** One purlin row with its posts (canonical frame). */
+export interface PostRow {
+  /** Override key prefix: 'front' | 'rear' | 'left' | 'right' | 'mid0', 'mid1', … */
+  key: string;
+  /** Eave rows sit on an outer wall; intermediate rows have none */
+  wallId?: WallId;
+  /** 0-based index of an intermediate row */
+  index?: number;
+  /** Axis the row runs along */
+  axis: 'x' | 'z';
+  /** Fixed coordinate of the row: z for rows along X, x for rows along Z */
+  offset: Millimeters;
+  /** Post axis positions along the row */
+  positions: Millimeters[];
+  keys: string[];
+  name: string;
+  nameDe: string;
+}
+
+export interface WallPosts {
+  /** Post axis positions along the wall (u from the canonical start corner) */
+  positions: Millimeters[];
+  keys: string[];
 }
 
 export interface FramingWarning {
@@ -501,6 +625,7 @@ export interface DerivedModel {
   cutList: CutListItem[];
   connections: ConnectionsResult;
   vehicles: VehicleFit[];
+  paving: PavingSummary;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -517,6 +642,7 @@ export interface LayerVisibility {
   dimensions: boolean;
   grid: boolean;
   vehicles: boolean;
+  paving: boolean;
 }
 
 export interface ViewSettings {

@@ -8,6 +8,7 @@ import { ProjectMenu } from '@/components/ui/ProjectMenu';
 import { ResultsPanel } from '@/components/ui/ResultsPanel';
 import { ViewportControls } from '@/components/ui/ViewportControls';
 import { useVehicleKeyboard } from '@/components/ui/useVehicleKeyboard';
+import { usePavingKeyboard } from '@/components/ui/usePavingKeyboard';
 import { useModel, useProjectStore } from '@/store';
 import { useUiStore } from '@/store/uiStore';
 
@@ -38,6 +39,7 @@ function Designer() {
   const toggleRight = useUiStore((s) => s.toggleRight);
   const canvasRef = useRef<HTMLDivElement>(null);
   useVehicleKeyboard();
+  usePavingKeyboard();
   useHistoryKeyboard();
 
   return (

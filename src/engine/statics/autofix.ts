@@ -1,5 +1,5 @@
-import type { ProjectState, StaticsCheck, StaticsStatus, StructureParams, TimberSection } from '@/types';
-import { buildFraming } from '../framing';
+import type { ProjectState, StaticsCheck, StaticsResult, StaticsStatus, StructureParams, TimberSection } from '@/types';
+import { buildFramingCanonical, canonicalProject } from '../framing';
 import { computeStatics, STANDARD_DEPTHS } from './index';
 import { findSmallestValidSection, findSmallestValidSquareSize } from './costOptimizationHelpers';
 
@@ -18,6 +18,7 @@ import { findSmallestValidSection, findSmallestValidSquareSize } from './costOpt
 const POST_SIZES = [100, 120, 140, 160, 180, 200, 220, 240];
 const STUD_DEPTHS = [100, 120, 140, 160, 180, 200];
 const RAFTER_SPACINGS = [1250, 1000, 800, 625, 500, 400, 300];
+const RAFTER_LENGTHS = [13000, 12000, 10000, 8000, 7000, 6000, 5000, 4500, 4000, 3500, 3000];
 const MIN_POST_SPACING = 1000;
 const POST_SPACING_STEP = 500;
 const MAX_ITERATIONS = 60;
@@ -56,8 +57,14 @@ function nextDown(ladder: number[], value: number): number | undefined {
   return [...ladder].reverse().find((v) => v < value);
 }
 
+/** Statics of a world project, evaluated in the canonical frame. */
+function staticsOf(project: ProjectState): StaticsResult {
+  const canonical = canonicalProject(project);
+  return computeStatics(canonical, buildFramingCanonical(canonical));
+}
+
 function evaluate(project: ProjectState): StaticsCheck[] {
-  return computeStatics(project, buildFraming(project)).checks;
+  return staticsOf(project).checks;
 }
 
 /** Adds posts to every purlin row; returns the new params or undefined when no more posts fit. */
@@ -76,7 +83,10 @@ function applyFix(params: StructureParams, check: StaticsCheck): StructureParams
     const deeper = nextUp(STANDARD_DEPTHS, timber.rafter.height);
     if (deeper) return { ...params, timber: { ...timber, rafter: { ...timber.rafter, height: deeper } } };
     const closer = nextDown(RAFTER_SPACINGS, params.maxRafterSpacing);
-    return closer ? { ...params, maxRafterSpacing: closer } : undefined;
+    if (closer) return { ...params, maxRafterSpacing: closer };
+    // last resort: a shorter max rafter length adds an intermediate purlin row
+    const shorter = nextDown(RAFTER_LENGTHS, params.maxRafterLength);
+    return shorter ? { ...params, maxRafterLength: shorter } : undefined;
   }
   if (check.id.startsWith('purlin')) {
     const deeper = nextUp(STANDARD_DEPTHS, timber.beam.height);
@@ -107,13 +117,14 @@ function diffParams(before: StructureParams, after: StructureParams): AutoFixCha
   push('Posts (Pfosten)', sec(before.timber.post), sec(after.timber.post));
   push('Wall studs (Ständer)', sec(before.timber.stud), sec(after.timber.stud));
   push('Max rafter spacing', `${before.maxRafterSpacing} mm`, `${after.maxRafterSpacing} mm`);
+  push('Max rafter length', `${before.maxRafterLength} mm`, `${after.maxRafterLength} mm`);
   push('Max post spacing', `${before.maxPostSpacing} mm`, `${after.maxPostSpacing} mm`);
   push('Posts per row', String(before.postsPerRow ?? 'auto'), String(after.postsPerRow ?? 'auto'));
   return changes;
 }
 
 function isStaticsOk(project: ProjectState, params: StructureParams): boolean {
-  return computeStatics({ ...project, params }, buildFraming({ ...project, params })).status === 'ok';
+  return staticsOf({ ...project, params }).status === 'ok';
 }
 
 function replaceSection(params: StructureParams, key: 'rafter' | 'beam' | 'stud', section: TimberSection): StructureParams {
@@ -125,7 +136,7 @@ function replacePost(params: StructureParams, section: TimberSection): Structure
 }
 
 function finalResult<T extends StaticsAction>(project: ProjectState, params: StructureParams, action: T): Omit<StaticsActionResult, 'action'> & { action: T } {
-  const finalStatics = computeStatics({ ...project, params }, buildFraming({ ...project, params }));
+  const finalStatics = staticsOf({ ...project, params });
   return {
     params,
     changes: diffParams(project.params, params),
@@ -189,7 +200,7 @@ export function autoFixStatics(project: ProjectState): AutoFixResult {
     params = next;
   }
 
-  const finalStatics = computeStatics({ ...project, params }, buildFraming({ ...project, params }));
+  const finalStatics = staticsOf({ ...project, params });
   return {
     params,
     changes: diffParams(project.params, params),

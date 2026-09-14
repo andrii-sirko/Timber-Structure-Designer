@@ -32,7 +32,6 @@ export function generateWallFraming(
   const { timber } = params;
   const sw = timber.stud.width; // along the wall
   const sd = timber.stud.height; // wall depth
-  const pw = timber.post.width;
   const sillTop = sw; // bottom plate laid flat
   const pitch = frame.sloped ? roof.pitchDeg : 0;
   const tan = frame.sloped ? roof.tan : 0;
@@ -222,19 +221,44 @@ export function generateWallFraming(
     }
   }
 
-  // Sloped side rail (Rähm) between the purlins
-  if (frame.sloped && !isPartition) {
+  // Rail (Rähm) on outer walls without a purlin – one piece per purlin bay.
+  // classic: sloped along the side walls between the purlins; sloped-purlins: level along the
+  // front / rear walls between the purlin rows.
+  if (!isPartition && !frame.hasPurlin) {
     const bw = timber.beam.width;
     const bh = timber.beam.height;
-    const zA = pw / 2 + bw / 2;
-    const zB = params.width - pw / 2 - bw / 2;
-    if (zB - zA > 100) {
-      const axisLength = (zB - zA) / roof.cos;
-      const startWorld = frame.toWorld(zA, roof.bottomAt(zA) - bh / 2 / roof.cos);
+    const rowU = frame.sloped ? roof.purlins.map((p) => p.z) : [frame.postU[0], ...roof.midPurlinX, frame.postU[frame.postU.length - 1]];
+    for (let k = 0; k < rowU.length - 1; k++) {
+      const uA = rowU[k] + bw / 2;
+      const uB = rowU[k + 1] - bw / 2;
+      if (uB - uA <= 100) continue;
+      const name = rowU.length > 2 ? `Side rail ${wallLabel} (part ${k + 1})` : `Side rail ${wallLabel}`;
+      if (!frame.sloped) {
+        const length = uB - uA;
+        members.push({
+          id: nextId('rail'),
+          category: 'beam',
+          name,
+          nameDe: 'Rähm',
+          group: 'Side rail (Rähm)',
+          section: { width: bw, height: bh },
+          length: Math.round(length),
+          start: frame.toWorld(uA, frame.studTopAt(uA) + bh / 2),
+          direction: frame.u,
+          up: Y_AXIS,
+          cuts: { start: 0, end: 0 },
+          profile: rectProfile(length, bh),
+          ...ref,
+          notes: 'Level under the rafters, between the purlin rows',
+        });
+        continue;
+      }
+      const axisLength = (uB - uA) / roof.cos;
+      const startWorld = frame.toWorld(uA, roof.bottomAt(uA) - bh / 2 / roof.cos);
       members.push({
         id: nextId('rail'),
         category: 'beam',
-        name: `Side rail ${wallLabel}`,
+        name,
         nameDe: 'Rähm',
         group: 'Side rail (Rähm)',
         section: { width: bw, height: bh },

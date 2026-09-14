@@ -1,5 +1,7 @@
 import type { FramingResult, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection } from '@/types';
 import { sanitizeParams } from '../framing';
+import { rowPostTop } from '../framing/structure';
+import { computeRoofLines } from '../framing/roofLines';
 import { sectionLabel } from '../geometry';
 import {
   KDEF_BY_SERVICE_CLASS,
@@ -152,6 +154,7 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
   const kmod = KMOD_BY_SERVICE_CLASS[loads.serviceClass];
   const kdef = KDEF_BY_SERVICE_CLASS[loads.serviceClass];
   const roof = framing.roof;
+  const roofLines = computeRoofLines(params);
   const cos = Math.cos(roof.pitchRad);
   const density = (mat.density * G_ACCEL) / 1000; // kN/m³
 
@@ -166,14 +169,26 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
 
   const checks: StaticsCheck[] = [];
 
+  const grid = framing.grid;
+  const slopedPurlins = grid.scheme === 'sloped-purlins';
+  const pw = timber.post.width;
+  // Row offsets across the rafters: classic z of every purlin row, sloped-purlins x of every row
+  const rowOffsets = grid.rows.map((r) => r.offset);
+  const rowIds = grid.rows.map((r) => (r.wallId ? `purlin-${r.wallId}` : `purlin-mid-${r.index ?? 0}`));
+
   // ── Rafters ─────────────────────────────────────────────────────────────
   {
-    const pw = timber.post.width;
-    const horizontalSpan = Math.max(params.width - pw, 500);
-    const span = horizontalSpan / cos;
-    const cantilever = Math.max(overhangs.front, overhangs.rear) / cos;
-    const qG = deadLoad * spacingM * cos * cos;
-    const qQ = snowLoadRoof * spacingM * cos * cos;
+    // governing bay between neighbouring purlin rows
+    let horizontalSpan = 500;
+    for (let i = 1; i < rowOffsets.length; i++) horizontalSpan = Math.max(horizontalSpan, rowOffsets[i] - rowOffsets[i - 1] - pw);
+    // classic rafters run down the slope (sloped span, loads per sloped metre → cos²);
+    // sloped-purlins rafters are level across the slope
+    const span = slopedPurlins ? horizontalSpan : horizontalSpan / cos;
+    const nMid = rowOffsets.length - 2;
+    const cantilever = slopedPurlins ? Math.max(overhangs.left, overhangs.right) : Math.max(overhangs.front, overhangs.rear) / cos;
+    const factor = slopedPurlins ? 1 : cos * cos;
+    const qG = deadLoad * spacingM * factor;
+    const qQ = snowLoadRoof * spacingM * factor;
     const res = checkBeam({ section: timber.rafter, span, cantilever, qG, qQ }, mat, kmod, kdef);
     const status = statusOf(res.utilisation);
     let recommendation: string | undefined;
@@ -182,8 +197,8 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
         (h) => h > timber.rafter.height && checkBeam({ section: { width: timber.rafter.width, height: h }, span, cantilever, qG, qQ }, mat, kmod, kdef).utilisation <= OK_LIMIT,
       );
       recommendation = better
-        ? `Increase rafters to ${timber.rafter.width}×${better} mm, or reduce rafter spacing / add a mid purlin.`
-        : 'Add an intermediate purlin with posts to halve the rafter span.';
+        ? `Increase rafters to ${timber.rafter.width}×${better} mm, or reduce rafter spacing / the max rafter length (adds a mid purlin).`
+        : 'Reduce the max rafter length to add an intermediate purlin row and halve the rafter span.';
     }
     checks.push({
       id: 'rafter',
@@ -200,29 +215,44 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
       utilisation: res.utilisation,
       status,
       recommendation,
-      detail: `Simply supported on both purlins, span ${fmt(span / 1000, 2)} m (sloped), spacing ${roof.rafterSpacing} mm, cantilever ${Math.round(cantilever)} mm. σ_m,d = ${fmt(res.sigma)} ≤ f_m,d = ${fmt(res.fmd)} N/mm² (${pct(res.stressUtil)}), shear ${pct(res.shearUtil)}, w_fin = ${fmt(res.wFin)} mm ≤ ${fmt(res.wLimit)} mm (L/200).`,
+      detail: `${nMid > 0 ? `Supported on ${nMid + 2} purlin rows, governing bay treated as simply supported (conservative)` : 'Simply supported on both purlins'}, span ${fmt(span / 1000, 2)} m (${slopedPurlins ? 'level' : 'sloped'}), spacing ${roof.rafterSpacing} mm, cantilever ${Math.round(cantilever)} mm. σ_m,d = ${fmt(res.sigma)} ≤ f_m,d = ${fmt(res.fmd)} N/mm² (${pct(res.stressUtil)}), shear ${pct(res.shearUtil)}, w_fin = ${fmt(res.wFin)} mm ≤ ${fmt(res.wLimit)} mm (L/200).`,
     });
   }
 
-  // ── Purlins (front carries W/2 + front overhang, rear W/2 + rear overhang) ─
+  // ── Purlins ─────────────────────────────────────────────────────────────
   const purlinSelf = density * (timber.beam.width / 1000) * (timber.beam.height / 1000);
   // Supports are the posts actually present in each row (posts can be moved or removed
   // individually), so the governing span is the widest gap between neighbouring posts
   // and the cantilever the longest purlin end beyond the outermost post.
-  const purlinStart = -overhangs.left;
-  const purlinEnd = params.length + overhangs.right;
-  const purlinRows = [
-    { id: 'purlin-front', label: 'Purlin front', labelDe: 'Pfette vorne', trib: params.width / 2 + overhangs.front, supports: purlinSupports(framing.grid.frontXPositions, purlinStart, purlinEnd) },
-    { id: 'purlin-rear', label: 'Purlin rear', labelDe: 'Pfette hinten', trib: params.width / 2 + overhangs.rear, supports: purlinSupports(framing.grid.rearXPositions, purlinStart, purlinEnd) },
-  ];
+  const purlinStart = slopedPurlins ? -overhangs.front : -overhangs.left;
+  const purlinEnd = slopedPurlins ? params.width + overhangs.rear : params.length + overhangs.right;
+  // Each row carries half of the rafter bay on either side; the eave rows add their overhang.
+  const half = (i: number, j: number): number => (rowOffsets[j] - rowOffsets[i]) / 2;
+  const last = rowOffsets.length - 1;
+  const eaveOverhang = (wallId: string | undefined): number =>
+    wallId === 'front' ? overhangs.front : wallId === 'rear' ? overhangs.rear : wallId === 'left' ? overhangs.left : wallId === 'right' ? overhangs.right : 0;
+  const purlinRows = grid.rows.map((row, k) => ({
+    id: rowIds[k],
+    label: row.name,
+    labelDe: row.nameDe,
+    trib: (k > 0 ? half(k - 1, k) : 0) + (k < last ? half(k, k + 1) : 0) + eaveOverhang(row.wallId),
+    supports: purlinSupports(row.positions, purlinStart, purlinEnd),
+    row,
+  }));
+  // Vertical line loads per horizontal metre (post reactions) and the beam-check loads
+  // (sloped purlins: sloped span, perpendicular component → cos²).
+  const spanFactor = slopedPurlins ? 1 / cos : 1;
+  const loadFactor = slopedPurlins ? cos * cos : 1;
   const purlinLoads = purlinRows.map((row) => {
     const tribM = row.trib / 1000;
-    const qG = deadLoad * tribM + purlinSelf;
-    const qQ = snowLoadRoof * tribM;
-    return { row, qG, qQ };
+    const qvG = deadLoad * tribM + purlinSelf;
+    const qvQ = snowLoadRoof * tribM;
+    return { row, qvG, qvQ, qG: qvG * loadFactor, qQ: qvQ * loadFactor };
   });
   for (const { row, qG, qQ } of purlinLoads) {
-    const { span: purlinSpan, cantilever: purlinCantilever, posts } = row.supports;
+    const { span: gap, cantilever: gapCantilever, posts } = row.supports;
+    const purlinSpan = gap * spanFactor;
+    const purlinCantilever = gapCantilever * spanFactor;
     const res = checkBeam({ section: timber.beam, span: purlinSpan, cantilever: purlinCantilever, qG, qQ }, mat, kmod, kdef);
     const unsupported = posts < 2;
     const status = unsupported ? 'fail' : statusOf(res.utilisation);
@@ -252,20 +282,27 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
       utilisation: res.utilisation,
       status,
       recommendation,
-      detail: `${unsupported ? `Only ${posts} post in this row – no supported span. ` : ''}Largest post spacing ${fmt(purlinSpan / 1000, 2)} m (${posts} posts) treated as simply supported (conservative), tributary width ${fmt(row.trib / 1000, 2)} m, end cantilever ${Math.round(purlinCantilever)} mm. σ_m,d = ${fmt(res.sigma)} ≤ ${fmt(res.fmd)} N/mm² (${pct(res.stressUtil)}), w_fin = ${fmt(res.wFin)} mm ≤ ${fmt(res.wLimit)} mm.`,
+      detail: `${unsupported ? `Only ${posts} post in this row – no supported span. ` : ''}Largest post spacing ${fmt(purlinSpan / 1000, 2)} m${slopedPurlins ? ' (sloped)' : ''} (${posts} posts) treated as simply supported (conservative), tributary width ${fmt(row.trib / 1000, 2)} m, end cantilever ${Math.round(purlinCantilever)} mm. σ_m,d = ${fmt(res.sigma)} ≤ ${fmt(res.fmd)} N/mm² (${pct(res.stressUtil)}), w_fin = ${fmt(res.wFin)} mm ≤ ${fmt(res.wLimit)} mm.`,
     });
   }
 
-  // ── Posts (front row usually governs: taller + larger tributary) ─────────
-  const postRows = [
-    { id: 'post-front', label: 'Post front', labelDe: 'Pfosten vorne', height: params.frontHeight - timber.beam.height, load: purlinLoads[0] },
-    { id: 'post-rear', label: 'Post rear', labelDe: 'Pfosten hinten', height: params.rearHeight - timber.beam.height, load: purlinLoads[1] },
-  ];
+  // ── Posts (the tallest post of each row governs: buckling length + tributary) ──
+  const postRows = purlinLoads.map((load) => {
+    const row = load.row.row;
+    const tallest = row.positions.length > 0 ? Math.max(...row.positions.map((pos) => rowPostTop(row, roofLines, params, pos))) : rowPostTop(row, roofLines, params, pw / 2);
+    return {
+      id: load.row.id.replace('purlin', 'post'),
+      label: row.name.replace('Purlin', 'Post'),
+      labelDe: row.nameDe === 'Mittelpfette' ? 'Pfosten mitte' : row.nameDe.replace('Pfette', 'Pfosten'),
+      height: tallest,
+      load,
+    };
+  });
   for (const row of postRows) {
-    const { span: purlinSpan, cantilever: purlinCantilever } = row.load.row.supports;
-    const spanM = (purlinSpan + purlinCantilever) / 1000;
-    const Nd = (GAMMA_G * row.load.qG + GAMMA_Q * row.load.qQ) * spanM;
-    const Nk = (row.load.qG + row.load.qQ) * spanM;
+    const { span: gap, cantilever: gapCantilever } = row.load.row.supports;
+    const spanM = (gap + gapCantilever) / 1000;
+    const Nd = (GAMMA_G * row.load.qvG + GAMMA_Q * row.load.qvQ) * spanM;
+    const Nk = (row.load.qvG + row.load.qvQ) * spanM;
     const res = checkPost(timber.post, row.height, Nd, mat, kmod);
     const status = statusOf(res.utilisation);
     let recommendation: string | undefined;

@@ -10,8 +10,10 @@ import type {
   Opening,
   OpeningType,
   Overhangs,
+  GroundPoint,
   Partition,
   PartitionAxis,
+  PavedArea,
   ProjectState,
   SavedProject,
   StrengthClass,
@@ -26,6 +28,7 @@ import type {
 import { isOuterWall } from '@/types';
 import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, OPENING_DEFAULTS } from '@/engine';
 import { findVehicleSpot, getVehicleModel, VEHICLE_COLORS } from '@/engine/vehicles';
+import { defaultPavedArea, insertVertex, PAVING_COLORS, resizePolygon, translatePolygon } from '@/engine/paving';
 import { uuid } from '@/engine/geometry';
 import { createDefaultProject, DEFAULT_VIEW, normalizeProject, PROJECT_TEMPLATES } from './defaults';
 import { withHistory, type HistorySlice } from './history';
@@ -82,6 +85,9 @@ interface ProjectStoreBase {
   selectedWallId: WallKey | null;
   selectedOpeningId: string | null;
   selectedVehicleId: string | null;
+  selectedPavedAreaId: string | null;
+  /** Index of the selected corner of the selected paved floor */
+  selectedPavedPointIndex: number | null;
   hoveredMemberId: string | null;
   /** Member whose distances to its neighbours are being inspected */
   selectedMemberId: string | null;
@@ -124,7 +130,20 @@ interface ProjectStoreBase {
   nudgeVehicle: (id: string, dx: number, dz: number) => void;
   rotateVehicle: (id: string, deltaDeg: number) => void;
   movePost: (id: string, position: number) => void;
+  /** Manual axis position of intermediate purlin row `index` (canonical frame); null = automatic */
+  moveMidPurlin: (index: number, position: number | null) => void;
   removePost: (id: string) => void;
+
+  addPavedArea: () => string;
+  updatePavedArea: (id: string, patch: Partial<Omit<PavedArea, 'id'>>) => void;
+  removePavedArea: (id: string) => void;
+  selectPavedArea: (id: string | null, pointIndex?: number | null) => void;
+  movePavedPoint: (id: string, index: number, point: GroundPoint) => void;
+  /** Insert a corner on the edge after `afterIndex` (at its midpoint unless a point is given) and select it */
+  insertPavedPoint: (id: string, afterIndex: number, point?: GroundPoint) => number;
+  removePavedPoint: (id: string, index: number) => void;
+  translatePavedArea: (id: string, dx: number, dz: number) => void;
+  resizePavedArea: (id: string, width: number, depth: number) => void;
 
   setLayer: (layer: keyof LayerVisibility, visible: boolean) => void;
   setHighlight: (mode: HighlightMode) => void;
@@ -135,6 +154,7 @@ interface ProjectStoreBase {
   setNeighbourRadius: (mm: number) => void;
   setNeighbourLimit: (count: number) => void;
   addMeasurement: (m: Measurement) => void;
+  updateMeasurement: (id: string, patch: Partial<Pick<Measurement, 'a' | 'b'>>) => void;
   clearMeasurements: () => void;
 
   saveProjectAs: (name: string) => void;
@@ -196,6 +216,8 @@ export const useProjectStore = create<ProjectStore>()(
       selectedWallId: null,
       selectedOpeningId: null,
       selectedVehicleId: null,
+      selectedPavedAreaId: null,
+      selectedPavedPointIndex: null,
       hoveredMemberId: null,
       selectedMemberId: null,
       focusedNeighbourId: null,
@@ -209,14 +231,19 @@ export const useProjectStore = create<ProjectStore>()(
       setParam: (key, value) =>
         set((s) => {
           let params = { ...s.project.params, [key]: value };
-          // keep the monopitch geometry valid: front ≥ rear
+          // keep the monopitch geometry valid: high eave H1 ≥ low eave H2
           if (key === 'frontHeight' && typeof value === 'number' && value < params.rearHeight) {
             params = { ...params, rearHeight: value };
           }
           if (key === 'rearHeight' && typeof value === 'number' && value > params.frontHeight) {
             params = { ...params, frontHeight: value };
           }
-          return { project: clampAllOpenings({ ...s.project, params }) };
+          // Post overrides are keyed by purlin row; the rows move to other walls with the roof direction.
+          // Manual mid purlin positions are canonical-frame coordinates of those rows – reset as well.
+          const layoutChanged = (key === 'roofDirection' || key === 'roofScheme') && value !== s.project.params[key];
+          const postOverrides = layoutChanged ? {} : s.project.postOverrides;
+          if (layoutChanged) params = { ...params, midPurlinPositions: [] };
+          return { project: clampAllOpenings({ ...s.project, params, postOverrides }) };
         }),
 
       setParams: (params) => set((s) => ({ project: clampAllOpenings({ ...s.project, params }) })),
@@ -324,8 +351,14 @@ export const useProjectStore = create<ProjectStore>()(
         })),
 
       selectWall: (id) =>
-        set((s) => ({ selectedWallId: id, selectedOpeningId: id === s.selectedWallId ? s.selectedOpeningId : null, selectedVehicleId: id ? null : s.selectedVehicleId })),
-      selectOpening: (wallId, id) => set({ selectedWallId: wallId, selectedOpeningId: id, selectedVehicleId: null }),
+        set((s) => ({
+          selectedWallId: id,
+          selectedOpeningId: id === s.selectedWallId ? s.selectedOpeningId : null,
+          selectedVehicleId: id ? null : s.selectedVehicleId,
+          selectedPavedAreaId: id ? null : s.selectedPavedAreaId,
+          selectedPavedPointIndex: id ? null : s.selectedPavedPointIndex,
+        })),
+      selectOpening: (wallId, id) => set({ selectedWallId: wallId, selectedOpeningId: id, selectedVehicleId: null, selectedPavedAreaId: null, selectedPavedPointIndex: null }),
 
       addVehicle: (modelId) => {
         const id = uuid();
@@ -338,6 +371,8 @@ export const useProjectStore = create<ProjectStore>()(
             selectedVehicleId: id,
             selectedWallId: null,
             selectedOpeningId: null,
+            selectedPavedAreaId: null,
+            selectedPavedPointIndex: null,
           };
         });
         return id;
@@ -354,7 +389,14 @@ export const useProjectStore = create<ProjectStore>()(
           project: { ...s.project, vehicles: s.project.vehicles.filter((v) => v.id !== id) },
           selectedVehicleId: s.selectedVehicleId === id ? null : s.selectedVehicleId,
         })),
-      selectVehicle: (id) => set((s) => ({ selectedVehicleId: id, selectedWallId: id ? null : s.selectedWallId, selectedOpeningId: id ? null : s.selectedOpeningId })),
+      selectVehicle: (id) =>
+        set((s) => ({
+          selectedVehicleId: id,
+          selectedWallId: id ? null : s.selectedWallId,
+          selectedOpeningId: id ? null : s.selectedOpeningId,
+          selectedPavedAreaId: id ? null : s.selectedPavedAreaId,
+          selectedPavedPointIndex: id ? null : s.selectedPavedPointIndex,
+        })),
       nudgeVehicle: (id, dx, dz) =>
         set((s) => ({
           project: { ...s.project, vehicles: s.project.vehicles.map((v) => (v.id === id ? { ...v, x: v.x + dx, z: v.z + dz } : v)) },
@@ -365,8 +407,88 @@ export const useProjectStore = create<ProjectStore>()(
         })),
       movePost: (id, position) =>
         set((s) => ({ project: { ...s.project, postOverrides: { ...s.project.postOverrides, [id]: { position } } } })),
+      moveMidPurlin: (index, position) =>
+        set((s) => {
+          const midPurlinPositions = s.project.params.midPurlinPositions.slice();
+          while (midPurlinPositions.length <= index) midPurlinPositions.push(null);
+          midPurlinPositions[index] = position;
+          return { project: { ...s.project, params: { ...s.project.params, midPurlinPositions } } };
+        }),
       removePost: (id) =>
         set((s) => ({ project: { ...s.project, postOverrides: { ...s.project.postOverrides, [id]: { removed: true } } }, selectedMemberId: s.selectedMemberId === id ? null : s.selectedMemberId })),
+      addPavedArea: () => {
+        const id = uuid();
+        set((s) => {
+          const n = s.project.pavedAreas.length;
+          const area = defaultPavedArea(s.project.params, id, `Paved floor ${n + 1}`, PAVING_COLORS[n % PAVING_COLORS.length]);
+          // stack later floors next to the first one so they do not overlap exactly
+          const shifted = n > 0 ? { ...area, points: translatePolygon(area.points, 0, n * (s.project.params.width + 1000)) } : area;
+          return {
+            project: { ...s.project, pavedAreas: [...s.project.pavedAreas, shifted] },
+            selectedPavedAreaId: id,
+            selectedPavedPointIndex: null,
+            selectedVehicleId: null,
+            selectedWallId: null,
+            selectedOpeningId: null,
+          };
+        });
+        return id;
+      },
+      updatePavedArea: (id, patch) =>
+        set((s) => ({ project: { ...s.project, pavedAreas: s.project.pavedAreas.map((a) => (a.id === id ? { ...a, ...patch } : a)) } })),
+      removePavedArea: (id) =>
+        set((s) => ({
+          project: { ...s.project, pavedAreas: s.project.pavedAreas.filter((a) => a.id !== id) },
+          selectedPavedAreaId: s.selectedPavedAreaId === id ? null : s.selectedPavedAreaId,
+          selectedPavedPointIndex: s.selectedPavedAreaId === id ? null : s.selectedPavedPointIndex,
+        })),
+      selectPavedArea: (id, pointIndex = null) =>
+        set((s) => ({
+          selectedPavedAreaId: id,
+          selectedPavedPointIndex: id ? pointIndex : null,
+          selectedWallId: id ? null : s.selectedWallId,
+          selectedOpeningId: id ? null : s.selectedOpeningId,
+          selectedVehicleId: id ? null : s.selectedVehicleId,
+        })),
+      movePavedPoint: (id, index, point) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            pavedAreas: s.project.pavedAreas.map((a) => (a.id === id ? { ...a, points: a.points.map((p, i) => (i === index ? { x: Math.round(point.x), z: Math.round(point.z) } : p)) } : a)),
+          },
+        })),
+      insertPavedPoint: (id, afterIndex, point) => {
+        const index = afterIndex + 1;
+        set((s) => ({
+          project: {
+            ...s.project,
+            pavedAreas: s.project.pavedAreas.map((a) => (a.id === id ? { ...a, points: insertVertex(a.points, afterIndex, point) } : a)),
+          },
+          selectedPavedAreaId: id,
+          selectedPavedPointIndex: index,
+          selectedWallId: null,
+          selectedOpeningId: null,
+          selectedVehicleId: null,
+        }));
+        return index;
+      },
+      removePavedPoint: (id, index) =>
+        set((s) => {
+          const area = s.project.pavedAreas.find((a) => a.id === id);
+          if (!area || area.points.length <= 3) return s;
+          return {
+            project: { ...s.project, pavedAreas: s.project.pavedAreas.map((a) => (a.id === id ? { ...a, points: a.points.filter((_, i) => i !== index) } : a)) },
+            selectedPavedPointIndex: s.selectedPavedAreaId === id && s.selectedPavedPointIndex === index ? null : s.selectedPavedPointIndex,
+          };
+        }),
+      translatePavedArea: (id, dx, dz) =>
+        set((s) => ({
+          project: { ...s.project, pavedAreas: s.project.pavedAreas.map((a) => (a.id === id ? { ...a, points: translatePolygon(a.points, dx, dz) } : a)) },
+        })),
+      resizePavedArea: (id, width, depth) =>
+        set((s) => ({
+          project: { ...s.project, pavedAreas: s.project.pavedAreas.map((a) => (a.id === id ? { ...a, points: resizePolygon(a.points, Math.max(100, width), Math.max(100, depth)) } : a)) },
+        })),
       setHoveredMember: (id) => set((s) => (s.hoveredMemberId === id ? s : { hoveredMemberId: id })),
       selectMember: (id) => set((s) => (s.selectedMemberId === id ? s : { selectedMemberId: id, focusedNeighbourId: null })),
       setFocusedNeighbour: (id) => set((s) => (s.focusedNeighbourId === id ? s : { focusedNeighbourId: id })),
@@ -383,6 +505,8 @@ export const useProjectStore = create<ProjectStore>()(
       setNeighbourRadius: (neighbourRadius) => set((s) => ({ view: { ...s.view, neighbourRadius } })),
       setNeighbourLimit: (neighbourLimit) => set((s) => ({ view: { ...s.view, neighbourLimit } })),
       addMeasurement: (m) => set((s) => ({ measurements: [...s.measurements, m] })),
+      updateMeasurement: (id, patch) =>
+        set((s) => ({ measurements: s.measurements.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
       clearMeasurements: () => set({ measurements: [] }),
 
       saveProjectAs: (name) =>
@@ -394,19 +518,19 @@ export const useProjectStore = create<ProjectStore>()(
       loadSavedProject: (id) => {
         const entry = get().savedProjects.find((p) => p.id === id);
         if (!entry) return;
-        set({ project: clampAllOpenings(normalizeProject(entry.project)), selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, measurements: [] });
+        set({ project: clampAllOpenings(normalizeProject(entry.project)), selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, selectedPavedAreaId: null, selectedPavedPointIndex: null, measurements: [] });
       },
       deleteSavedProject: (id) => set((s) => ({ savedProjects: s.savedProjects.filter((p) => p.id !== id) })),
       loadTemplate: (templateId) => {
         const t = PROJECT_TEMPLATES.find((x) => x.id === templateId);
         if (!t) return;
-        set({ project: clampAllOpenings(t.build()), selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, measurements: [] });
+        set({ project: clampAllOpenings(t.build()), selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, selectedPavedAreaId: null, selectedPavedPointIndex: null, measurements: [] });
       },
       importProject: (raw) => {
         const project = clampAllOpenings(normalizeProject(raw));
-        set({ project, selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, measurements: [] });
+        set({ project, selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, selectedPavedAreaId: null, selectedPavedPointIndex: null, measurements: [] });
       },
-      resetProject: () => set({ project: createDefaultProject(), selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, measurements: [] }),
+      resetProject: () => set({ project: createDefaultProject(), selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, selectedPavedAreaId: null, selectedPavedPointIndex: null, measurements: [] }),
       setHydrated: (hydrated) => set({ hydrated }),
     })),
     {

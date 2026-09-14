@@ -46,7 +46,7 @@ const humanize = (s: string): string => s.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
 /** Label shown as "Undo <label>" — receives the action's own arguments. */
 const LABELS: Record<string, (...args: never[]) => string> = {
   setProjectName: () => 'Rename project',
-  setParam: (key: string) => `Change ${humanize(key)}`,
+  setParam: (key: string) => (key === 'roofDirection' ? 'Change roof direction' : key === 'roofScheme' ? 'Change roof framing scheme' : `Change ${humanize(key)}`),
   setParams: () => 'Apply statics auto-fix',
   setOverhang: (side: string) => `Change ${side} overhang`,
   setTimber: (key: string) => `Change ${humanize(key)} section`,
@@ -65,7 +65,16 @@ const LABELS: Record<string, (...args: never[]) => string> = {
   nudgeVehicle: () => 'Move vehicle',
   rotateVehicle: () => 'Rotate vehicle',
   movePost: () => 'Move post',
+  moveMidPurlin: (_index: number, position: number | null) => (position === null ? 'Reset mid purlin position' : 'Move mid purlin'),
   removePost: () => 'Remove post',
+  addPavedArea: () => 'Add paved floor',
+  updatePavedArea: () => 'Edit paved floor',
+  removePavedArea: () => 'Remove paved floor',
+  movePavedPoint: () => 'Move floor corner',
+  insertPavedPoint: () => 'Add floor corner',
+  removePavedPoint: () => 'Remove floor corner',
+  translatePavedArea: () => 'Move paved floor',
+  resizePavedArea: () => 'Resize paved floor',
   addMeasurement: () => 'Add measurement',
   clearMeasurements: () => 'Clear measurements',
   saveProjectAs: () => 'Save project',
@@ -87,6 +96,11 @@ const COALESCE: Record<string, (...args: never[]) => string> = {
   nudgeVehicle: (id: string) => `vehicle:${id}`,
   rotateVehicle: (id: string) => `vehicle:rot:${id}`,
   movePost: (id: string) => `post:${id}`,
+  moveMidPurlin: (index: number) => `midPurlin:${index}`,
+  updatePavedArea: (id: string) => `paving:${id}`,
+  movePavedPoint: (id: string, index: number) => `paving:${id}:${index}`,
+  translatePavedArea: (id: string) => `paving:move:${id}`,
+  resizePavedArea: (id: string) => `paving:size:${id}`,
 };
 
 function snapshotOf(s: HistoryTracked): Snapshot {

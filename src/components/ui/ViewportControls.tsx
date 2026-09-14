@@ -20,6 +20,7 @@ import {
   Scan,
   Waypoints,
   Car,
+  BrickWall,
 } from 'lucide-react';
 import type { CameraPreset, HighlightMode, LayerVisibility } from '@/types';
 import { useProjectStore } from '@/store';
@@ -42,6 +43,7 @@ const LAYERS: { id: keyof LayerVisibility; label: string; icon: typeof Home }[] 
   { id: 'dimensions', label: 'Dimension lines', icon: Ruler },
   { id: 'grid', label: 'Ground grid', icon: Grid3x3 },
   { id: 'vehicles', label: 'Vehicles', icon: Car },
+  { id: 'paving', label: 'Paved floors', icon: BrickWall },
 ];
 
 const HIGHLIGHTS: { id: HighlightMode; label: string; icon: typeof Home }[] = [

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import type { CameraPreset, DerivedModel } from '@/types';
@@ -35,7 +35,13 @@ export function CameraRig({ bounds }: { bounds: Bounds }) {
 
   const wallForPreset: string | null = preset === 'wall' ? selectedWallId : null;
 
+  // Bounds are read through a ref so that editing dimensions does not re-frame the camera;
+  // only an explicit preset change / nonce bump (or viewport resize) re-frames.
+  const boundsRef = useRef(bounds);
+  boundsRef.current = bounds;
+
   useEffect(() => {
+    const bounds = boundsRef.current;
     const centre = bounds.min.clone().add(bounds.max).multiplyScalar(0.5);
     const extent = bounds.max.clone().sub(bounds.min);
     const radius = extent.length() / 2;
@@ -123,7 +129,7 @@ export function CameraRig({ bounds }: { bounds: Bounds }) {
       controls.update();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset, orthographic, nonce, camera, controls, size.width, size.height, wallForPreset, bounds.min.x, bounds.min.z, bounds.max.x, bounds.max.y, bounds.max.z]);
+  }, [preset, orthographic, nonce, camera, controls, size.width, size.height, wallForPreset]);
 
   return null;
 }

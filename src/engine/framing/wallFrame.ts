@@ -1,5 +1,6 @@
 import type { Partition, PostGrid, StructureParams, Vec3, Wall, WallId } from '@/types';
 import { add, scale, X_AXIS, Y_AXIS, Z_AXIS, NEG_X, NEG_Z } from '../geometry';
+import { mapPos, mapVec, type GroundMap } from '../orientation';
 import type { RoofLines } from './roofLines';
 
 /** Clearance between the top of a partition wall and the rafter underside (mm). */
@@ -30,6 +31,8 @@ export interface WallFrame {
   sloped: boolean;
   /** Post axis positions along u (corner posts + intermediate posts; end studs for partitions) */
   postU: number[];
+  /** true when a purlin runs along the top of the wall (its posts are a purlin row) */
+  hasPurlin: boolean;
   /** Half width of the members at `postU` – bays start/end this far inside them */
   bayInset: number;
   /** Underside of the top member (purlin, side rail or top plate) at u → top of the studs */
@@ -40,7 +43,7 @@ export interface WallFrame {
   toWorld: (u: number, v: number, n?: number) => Vec3;
 }
 
-function makeToWorld(origin: Vec3, u: Vec3, v: Vec3, normal: Vec3, axisInset: number) {
+export function makeToWorld(origin: Vec3, u: Vec3, v: Vec3, normal: Vec3, axisInset: number) {
   return (uu: number, vv: number, n = -axisInset): Vec3 => add(add(add(origin, scale(u, uu)), scale(v, vv)), scale(normal, n));
 }
 
@@ -62,7 +65,11 @@ export function computeWallFrame(
   let postU: number[];
   let studTopAt: (u: number) => number;
   let claddingTopAt: (u: number) => number;
-  let sloped = false;
+  let isSloped = false;
+
+  const sloped = params.roofScheme === 'sloped-purlins';
+  const rowPositions = (rowKey: string): number[] => grid.rows.find((r) => r.key === rowKey)?.positions ?? [];
+  const wallPosts = (wallId: WallId, mids: number[], span: number): number[] => [pw / 2, ...(wall.closed ? (grid.wallPosts[wallId]?.positions ?? []) : mids), span - pw / 2];
 
   switch (id) {
     case 'front':
@@ -70,38 +77,42 @@ export function computeWallFrame(
       u = X_AXIS;
       normal = NEG_Z;
       length = L;
-      postU = grid.frontXPositions;
+      // classic: the front purlin row; sloped-purlins: a level rail between the purlin rows
+      postU = sloped ? wallPosts('front', roof.midPurlinX, L) : rowPositions('front');
       studTopAt = () => params.frontHeight - bh;
       claddingTopAt = () => roof.bottomAt(0);
+      isSloped = false;
       break;
     case 'rear':
       origin = { x: 0, y: 0, z: W };
       u = X_AXIS;
       normal = Z_AXIS;
       length = L;
-      postU = grid.rearXPositions;
+      postU = sloped ? wallPosts('rear', roof.midPurlinX, L) : rowPositions('rear');
       studTopAt = () => params.rearHeight - bh;
       claddingTopAt = () => roof.bottomAt(W);
+      isSloped = false;
       break;
     case 'left':
       origin = { x: 0, y: 0, z: 0 };
       u = Z_AXIS;
       normal = NEG_X;
       length = W;
-      postU = [pw / 2, ...(wall.closed ? grid.leftZPositions : []), W - pw / 2];
+      // classic: side posts under the sloped rail; sloped-purlins: the left purlin row
+      postU = sloped ? rowPositions('left') : wallPosts('left', roof.midPurlinZ, W);
       studTopAt = (uu) => roof.railBottomAt(uu);
       claddingTopAt = (uu) => roof.bottomAt(uu);
-      sloped = true;
+      isSloped = true;
       break;
     case 'right':
       origin = { x: L, y: 0, z: 0 };
       u = Z_AXIS;
       normal = X_AXIS;
       length = W;
-      postU = [pw / 2, ...(wall.closed ? grid.rightZPositions : []), W - pw / 2];
+      postU = sloped ? rowPositions('right') : wallPosts('right', roof.midPurlinZ, W);
       studTopAt = (uu) => roof.railBottomAt(uu);
       claddingTopAt = (uu) => roof.bottomAt(uu);
-      sloped = true;
+      isSloped = true;
       break;
   }
 
@@ -112,13 +123,14 @@ export function computeWallFrame(
     kind: 'outer',
     wallId: id,
     label: id,
+    hasPurlin: sloped ? id === 'left' || id === 'right' : id === 'front' || id === 'rear',
     origin,
     u,
     v,
     normal,
     length,
     axisInset,
-    sloped,
+    sloped: isSloped,
     postU,
     bayInset: pw / 2,
     studTopAt,
@@ -170,6 +182,7 @@ export function computePartitionFrame(partition: Partition, params: StructurePar
     kind: 'partition',
     partitionId: partition.id,
     label: partition.label || 'partition',
+    hasPurlin: false,
     origin,
     u,
     v,
@@ -182,6 +195,32 @@ export function computePartitionFrame(partition: Partition, params: StructurePar
     studTopAt,
     claddingTopAt,
     toWorld: makeToWorld(origin, u, v, normal, axisInset),
+  };
+}
+
+/**
+ * A canonical wall frame re-expressed in world space through the ground map `m`.
+ * When `flipped`, the world wall runs the other way along the same face, so the u origin moves
+ * to the far corner and every u-dependent quantity is mirrored (u' = length − u).
+ */
+export function wallFrameToWorld(frame: WallFrame, m: GroundMap, flipped: boolean, ids: { id: string; wallId?: WallId; partitionId?: string; label: string }): WallFrame {
+  const { length } = frame;
+  const originC = flipped ? add(frame.origin, scale(frame.u, length)) : frame.origin;
+  const uC = flipped ? scale(frame.u, -1) : frame.u;
+  const origin = mapPos(m, originC);
+  const u = mapVec(m, uC);
+  const normal = mapVec(m, frame.normal);
+  const mirror = (f: (u: number) => number) => (flipped ? (uu: number) => f(length - uu) : f);
+  return {
+    ...frame,
+    ...ids,
+    origin,
+    u,
+    normal,
+    postU: flipped ? frame.postU.map((uu) => length - uu).reverse() : frame.postU,
+    studTopAt: mirror(frame.studTopAt),
+    claddingTopAt: mirror(frame.claddingTopAt),
+    toWorld: makeToWorld(origin, u, frame.v, normal, frame.axisInset),
   };
 }
 

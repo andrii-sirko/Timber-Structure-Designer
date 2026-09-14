@@ -12,9 +12,12 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   const count = (pred: (m: (typeof members)[number]) => boolean): number => members.filter(pred).length;
 
   const nPosts = count((m) => m.category === 'post');
-  const nRowPosts = framing.grid.xPositions.length * 2;
+  const nRowPosts = framing.grid.rows.reduce((s, r) => s + r.positions.length, 0);
+  const nPurlinRows = framing.grid.rows.length;
+  const slopedPurlins = framing.grid.scheme === 'sloped-purlins';
+  /** Rafter bearings: every rafter seats on every purlin row */
+  const nBearings = framing.roof.rafterCount * nPurlinRows;
   const nSidePosts = nPosts - nRowPosts;
-  const nRafters = count((m) => m.category === 'rafter');
   const nBraces = count((m) => m.category === 'brace');
   const nStuds = count((m) => m.category === 'stud');
   const nPlates = count((m) => m.category === 'plate');
@@ -22,7 +25,7 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   const nHeaders = count((m) => m.category === 'header');
   const nSills = count((m) => m.category === 'sill');
   const nPurlinPieces = count((m) => m.group.startsWith('Purlin'));
-  const nSplices = Math.max(nPurlinPieces - 2, 0);
+  const nSplices = Math.max(nPurlinPieces - nPurlinRows, 0);
   const nRails = count((m) => m.group.startsWith('Side rail'));
   const claddingArea = framing.panels.filter((p) => p.kind === 'cladding').reduce((s, p) => s + p.areaM2, 0);
   const roofArea = framing.roof.areaM2;
@@ -45,8 +48,8 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   if (params.connectionMode === 'hardware') {
     hw('bracket', 'Angle bracket with rib 90×90×65', 'Winkelverbinder mit Rippe', '90×90×65×2.5 mm', nRowPosts * 2, '2 per post–purlin connection');
     hw('bracket-nails', 'Connector nails', 'Kammnägel', '4.0 × 40 mm', nRowPosts * 2 * 20);
-    hw('rafter-anchor', 'Rafter–purlin anchor', 'Sparrenpfettenanker', '170 mm, left/right alternating', nRafters * 2, '1 per rafter bearing');
-    hw('rafter-anchor-nails', 'Connector nails', 'Kammnägel', '4.0 × 50 mm', nRafters * 2 * 12);
+    hw('rafter-anchor', 'Rafter–purlin anchor', 'Sparrenpfettenanker', '170 mm, left/right alternating', nBearings, '1 per rafter bearing');
+    hw('rafter-anchor-nails', 'Connector nails', 'Kammnägel', '4.0 × 50 mm', nBearings * 12);
     hw('brace-screws', 'Structural screws, countersunk', 'Konstruktionsschrauben', '8 × 240 mm', nBraces * 4, '2 per brace end');
     hw('side-post-screws', 'Structural screws (side posts → rail)', 'Konstruktionsschrauben', '8 × 200 mm', nSidePosts * 2 + nRails * 4);
     hw('stud-screws', 'Wood screws (toe-screwed studs)', 'Holzbauschrauben', '6 × 140 mm', nStuds * 4, '2 per stud end');
@@ -57,13 +60,14 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   } else {
     jn('tenon-post', 'Mortise & tenon post → purlin', 'Zapfenverbindung Pfosten–Pfette', nRowPosts, 'Tenon 40 mm thick, 60 mm long, secured with oak peg');
     jn('peg-post', 'Oak pegs Ø 20 mm', 'Holznägel', nRowPosts + nBraces * 2);
-    jn('birdsmouth', 'Birdsmouth seat (rafter on purlin)', 'Kerve', nRafters * 2, `${framing.roof.birdsmouthDepth} mm deep`);
+    if (slopedPurlins) jn('seat', 'Bevelled seat (level rafter on sloped purlin)', 'Auflager geschrägt', nBearings, `${framing.roof.pitchDeg.toFixed(1)}° bevel`);
+    else jn('birdsmouth', 'Birdsmouth seat (rafter on purlin)', 'Kerve', nBearings, `${framing.roof.birdsmouthDepth} mm deep`);
     jn('brace-tenon', 'Knee brace tenons (both ends)', 'Kopfband-Zapfen', nBraces * 2, 'Stub tenon with peg');
     jn('scarf', 'Hooked scarf joint (purlin splice)', 'Hakenblatt', nSplices, 'Located over a post, bolted M12');
     jn('lap-rail', 'Half-lap side rail → post', 'Überblattung Rähm–Pfosten', nRails * 2 + nSidePosts);
     jn('stud-tenon', 'Stud tenons into plate & rail', 'Ständerzapfen', nStuds * 2);
     jn('housing', 'Housed headers & sills', 'Eingelassene Stürze/Riegel', nHeaders * 2 + nSills * 2);
-    hw('rafter-screw', 'Rafter screws (secures birdsmouth)', 'Sparrenschrauben', '8 × 280 mm', nRafters * 2, '1 per rafter bearing');
+    hw('rafter-screw', slopedPurlins ? 'Rafter screws (secures seat)' : 'Rafter screws (secures birdsmouth)', 'Sparrenschrauben', '8 × 280 mm', nBearings, '1 per rafter bearing');
     hw('splice-bolt', 'Scarf joint bolts', 'Stoßverschraubung', 'M12 × 200 mm', nSplices * 2);
     hw('plate-anchor', 'Frame anchors (bottom plate → slab)', 'Rahmendübel', '10 × 135 mm', Math.max(nPlates * 2, plateLengthM / 0.8));
   }

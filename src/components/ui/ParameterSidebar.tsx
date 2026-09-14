@@ -1,11 +1,27 @@
 import { Cable, CloudSnow, Ruler, Settings2, TreePine, Triangle } from 'lucide-react';
-import type { DerivedModel, RoofCovering, TimberSection } from '@/types';
+import type { BraceDirection, DerivedModel, RoofCovering, RoofDirection, RoofScheme, TimberSection, WallId } from '@/types';
+import { gridPostCount } from '@/engine/framing';
+import { midPurlinBounds } from '@/engine/framing/roofLines';
+import { worldWall } from '@/engine/orientation';
 import { useProjectStore } from '@/store';
 import { ROOF_COVERING_LOAD, SNOW_ZONE_PRESETS, STRENGTH_CLASSES } from '@/engine/statics/materials';
 import { NumberField, Section, SelectField, Toggle } from './primitives';
 import { StaticsBadge } from './StaticsBadge';
 import { WallEditor } from './WallEditor';
 import { VehiclesPanel } from './VehiclesPanel';
+import { PavingPanel } from './PavingPanel';
+
+const ROOF_DIRECTION_OPTIONS: { value: RoofDirection; label: string }[] = [
+  { value: 'rear', label: 'Rear – high eave at the front' },
+  { value: 'front', label: 'Front – high eave at the rear' },
+  { value: 'left', label: 'Left – high eave on the right' },
+  { value: 'right', label: 'Right – high eave on the left' },
+];
+
+const ROOF_SCHEME_OPTIONS: { value: RoofScheme; label: string }[] = [
+  { value: 'classic', label: 'Classic – level purlins across the slope, rafters down the slope' },
+  { value: 'sloped-purlins', label: 'Sloped purlins – post rows & braces down the slope, level rafters across (gable entry)' },
+];
 
 function SectionPair({ label, value, onChange, hint }: { label: string; value: TimberSection; onChange: (s: TimberSection) => void; hint?: string }) {
   return (
@@ -25,11 +41,17 @@ function SectionPair({ label, value, onChange, hint }: { label: string; value: T
 export function ParameterSidebar({ model }: { model: DerivedModel }) {
   const params = useProjectStore((s) => s.project.params);
   const setParam = useProjectStore((s) => s.setParam);
+  const moveMidPurlin = useProjectStore((s) => s.moveMidPurlin);
   const setOverhang = useProjectStore((s) => s.setOverhang);
   const setTimber = useProjectStore((s) => s.setTimber);
   const setStrengthClass = useProjectStore((s) => s.setStrengthClass);
   const setLoad = useProjectStore((s) => s.setLoad);
   const roof = model.framing.roof;
+  const lowWall: WallId = params.roofDirection;
+  const highWall = worldWall(params.roofDirection, 'front');
+  const midRows = model.framing.grid.rows.filter((r): r is typeof r & { index: number } => r.index !== undefined);
+  const midBounds = midPurlinBounds(params);
+  const midAxisFrom = params.roofScheme === 'sloped-purlins' ? `${worldWall(params.roofDirection, 'left')} wall post axis` : `high-eave (${highWall}) post axis`;
 
   return (
     <div className="flex h-full flex-col">
@@ -41,9 +63,21 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
           <div className="grid grid-cols-2 gap-2">
             <NumberField label="Length L" value={params.length} min={1500} max={20000} step={100} onChange={(v) => setParam('length', v)} />
             <NumberField label="Width W" value={params.width} min={1500} max={12000} step={100} onChange={(v) => setParam('width', v)} />
-            <NumberField label="Front height H1" value={params.frontHeight} min={1800} max={5000} step={50} onChange={(v) => setParam('frontHeight', v)} />
-            <NumberField label="Rear height H2" value={params.rearHeight} min={1500} max={5000} step={50} onChange={(v) => setParam('rearHeight', v)} />
+            <NumberField label={`High eave H1 (${highWall})`} value={params.frontHeight} min={1800} max={5000} step={50} onChange={(v) => setParam('frontHeight', v)} />
+            <NumberField label={`Low eave H2 (${lowWall})`} value={params.rearHeight} min={1500} max={5000} step={50} onChange={(v) => setParam('rearHeight', v)} />
           </div>
+          <SelectField<RoofDirection>
+            label="Roof slopes down towards"
+            value={params.roofDirection}
+            onChange={(v) => setParam('roofDirection', v)}
+            options={ROOF_DIRECTION_OPTIONS}
+          />
+          <SelectField<RoofScheme>
+            label="Framing scheme"
+            value={params.roofScheme}
+            onChange={(v) => setParam('roofScheme', v)}
+            options={ROOF_SCHEME_OPTIONS}
+          />
           <dl className="grid grid-cols-3 gap-2 rounded-md border border-slate-800 bg-slate-900/60 p-2 text-[11px]">
             <div>
               <dt className="text-slate-500">Pitch</dt>
@@ -54,7 +88,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
               <dd className="font-mono text-slate-200">{roof.ridgeHeight} mm</dd>
             </div>
             <div>
-              <dt className="text-slate-500">Rear eave</dt>
+              <dt className="text-slate-500">Low eave</dt>
               <dd className="font-mono text-slate-200">{roof.eaveHeight} mm</dd>
             </div>
           </dl>
@@ -77,6 +111,38 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
             }))}
           />
           <NumberField label="Max rafter spacing" value={params.maxRafterSpacing} min={300} max={1250} step={25} hint={`→ ${roof.rafterCount} rafters @ ${roof.rafterSpacing} mm`} onChange={(v) => setParam('maxRafterSpacing', v)} />
+          <NumberField
+            label="Max rafter length"
+            value={params.maxRafterLength}
+            min={2000}
+            max={13000}
+            step={250}
+            hint={roof.midPurlinCount > 0 ? `→ ${roof.midPurlinCount} mid purlin${roof.midPurlinCount > 1 ? 's' : ''}, ${roof.rafterPieces} pieces ≤ ${roof.rafterPieceLength} mm` : 'longer rafters get a mid purlin'}
+            onChange={(v) => setParam('maxRafterLength', v)}
+          />
+          {midRows.map((row) => {
+            const manual = params.midPurlinPositions[row.index] != null;
+            return (
+              <div key={row.key} className="flex items-end gap-2">
+                <div className="flex-1">
+                  <NumberField
+                    label={`${row.name} position`}
+                    value={row.offset}
+                    min={midBounds.lo}
+                    max={midBounds.hi}
+                    step={50}
+                    hint={`${manual ? 'manual' : 'auto'} – axis distance from the ${midAxisFrom}; drag the purlin in the 3D view too`}
+                    onChange={(v) => moveMidPurlin(row.index, v)}
+                  />
+                </div>
+                {manual && (
+                  <button type="button" className="mb-4 rounded border border-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-800" onClick={() => moveMidPurlin(row.index, null)}>
+                    Auto
+                  </button>
+                )}
+              </div>
+            );
+          })}
           <dl className="grid grid-cols-3 gap-2 rounded-md border border-slate-800 bg-slate-900/60 p-2 text-[11px]">
             <div>
               <dt className="text-slate-500">Total roof area</dt>
@@ -88,7 +154,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
             </div>
             <div>
               <dt className="text-slate-500">Rafter length</dt>
-              <dd className="font-mono text-slate-200">{roof.rafterLength} mm</dd>
+              <dd className="font-mono text-slate-200">{roof.rafterLength} mm{roof.rafterPieces > 1 ? ` (${roof.rafterPieces}× ≤ ${roof.rafterPieceLength})` : ''}</dd>
             </div>
           </dl>
         </Section>
@@ -110,9 +176,9 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
         <Section title="Structural grid" icon={Settings2} defaultOpen={false}>
           <Toggle
             label="Post count per row: automatic"
-            description={params.postsPerRow === null ? `From max spacing → ${model.framing.grid.xPositions.length} posts @ ${Math.round(model.framing.grid.postSpacing)} mm` : 'Off – set the number of posts manually'}
+            description={params.postsPerRow === null ? `From max spacing → ${gridPostCount(model.framing.grid)} posts @ ${Math.round(model.framing.grid.postSpacing)} mm` : 'Off – set the number of posts manually'}
             checked={params.postsPerRow === null}
-            onChange={(auto) => setParam('postsPerRow', auto ? null : model.framing.grid.xPositions.length)}
+            onChange={(auto) => setParam('postsPerRow', auto ? null : gridPostCount(model.framing.grid))}
           />
           {params.postsPerRow !== null && (
             <NumberField
@@ -131,6 +197,19 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
           <NumberField label="Max stock length" value={params.maxStockLength} min={3000} max={13000} step={500} hint="purlins spliced above" onChange={(v) => setParam('maxStockLength', v)} />
           <Toggle label="Knee braces (Kopfbänder)" description="45° braces post ↔ purlin for longitudinal stiffness" checked={params.braces} onChange={(v) => setParam('braces', v)} />
           {params.braces && <NumberField label="Brace leg" value={params.braceLeg} min={300} max={1200} step={50} onChange={(v) => setParam('braceLeg', v)} />}
+          {params.braces && (
+            <SelectField<BraceDirection>
+              label="Brace direction"
+              value={params.braceDirection}
+              onChange={(v) => setParam('braceDirection', v)}
+              options={[
+                { value: 'both', label: 'Both sides (pair per post)' },
+                { value: 'left', label: 'Towards left wall' },
+                { value: 'right', label: 'Towards right wall' },
+                { value: 'alternating', label: 'Alternating' },
+              ]}
+            />
+          )}
         </Section>
 
         <Section title="Loads & connections" icon={CloudSnow} defaultOpen={false}>
@@ -170,6 +249,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
 
         <WallEditor />
         <VehiclesPanel model={model} />
+        <PavingPanel model={model} />
       </div>
     </div>
   );

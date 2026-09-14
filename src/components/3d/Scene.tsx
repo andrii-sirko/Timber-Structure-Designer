@@ -7,8 +7,10 @@ import { useProjectStore } from '@/store';
 import { useNeighbours } from '@/store/useNeighbours';
 import { canDeleteSelectedPartition } from '@/engine/wallKeyboard';
 import { CameraRig, modelBounds } from './CameraRig';
-import { DimensionLines, PartitionDragDistances } from './DimensionLines';
-import { partitionDragAxis } from '@/engine/postDrag';
+import { DimensionLines, MidPurlinDragDistances, PartitionDragDistances } from './DimensionLines';
+import { midPurlinIndex, partitionDragAxis } from '@/engine/postDrag';
+import { worldPointToCanonical } from '@/engine/orientation';
+import { postKeyAxis } from '@/engine/postOverrides';
 import { MM } from './materials';
 import { MeasureTool, useMeasureStore } from './MeasureTool';
 import { NeighbourDistances } from './NeighbourDistances';
@@ -16,6 +18,7 @@ import { OpeningsEditor } from './OpeningsEditor';
 import { PanelMesh } from './PanelMesh';
 import { TimberMember } from './TimberMember';
 import { VehicleMesh } from './VehicleMesh';
+import { PavedAreaMesh } from './PavedAreaMesh';
 
 function HoverTooltip({ members }: { members: Member[] }) {
   const hoveredId = useProjectStore((s) => s.hoveredMemberId);
@@ -55,9 +58,13 @@ export function Scene({ model }: { model: DerivedModel }) {
   const selectWall = useProjectStore((s) => s.selectWall);
   const selectVehicle = useProjectStore((s) => s.selectVehicle);
   const selectedVehicleId = useProjectStore((s) => s.selectedVehicleId);
+  const selectedPavedAreaId = useProjectStore((s) => s.selectedPavedAreaId);
+  const selectedPavedPointIndex = useProjectStore((s) => s.selectedPavedPointIndex);
+  const selectPavedArea = useProjectStore((s) => s.selectPavedArea);
   const selectedMemberId = useProjectStore((s) => s.selectedMemberId);
   const selectMember = useProjectStore((s) => s.selectMember);
   const movePost = useProjectStore((s) => s.movePost);
+  const moveMidPurlin = useProjectStore((s) => s.moveMidPurlin);
   const updatePartition = useProjectStore((s) => s.updatePartition);
   const removePartition = useProjectStore((s) => s.removePartition);
   const removePost = useProjectStore((s) => s.removePost);
@@ -65,6 +72,7 @@ export function Scene({ model }: { model: DerivedModel }) {
   const focusedNeighbourId = useProjectStore((s) => s.focusedNeighbourId);
   const addPoint = useMeasureStore((s) => s.addPoint);
   const [draggingPartitionId, setDraggingPartitionId] = useState<string | null>(null);
+  const [draggingMidPurlin, setDraggingMidPurlin] = useState<number | null>(null);
 
   const { subject, links } = useNeighbours(model.framing.members);
   const neighbourIds = useMemo(() => new Set(links.map((l) => l.memberId)), [links]);
@@ -94,6 +102,7 @@ export function Scene({ model }: { model: DerivedModel }) {
     e.stopPropagation();
     (e.target as Element).setPointerCapture(e.pointerId);
     setDraggingPartitionId(member.partitionId ?? null);
+    setDraggingMidPurlin(midPurlinIndex(member));
     // Select on pointer-down, not only on click: a drag that ends over another
     // timber never fires click, so the neighbour distances would stay hidden.
     if (member.category === 'post') selectMember(member.id);
@@ -112,13 +121,27 @@ export function Scene({ model }: { model: DerivedModel }) {
       updatePartition(member.partitionId, { offset: Math.round(offset / 50) * 50 });
       return;
     }
-    const axisPosition = member.wallId === 'front' || member.wallId === 'rear' ? point.x / MM : point.z / MM;
+    // Post rows live in the canonical frame (see PostGrid): rotate the pointer into it and move
+    // the post along its row / wall axis (the post id is its override key).
+    const params = project.params;
+    const canonicalPoint = worldPointToCanonical(params, { x: point.x / MM, z: point.z / MM });
+    // Intermediate purlins move across the slope, i.e. perpendicular to their row
+    // (classic rows run along X → move along Z; sloped-purlins rows run along Z → move along X).
+    const midIndex = midPurlinIndex(member);
+    if (midIndex !== null) {
+      const across = params.roofScheme === 'sloped-purlins' ? canonicalPoint.x : canonicalPoint.z;
+      moveMidPurlin(midIndex, Math.round(across / 50) * 50);
+      return;
+    }
+    if (member.category !== 'post') return;
+    const axisPosition = postKeyAxis(params.roofScheme, member.id) === 'x' ? canonicalPoint.x : canonicalPoint.z;
     movePost(member.id, Math.round(axisPosition / 50) * 50);
-  }, [measureMode, movePost, project.partitions, updatePartition]);
+  }, [measureMode, movePost, moveMidPurlin, project.params, project.partitions, updatePartition]);
   const onPostDragEnd = useCallback((_member: Member, e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     (e.target as Element).releasePointerCapture(e.pointerId);
     setDraggingPartitionId(null);
+    setDraggingMidPurlin(null);
     useProjectStore.getState().setDragging(false);
   }, []);
   const onPanelClick = useCallback(
@@ -158,6 +181,7 @@ export function Scene({ model }: { model: DerivedModel }) {
           selectWall(null);
           selectMember(null);
           selectVehicle(null);
+          selectPavedArea(null);
         }
       }}
       className={measureMode ? 'cursor-crosshair' : undefined}
@@ -241,12 +265,23 @@ export function Scene({ model }: { model: DerivedModel }) {
             <PanelMesh key={p.id} panel={p} covering={project.params.loads.roofCovering} wireframe={wireframe} onClick={onPanelClick} />
           ) : null,
         )}
+        {layers.paving &&
+          project.pavedAreas.map((a) => (
+            <PavedAreaMesh
+              key={a.id}
+              area={a}
+              summary={model.paving.areas.find((s) => s.id === a.id)}
+              selected={a.id === selectedPavedAreaId}
+              selectedPointIndex={a.id === selectedPavedAreaId ? selectedPavedPointIndex : null}
+            />
+          ))}
         {layers.vehicles &&
           project.vehicles.map((v) => (
             <VehicleMesh key={v.id} vehicle={v} fit={model.vehicles.find((f) => f.vehicleId === v.id)} selected={v.id === selectedVehicleId} />
           ))}
         {layers.dimensions && <DimensionLines model={model} />}
         {draggingPartition && <PartitionDragDistances partition={draggingPartition} params={project.params} />}
+        {draggingMidPurlin !== null && <MidPurlinDragDistances index={draggingMidPurlin} model={model} params={project.params} />}
         <OpeningsEditor />
         <MeasureTool />
         <NeighbourDistances subject={subject} links={links} members={model.framing.members} />
@@ -262,7 +297,6 @@ export function Scene({ model }: { model: DerivedModel }) {
         maxPolarAngle={Math.PI / 2 - 0.01}
         minDistance={1}
         maxDistance={120}
-        target={[centre[0], (bounds.max.y * 0.5) as number, centre[2]]}
         mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
       />
     </Canvas>

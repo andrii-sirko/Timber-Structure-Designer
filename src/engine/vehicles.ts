@@ -2,6 +2,7 @@ import type { FramingResult, ProjectState, Vehicle, VehicleFit, VehicleModel, Wa
 import { WALL_IDS } from '@/types';
 import { sanitizeParams } from './framing';
 import { computeRoofLines } from './framing/roofLines';
+import { braceSides } from './framing/structure';
 import { toRad } from './geometry';
 
 /** Exterior dimensions in mm (approximate manufacturer data, current generations). */
@@ -10,12 +11,15 @@ export const VEHICLE_CATALOG: VehicleModel[] = [
   { id: 'vw-golf', name: 'VW Golf – compact', style: 'compact', length: 4284, width: 1789, mirrorWidth: 2027, height: 1456 },
   { id: 'bmw-3', name: 'BMW 3 Series – sedan', style: 'sedan', length: 4709, width: 1827, mirrorWidth: 2068, height: 1442 },
   { id: 'vw-passat-variant', name: 'VW Passat Variant – estate', style: 'estate', length: 4767, width: 1832, mirrorWidth: 2083, height: 1477 },
+  { id: 'opel-astra-k-sports-tourer', name: 'Opel Astra K Sports Tourer – estate', style: 'estate', length: 4702, width: 1809, mirrorWidth: 2042, height: 1510 },
   { id: 'tesla-model-y', name: 'Tesla Model Y – SUV', style: 'suv', length: 4751, width: 1921, mirrorWidth: 2129, height: 1624 },
   { id: 'vw-tiguan', name: 'VW Tiguan – SUV', style: 'suv', length: 4509, width: 1839, mirrorWidth: 2100, height: 1675 },
+  { id: 'cupra-formentor', name: 'Cupra Formentor (2026) – crossover SUV', style: 'suv', length: 4451, width: 1839, mirrorWidth: 2108, height: 1511 },
   { id: 'bmw-x5', name: 'BMW X5 – large SUV', style: 'suv', length: 4922, width: 2004, mirrorWidth: 2218, height: 1745 },
   { id: 'vw-multivan', name: 'VW Multivan T6.1 – van', style: 'van', length: 4904, width: 1904, mirrorWidth: 2297, height: 1970 },
   { id: 'ford-ranger', name: 'Ford Ranger – pickup', style: 'pickup', length: 5370, width: 1918, mirrorWidth: 2180, height: 1848 },
   { id: 'fiat-ducato-camper', name: 'Fiat Ducato L2H2 – camper van', style: 'camper', length: 5413, width: 2050, mirrorWidth: 2470, height: 2524 },
+  { id: 'mercedes-sprinter', name: 'Mercedes Sprinter L2H2 – panel van', style: 'camper', length: 5932, width: 2020, mirrorWidth: 2345, height: 2620 },
   { id: 'motorcycle', name: 'Motorcycle – touring', style: 'motorcycle', length: 2250, width: 900, mirrorWidth: 980, height: 1400 },
   // Bicycle: typical adult city/trekking bike; "mirror width" = handlebar width
   { id: 'bicycle', name: 'Bicycle – city / trekking', style: 'bicycle', length: 1800, width: 450, mirrorWidth: 640, height: 1050 },
@@ -122,26 +126,34 @@ export function checkVehicleFit(vehicle: Vehicle, project: ProjectState, framing
     const zTail = Math.min(b.maxZ, roofMaxZ);
     obstacle = roof.bottomAt(zTail);
     obstacleName = 'rafters';
-    const bands = [
-      { z0: roof.frontPurlinZ - bw / 2, z1: roof.frontPurlinZ + bw / 2, under: params.frontHeight - bh, name: 'front purlin' },
-      { z0: roof.rearPurlinZ - bw / 2, z1: roof.rearPurlinZ + bw / 2, under: params.rearHeight - bh, name: 'rear purlin' },
-    ];
-    for (const band of bands) {
-      const underBand = b.maxZ > band.z0 && b.minZ < band.z1;
+    // Purlin rows: classic along X (band across Z), sloped-purlins along Z (band across X)
+    for (const row of framing.grid.rows) {
+      const alongX = row.axis === 'x';
+      const lo = row.offset - bw / 2;
+      const hi = row.offset + bw / 2;
+      const underBand = alongX ? b.maxZ > lo && b.minZ < hi : b.maxX > lo && b.minX < hi;
       if (!underBand) continue;
-      if (band.under < obstacle) {
-        obstacle = band.under;
-        obstacleName = band.name;
+      // lowest purlin underside over the vehicle: level rows are constant, sloped rows drop towards +Z
+      const under = alongX ? roof.purlinTopAt(row.offset) - bh : roof.railBottomAt(Math.min(b.maxZ, roofMaxZ));
+      const name = row.name.toLowerCase().replace('purlin ', '') + ' purlin';
+      if (under < obstacle) {
+        obstacle = under;
+        obstacleName = name;
       }
       if (params.braces) {
-        for (const x of framing.grid.xPositions) {
-          const x0 = x - pw / 2 - params.braceLeg;
-          const x1 = x + pw / 2 + params.braceLeg;
-          if (b.maxX > x0 && b.minX < x1 && band.under - params.braceLeg < obstacle) {
-            obstacle = band.under - params.braceLeg;
-            obstacleName = `knee brace at ${band.name}`;
+        const vMin = alongX ? b.minX : b.minZ;
+        const vMax = alongX ? b.maxX : b.maxZ;
+        const positions = row.positions;
+        positions.forEach((pos, i) => {
+          const sides = braceSides(params.braceDirection, i, positions.length);
+          if (sides.length === 0) return;
+          const p0 = pos - pw / 2 - (sides.includes(-1) ? params.braceLeg : 0);
+          const p1 = pos + pw / 2 + (sides.includes(1) ? params.braceLeg : 0);
+          if (vMax > p0 && vMin < p1 && under - params.braceLeg < obstacle) {
+            obstacle = under - params.braceLeg;
+            obstacleName = `knee brace at ${name}`;
           }
-        }
+        });
       }
     }
   }
