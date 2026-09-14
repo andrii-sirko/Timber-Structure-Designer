@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, TreePine } from 'lucide-react';
 import { Scene } from '@/components/3d/Scene';
+import { AreaInfo } from '@/components/ui/AreaInfo';
 import { NeighbourPanel } from '@/components/ui/NeighbourPanel';
 import { ParameterSidebar } from '@/components/ui/ParameterSidebar';
 import { HistoryControls, useHistoryKeyboard } from '@/components/ui/HistoryControls';
@@ -77,6 +78,7 @@ function Designer() {
           <Scene model={model} />
           <ViewportControls canvasContainer={canvasRef} />
           <NeighbourPanel model={model} />
+          <AreaInfo model={model} />
         </main>
         {rightOpen && (
           <aside className="w-[26rem] shrink-0 border-l border-slate-800 bg-slate-950">
