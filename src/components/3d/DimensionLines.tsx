@@ -54,14 +54,20 @@ export function DimensionLines({ model }: { model: DerivedModel }) {
     const gap = 0.7;
     const list: DimensionProps[] = [];
     list.push({ a: [0, 0, 0], b: [L * MM, 0, 0], offset: [0, 0, -(o.front * MM + gap)], label: `L ${L} mm` });
-    const xs = model.framing.grid.xPositions;
-    if (xs.length > 2) {
-      for (let i = 0; i < xs.length - 1; i++) {
+    // Post spacing chains: front row outside the front edge, rear row outside the rear edge.
+    // Each row has its own positions (posts can be moved or removed individually).
+    const rows: { xs: number[]; z: number; offsetZ: number }[] = [
+      { xs: model.framing.grid.frontXPositions, z: 0, offsetZ: -(o.front * MM + gap * 0.5) },
+      { xs: model.framing.grid.rearXPositions, z: W * MM, offsetZ: o.rear * MM + gap * 0.5 },
+    ];
+    for (const row of rows) {
+      if (row.xs.length < 2) continue;
+      for (let i = 0; i < row.xs.length - 1; i++) {
         list.push({
-          a: [xs[i] * MM, 0, 0],
-          b: [xs[i + 1] * MM, 0, 0],
-          offset: [0, 0, -(o.front * MM + gap * 0.5)],
-          label: `${Math.round(xs[i + 1] - xs[i])}`,
+          a: [row.xs[i] * MM, 0, row.z],
+          b: [row.xs[i + 1] * MM, 0, row.z],
+          offset: [0, 0, row.offsetZ],
+          label: `${Math.round(row.xs[i + 1] - row.xs[i])}`,
           color: '#a5b4fc',
         });
       }

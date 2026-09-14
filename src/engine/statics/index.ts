@@ -131,6 +131,20 @@ function worst(statuses: StaticsStatus[]): StaticsStatus {
 const fmt = (v: number, d = 1): string => v.toFixed(d);
 const pct = (v: number): string => `${Math.round(v * 100)} %`;
 
+/** Governing purlin span / cantilever from the posts actually present in a row. */
+export function purlinSupports(postX: number[], start: number, end: number): { span: number; cantilever: number; posts: number } {
+  const xs = [...postX].sort((a, b) => a - b);
+  if (xs.length < 2) {
+    // 0 or 1 post: nothing spans between supports – treat the whole purlin as the span so
+    // the check fails loudly instead of reporting the nominal grid spacing.
+    return { span: Math.max(end - start, 300), cantilever: 0, posts: xs.length };
+  }
+  let span = 300;
+  for (let i = 1; i < xs.length; i++) span = Math.max(span, xs[i] - xs[i - 1]);
+  const cantilever = Math.max(0, xs[0] - start, end - xs[xs.length - 1]);
+  return { span, cantilever, posts: xs.length };
+}
+
 export function computeStatics(project: ProjectState, framing: FramingResult): StaticsResult {
   const params = sanitizeParams(project.params);
   const { timber, loads, overhangs } = params;
@@ -192,12 +206,15 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
 
   // ── Purlins (front carries W/2 + front overhang, rear W/2 + rear overhang) ─
   const purlinSelf = density * (timber.beam.width / 1000) * (timber.beam.height / 1000);
+  // Supports are the posts actually present in each row (posts can be moved or removed
+  // individually), so the governing span is the widest gap between neighbouring posts
+  // and the cantilever the longest purlin end beyond the outermost post.
+  const purlinStart = -overhangs.left;
+  const purlinEnd = params.length + overhangs.right;
   const purlinRows = [
-    { id: 'purlin-front', label: 'Purlin front', labelDe: 'Pfette vorne', trib: params.width / 2 + overhangs.front },
-    { id: 'purlin-rear', label: 'Purlin rear', labelDe: 'Pfette hinten', trib: params.width / 2 + overhangs.rear },
+    { id: 'purlin-front', label: 'Purlin front', labelDe: 'Pfette vorne', trib: params.width / 2 + overhangs.front, supports: purlinSupports(framing.grid.frontXPositions, purlinStart, purlinEnd) },
+    { id: 'purlin-rear', label: 'Purlin rear', labelDe: 'Pfette hinten', trib: params.width / 2 + overhangs.rear, supports: purlinSupports(framing.grid.rearXPositions, purlinStart, purlinEnd) },
   ];
-  const purlinSpan = Math.max(framing.grid.postSpacing, 300);
-  const purlinCantilever = Math.max(overhangs.left, overhangs.right);
   const purlinLoads = purlinRows.map((row) => {
     const tribM = row.trib / 1000;
     const qG = deadLoad * tribM + purlinSelf;
@@ -205,10 +222,14 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
     return { row, qG, qQ };
   });
   for (const { row, qG, qQ } of purlinLoads) {
+    const { span: purlinSpan, cantilever: purlinCantilever, posts } = row.supports;
     const res = checkBeam({ section: timber.beam, span: purlinSpan, cantilever: purlinCantilever, qG, qQ }, mat, kmod, kdef);
-    const status = statusOf(res.utilisation);
+    const unsupported = posts < 2;
+    const status = unsupported ? 'fail' : statusOf(res.utilisation);
     let recommendation: string | undefined;
-    if (status !== 'ok') {
+    if (unsupported) {
+      recommendation = `${row.label} rests on ${posts} post${posts === 1 ? '' : 's'} – a purlin row needs at least two posts.`;
+    } else if (status !== 'ok') {
       const better = STANDARD_DEPTHS.find(
         (h) => h > timber.beam.height && checkBeam({ section: { width: timber.beam.width, height: h }, span: purlinSpan, cantilever: purlinCantilever, qG, qQ }, mat, kmod, kdef).utilisation <= OK_LIMIT,
       );
@@ -231,7 +252,7 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
       utilisation: res.utilisation,
       status,
       recommendation,
-      detail: `Post spacing ${fmt(purlinSpan / 1000, 2)} m treated as simply supported (conservative), tributary width ${fmt(row.trib / 1000, 2)} m, end cantilever ${purlinCantilever} mm. σ_m,d = ${fmt(res.sigma)} ≤ ${fmt(res.fmd)} N/mm² (${pct(res.stressUtil)}), w_fin = ${fmt(res.wFin)} mm ≤ ${fmt(res.wLimit)} mm.`,
+      detail: `${unsupported ? `Only ${posts} post in this row – no supported span. ` : ''}Largest post spacing ${fmt(purlinSpan / 1000, 2)} m (${posts} posts) treated as simply supported (conservative), tributary width ${fmt(row.trib / 1000, 2)} m, end cantilever ${Math.round(purlinCantilever)} mm. σ_m,d = ${fmt(res.sigma)} ≤ ${fmt(res.fmd)} N/mm² (${pct(res.stressUtil)}), w_fin = ${fmt(res.wFin)} mm ≤ ${fmt(res.wLimit)} mm.`,
     });
   }
 
@@ -241,6 +262,7 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
     { id: 'post-rear', label: 'Post rear', labelDe: 'Pfosten hinten', height: params.rearHeight - timber.beam.height, load: purlinLoads[1] },
   ];
   for (const row of postRows) {
+    const { span: purlinSpan, cantilever: purlinCantilever } = row.load.row.supports;
     const spanM = (purlinSpan + purlinCantilever) / 1000;
     const Nd = (GAMMA_G * row.load.qG + GAMMA_Q * row.load.qQ) * spanM;
     const Nk = (row.load.qG + row.load.qQ) * spanM;

@@ -18,20 +18,20 @@ export function VehiclesPanel({ model }: { model: DerivedModel }) {
 
   return (
     <Section
-      title="Vehicles (Fahrzeuge)"
+      title="Objects (Fahrzeuge & Mülltonnen)"
       icon={Car}
       badge={vehicles.length > 0 ? <span className="rounded bg-slate-800 px-1.5 text-[10px] text-slate-300">{vehicles.length}</span> : undefined}
     >
       <div className="flex items-end gap-2">
         <div className="min-w-0 flex-1">
-          <SelectField label="Add vehicle" value={catalogId} onChange={setCatalogId} options={VEHICLE_CATALOG.map((m) => ({ value: m.id, label: m.name }))} />
+          <SelectField label="Objects" value={catalogId} onChange={setCatalogId} options={VEHICLE_CATALOG.map((m) => ({ value: m.id, label: m.name }))} />
         </div>
         <Button variant="primary" icon={Plus} onClick={() => addVehicle(catalogId)} title="Place under the roof">
           Add
         </Button>
       </div>
       <p className="text-[11px] text-slate-500">
-        {catalog.length} × {catalog.width} × {catalog.height} mm · {catalog.mirrorWidth} mm incl. mirrors. Drag vehicles in 3D; arrow keys nudge 50 mm (Shift 10 mm), R rotates 90°, Delete removes.
+        {catalog.length} × {catalog.width} × {catalog.height} mm · {catalog.mirrorWidth} mm incl. mirrors. Drag objects in 3D; arrow keys nudge 50 mm (Shift 10 mm), R rotates 90°, Delete removes.
       </p>
 
       {vehicles.map((v) => {
@@ -50,7 +50,7 @@ export function VehiclesPanel({ model }: { model: DerivedModel }) {
               <button type="button" title="Rotate 90°" className="rounded p-1 text-slate-300 hover:bg-slate-800" onClick={(e) => { e.stopPropagation(); rotateVehicle(v.id, 90); }}>
                 <RotateCw className="h-4 w-4" />
               </button>
-              <button type="button" title="Remove vehicle" className="rounded p-1 text-rose-300 hover:bg-rose-950/60" onClick={(e) => { e.stopPropagation(); removeVehicle(v.id); }}>
+              <button type="button" title="Remove object" className="rounded p-1 text-rose-300 hover:bg-rose-950/60" onClick={(e) => { e.stopPropagation(); removeVehicle(v.id); }}>
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>

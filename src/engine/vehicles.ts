@@ -17,6 +17,12 @@ export const VEHICLE_CATALOG: VehicleModel[] = [
   { id: 'ford-ranger', name: 'Ford Ranger – pickup', style: 'pickup', length: 5370, width: 1918, mirrorWidth: 2180, height: 1848 },
   { id: 'fiat-ducato-camper', name: 'Fiat Ducato L2H2 – camper van', style: 'camper', length: 5413, width: 2050, mirrorWidth: 2470, height: 2524 },
   { id: 'motorcycle', name: 'Motorcycle – touring', style: 'motorcycle', length: 2250, width: 900, mirrorWidth: 980, height: 1400 },
+  // Bicycle: typical adult city/trekking bike; "mirror width" = handlebar width
+  { id: 'bicycle', name: 'Bicycle – city / trekking', style: 'bicycle', length: 1800, width: 450, mirrorWidth: 640, height: 1050 },
+  // Waste bins (EN 840 two- and four-wheeled containers; length = depth front-to-back)
+  { id: 'bin-120', name: 'Waste bin 120 L', style: 'bin', length: 555, width: 480, mirrorWidth: 480, height: 940 },
+  { id: 'bin-240', name: 'Waste bin 240 L', style: 'bin', length: 740, width: 580, mirrorWidth: 580, height: 1075 },
+  { id: 'bin-1100', name: 'Waste container 1100 L', style: 'container', length: 1070, width: 1370, mirrorWidth: 1370, height: 1370 },
 ];
 
 export const VEHICLE_COLORS = ['#b91c1c', '#1d4ed8', '#e5e7eb', '#111827', '#9ca3af', '#166534', '#d97706', '#0e7490'];

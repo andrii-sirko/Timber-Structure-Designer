@@ -82,7 +82,12 @@ export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }:
     [(wheel.rear - 0.5) * model.length * MM, wheelRadius, wheelInset],
     [(wheel.rear - 0.5) * model.length * MM, wheelRadius, -wheelInset],
   ];
-  const wheelsToRender = model.style === 'motorcycle' ? [wheelPositions[0], wheelPositions[2]].map(([x, y]) => [x, y, 0] as [number, number, number]) : wheelPositions;
+  const wheelsToRender =
+    model.style === 'motorcycle' || model.style === 'bicycle'
+      ? [wheelPositions[0], wheelPositions[2]].map(([x, y]) => [x, y, 0] as [number, number, number])
+      : model.style === 'bin'
+        ? [wheelPositions[2], wheelPositions[3]]
+        : wheelPositions;
 
   const footprint = useMemo(() => {
     const c = vehicleCorners(vehicle, model, true).map((p) => [p.x * MM, 0.004, p.z * MM] as [number, number, number]);

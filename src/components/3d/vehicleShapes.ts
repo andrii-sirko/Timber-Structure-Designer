@@ -10,6 +10,12 @@ export const SILHOUETTES: Record<VehicleBodyStyle, [number, number][]> = {
   van: [[0, 0.16], [0.02, 0.45], [0.1, 0.58], [0.2, 0.92], [0.27, 1], [0.98, 1], [1, 0.8], [1, 0.3], [0.99, 0.16]],
   pickup: [[0, 0.16], [0.02, 0.42], [0.06, 0.55], [0.27, 0.6], [0.35, 0.9], [0.44, 0.99], [0.58, 0.99], [0.6, 0.62], [0.98, 0.62], [1, 0.45], [0.99, 0.16]],
   camper: [[0, 0.14], [0.02, 0.4], [0.1, 0.52], [0.18, 0.88], [0.26, 1], [0.99, 1], [1, 0.85], [1, 0.28], [0.99, 0.14]],
+  // wheelie bin: vertical body with a sloped lid at the back (hinge side)
+  bin: [[0.08, 0.28], [0.06, 0.92], [0.1, 0.95], [0.86, 0.95], [0.98, 1], [1, 0.95], [0.96, 0.4], [0.92, 0.28]],
+  // 1100 L container: box body on casters with a flat lid
+  container: [[0.06, 0.12], [0.04, 0.94], [0.08, 0.98], [0.94, 0.98], [0.98, 0.94], [0.96, 0.3], [0.9, 0.12]],
+  // bicycle: thin frame outline – saddle (front, u≈0.3) to handlebar (rear, u≈0.75) – wheels are drawn separately
+  bicycle: [[0.18, 0.32], [0.24, 0.62], [0.3, 0.66], [0.4, 0.66], [0.58, 0.56], [0.72, 0.6], [0.78, 0.72], [0.82, 0.7], [0.8, 0.6], [0.76, 0.52], [0.6, 0.5], [0.52, 0.36], [0.5, 0.26], [0.42, 0.28], [0.34, 0.38], [0.24, 0.27], [0.2, 0.26]],
   motorcycle: [[0.02, 0.3], [0.1, 0.42], [0.3, 0.55], [0.42, 0.72], [0.52, 0.78], [0.62, 0.66], [0.75, 0.62], [0.98, 0.55], [1, 0.45], [0.9, 0.3], [0.6, 0.28], [0.4, 0.3]],
 };
 
@@ -33,6 +39,9 @@ export const WHEELS: Record<VehicleBodyStyle, WheelSpec> = {
   pickup: { front: 0.16, rear: 0.74, diameter: 0.4, width: 0.14 },
   camper: { front: 0.17, rear: 0.72, diameter: 0.3, width: 0.11 },
   motorcycle: { front: 0.15, rear: 0.85, diameter: 0.45, width: 0.15 },
+  bicycle: { front: 0.19, rear: 0.81, diameter: 0.66, width: 0.1 },
+  bin: { front: 0.85, rear: 0.85, diameter: 0.2, width: 0.08 },
+  container: { front: 0.15, rear: 0.85, diameter: 0.12, width: 0.08 },
 };
 
 /** Glass band (fractions of height) and how far along the length windows extend. */

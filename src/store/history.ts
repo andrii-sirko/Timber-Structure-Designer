@@ -59,7 +59,7 @@ const LABELS: Record<string, (...args: never[]) => string> = {
   addPartition: () => 'Add partition',
   updatePartition: () => 'Edit partition',
   removePartition: () => 'Delete partition',
-  addVehicle: () => 'Add vehicle',
+  addVehicle: () => 'Add object',
   updateVehicle: () => 'Move vehicle',
   removeVehicle: () => 'Remove vehicle',
   nudgeVehicle: () => 'Move vehicle',

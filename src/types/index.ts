@@ -105,7 +105,7 @@ export interface OpeningHost {
 export type WallKey = string;
 export const isOuterWall = (key: string): key is WallId => (WALL_IDS as readonly string[]).includes(key);
 
-export type VehicleBodyStyle = 'city' | 'compact' | 'sedan' | 'estate' | 'suv' | 'van' | 'pickup' | 'camper' | 'motorcycle';
+export type VehicleBodyStyle = 'city' | 'compact' | 'sedan' | 'estate' | 'suv' | 'van' | 'pickup' | 'camper' | 'motorcycle' | 'bicycle' | 'bin' | 'container';
 
 /** Catalogue entry with real-world exterior dimensions (approximate manufacturer data). */
 export interface VehicleModel {

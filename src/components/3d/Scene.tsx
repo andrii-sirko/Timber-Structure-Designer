@@ -94,8 +94,11 @@ export function Scene({ model }: { model: DerivedModel }) {
     e.stopPropagation();
     (e.target as Element).setPointerCapture(e.pointerId);
     setDraggingPartitionId(member.partitionId ?? null);
+    // Select on pointer-down, not only on click: a drag that ends over another
+    // timber never fires click, so the neighbour distances would stay hidden.
+    if (member.category === 'post') selectMember(member.id);
     useProjectStore.getState().setDragging(true);
-  }, [measureMode]);
+  }, [measureMode, selectMember]);
   const onPostDrag = useCallback((member: Member, e: ThreeEvent<PointerEvent>) => {
     if (measureMode) return;
     e.stopPropagation();
