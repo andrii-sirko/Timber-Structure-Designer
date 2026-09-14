@@ -1,5 +1,9 @@
 import type { MemberCategory, PartitionAxis } from '@/types';
 
+/** Pointer-drag snap step (mm) shared by posts, purlins, partitions, outer walls, vehicles and paved floors. */
+export const DRAG_SNAP = 10;
+export const snapDrag = (v: number): number => Math.round(v / DRAG_SNAP) * DRAG_SNAP;
+
 export function canMovePost(isDragging: boolean): boolean {
   return isDragging;
 }

@@ -7,6 +7,7 @@ import { computePostGrid, generateBraces, generatePosts, generatePurlins } from 
 import { clampPartition } from './partitions';
 import { computePartitionFrame, computeWallFrame, wallFrameToWorld, type WallFrame } from './wallFrame';
 import { generateWallFraming } from './walls';
+import { generateFreePosts } from '../freePosts';
 import { canonicalizeProject, canonicalToWorldMap, canonicalWall, framingToWorld, partitionFlipped, relabelFraming, wallFlipped } from '../orientation';
 
 export { computeRoofLines } from './roofLines';
@@ -106,6 +107,7 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
   const panels: Panel[] = [];
 
   members.push(...generatePosts(params, walls, roof, grid));
+  members.push(...generateFreePosts(params, roof, grid, project.freePosts));
   members.push(...generatePurlins(params, roof, grid, warnings));
   members.push(...generateBraces(params, roof, grid));
 

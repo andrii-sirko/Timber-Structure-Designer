@@ -11,6 +11,7 @@ import type {
   OpeningType,
   Overhangs,
   GroundPoint,
+  FreePost,
   Partition,
   PartitionAxis,
   PavedArea,
@@ -29,6 +30,7 @@ import { isOuterWall } from '@/types';
 import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, OPENING_DEFAULTS } from '@/engine';
 import { findVehicleSpot, getVehicleModel, VEHICLE_COLORS } from '@/engine/vehicles';
 import { defaultPavedArea, insertVertex, PAVING_COLORS, resizePolygon, translatePolygon } from '@/engine/paving';
+import { clampFreePost, freePostMemberId } from '@/engine/freePosts';
 import { uuid } from '@/engine/geometry';
 import { createDefaultProject, DEFAULT_VIEW, normalizeProject, PROJECT_TEMPLATES } from './defaults';
 import { withHistory, type HistorySlice } from './history';
@@ -133,6 +135,10 @@ interface ProjectStoreBase {
   /** Manual axis position of intermediate purlin row `index` (canonical frame); null = automatic */
   moveMidPurlin: (index: number, position: number | null) => void;
   removePost: (id: string) => void;
+  /** Add a post at world (x, z), independent of the purlin rows; returns its id */
+  addFreePost: (x: number, z: number) => string;
+  updateFreePost: (id: string, patch: Partial<Omit<FreePost, 'id'>>) => void;
+  removeFreePost: (id: string) => void;
 
   addPavedArea: () => string;
   updatePavedArea: (id: string, patch: Partial<Omit<PavedArea, 'id'>>) => void;
@@ -416,6 +422,34 @@ export const useProjectStore = create<ProjectStore>()(
         }),
       removePost: (id) =>
         set((s) => ({ project: { ...s.project, postOverrides: { ...s.project.postOverrides, [id]: { removed: true } } }, selectedMemberId: s.selectedMemberId === id ? null : s.selectedMemberId })),
+      addFreePost: (x, z) => {
+        const id = uuid();
+        set((s) => {
+          const post = { id, ...clampFreePost({ x, z }, s.project.params) };
+          return {
+            project: { ...s.project, freePosts: [...s.project.freePosts, post] },
+            selectedMemberId: freePostMemberId(id),
+            selectedWallId: null,
+            selectedOpeningId: null,
+            selectedVehicleId: null,
+            selectedPavedAreaId: null,
+            selectedPavedPointIndex: null,
+          };
+        });
+        return id;
+      },
+      updateFreePost: (id, patch) =>
+        set((s) => ({
+          project: {
+            ...s.project,
+            freePosts: s.project.freePosts.map((p) => (p.id === id ? { ...p, ...clampFreePost({ ...p, ...patch }, s.project.params) } : p)),
+          },
+        })),
+      removeFreePost: (id) =>
+        set((s) => ({
+          project: { ...s.project, freePosts: s.project.freePosts.filter((p) => p.id !== id) },
+          selectedMemberId: s.selectedMemberId === freePostMemberId(id) ? null : s.selectedMemberId,
+        })),
       addPavedArea: () => {
         const id = uuid();
         set((s) => {

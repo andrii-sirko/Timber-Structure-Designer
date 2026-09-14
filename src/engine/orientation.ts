@@ -209,6 +209,7 @@ export function canonicalizeProject(project: ProjectState): ProjectState {
     partitions: project.partitions.map((p) => mapPartition(m, p)),
     vehicles,
     pavedAreas: project.pavedAreas.map((a) => ({ ...a, points: a.points.map((p) => mapPoint(m, p)) })),
+    freePosts: project.freePosts.map((p) => ({ ...p, ...mapPoint(m, p) })),
   };
 }
 

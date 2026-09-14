@@ -1,12 +1,14 @@
-import { Cable, CloudSnow, MapPinned, Ruler, Settings2, TreePine, Triangle } from 'lucide-react';
+import { Cable, CloudSnow, MapPin, MapPinned, Plus, Ruler, Settings2, Trash2, TreePine, Triangle } from 'lucide-react';
 import { useState } from 'react';
-import type { BraceDirection, DerivedModel, RoofCovering, RoofDirection, RoofScheme, TimberSection, WallId } from '@/types';
+import type { BraceDirection, DerivedModel, RoofCovering, RoofDirection, RoofScheme, StructureParams, TimberSection, WallId } from '@/types';
 import { gridPostCount, MIN_PLAN_DIM, minWallHeight } from '@/engine/framing';
 import { midPurlinBounds } from '@/engine/framing/roofLines';
+import { freePostMemberId } from '@/engine/freePosts';
 import { worldWall } from '@/engine/orientation';
 import { useProjectStore } from '@/store';
+import { useUiStore } from '@/store/uiStore';
 import { gustSpeedToPressure, pressureToGustSpeed, ROOF_COVERING_LOAD, SNOW_ZONE_PRESETS, STRENGTH_CLASSES, WIND_ZONE_PRESETS } from '@/engine/statics/materials';
-import { NumberField, Section, SelectField, Toggle } from './primitives';
+import { Button, NumberField, Section, SelectField, Toggle } from './primitives';
 import { StaticsBadge } from './StaticsBadge';
 import { WallEditor } from './WallEditor';
 import { VehiclesPanel } from './VehiclesPanel';
@@ -36,6 +38,80 @@ function SectionPair({ label, value, onChange, hint }: { label: string; value: T
         <NumberField label="b (width)" value={value.width} min={40} max={400} step={20} compact onChange={(width) => onChange({ ...value, width })} />
         <NumberField label="h (depth)" value={value.height} min={40} max={600} step={20} compact onChange={(height) => onChange({ ...value, height })} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Posts placed freely in plan, outside the purlin-row grid: click-to-place in the 3D view,
+ * or type the world X / Z of each post axis here.
+ */
+function FreePostsEditor({ params }: { params: StructureParams }) {
+  const freePosts = useProjectStore((s) => s.project.freePosts);
+  const selectedMemberId = useProjectStore((s) => s.selectedMemberId);
+  const selectMember = useProjectStore((s) => s.selectMember);
+  const addFreePost = useProjectStore((s) => s.addFreePost);
+  const updateFreePost = useProjectStore((s) => s.updateFreePost);
+  const removeFreePost = useProjectStore((s) => s.removeFreePost);
+  const placingPost = useUiStore((s) => s.placingPost);
+  const setPlacingPost = useUiStore((s) => s.setPlacingPost);
+  const half = params.timber.post.width / 2;
+  return (
+    <div className="space-y-2 border-t border-slate-800 pt-2">
+      <div className="flex items-baseline justify-between text-[11px] font-medium tracking-wide text-slate-400 uppercase">
+        <span>Free posts</span>
+        <span className="text-[10px] font-normal normal-case text-slate-500">Without purlin, anywhere in plan</span>
+      </div>
+      <div className="flex gap-2">
+        <Button
+          variant={placingPost ? 'primary' : 'subtle'}
+          size="sm"
+          icon={MapPin}
+          className="flex-1"
+          aria-pressed={placingPost}
+          onClick={() => setPlacingPost(!placingPost)}
+        >
+          {placingPost ? 'Click in the 3D view… (Esc cancels)' : 'Place post in 3D view'}
+        </Button>
+        <Button variant="subtle" size="sm" icon={Plus} title="Add a post at the centre of the footprint" onClick={() => addFreePost(params.length / 2, params.width / 2)}>
+          Centre
+        </Button>
+      </div>
+      {freePosts.length > 0 && (
+        <ul className="space-y-2">
+          {freePosts.map((post, i) => {
+            const memberId = freePostMemberId(post.id);
+            const selected = selectedMemberId === memberId;
+            return (
+              <li
+                key={post.id}
+                className={`rounded-md border p-2 ${selected ? 'border-sky-500/60 bg-sky-500/10' : 'border-slate-800 bg-slate-900/60'}`}
+                onClick={() => selectMember(memberId)}
+              >
+                <div className="mb-1 flex items-center justify-between text-[11px]">
+                  <span className="font-medium text-slate-200">Free post {i + 1}</span>
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-rose-300 hover:bg-rose-950/60"
+                    title="Remove post"
+                    aria-label={`Remove free post ${i + 1}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFreePost(post.id);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <NumberField label="X" value={post.x} min={half} max={params.length - half} step={10} compact onChange={(x) => updateFreePost(post.id, { x })} />
+                  <NumberField label="Z" value={post.z} min={half} max={params.width - half} step={10} compact onChange={(z) => updateFreePost(post.id, { z })} />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -122,6 +198,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
           />
           {params.postsPerRow !== null && <NumberField label="Posts per row" value={params.postsPerRow} min={2} max={40} step={1} unit="pcs" hint={`${Math.round(model.framing.grid.postSpacing)} mm centres`} onChange={(v) => setParam('postsPerRow', Math.max(2, Math.round(v)))} />}
           <NumberField label="Maximum post spacing" value={params.maxPostSpacing} min={1000} max={6000} step={100} onChange={(v) => setParam('maxPostSpacing', v)} />
+          <FreePostsEditor params={params} />
         </Section>
         </>}
 

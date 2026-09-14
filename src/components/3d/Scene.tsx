@@ -8,9 +8,11 @@ import { useNeighbours } from '@/store/useNeighbours';
 import { canDeleteSelectedPartition } from '@/engine/wallKeyboard';
 import { CameraRig, modelBounds } from './CameraRig';
 import { DimensionLines, MidPurlinDragDistances, PartitionDragDistances } from './DimensionLines';
-import { midPurlinIndex, partitionDragAxis } from '@/engine/postDrag';
+import { midPurlinIndex, partitionDragAxis, snapDrag } from '@/engine/postDrag';
 import { worldPointToCanonical } from '@/engine/orientation';
 import { postKeyAxis } from '@/engine/postOverrides';
+import { freePostIdOf } from '@/engine/freePosts';
+import { useUiStore } from '@/store/uiStore';
 import { MM } from './materials';
 import { MeasureTool, useMeasureStore } from './MeasureTool';
 import { NeighbourDistances } from './NeighbourDistances';
@@ -68,6 +70,11 @@ export function Scene({ model }: { model: DerivedModel }) {
   const updatePartition = useProjectStore((s) => s.updatePartition);
   const removePartition = useProjectStore((s) => s.removePartition);
   const removePost = useProjectStore((s) => s.removePost);
+  const addFreePost = useProjectStore((s) => s.addFreePost);
+  const updateFreePost = useProjectStore((s) => s.updateFreePost);
+  const removeFreePost = useProjectStore((s) => s.removeFreePost);
+  const placingPost = useUiStore((s) => s.placingPost);
+  const setPlacingPost = useUiStore((s) => s.setPlacingPost);
   const neighbourMode = useProjectStore((s) => s.view.neighbourMode);
   const focusedNeighbourId = useProjectStore((s) => s.focusedNeighbourId);
   const addPoint = useMeasureStore((s) => s.addPoint);
@@ -84,8 +91,32 @@ export function Scene({ model }: { model: DerivedModel }) {
   );
   const wireframe = highlight === 'wireframe';
 
+  /** Place a free post where the pointer ray meets the ground (placement mode). */
+  const placePostAt = useCallback(
+    (e: ThreeEvent<MouseEvent>): boolean => {
+      if (!placingPost) return false;
+      e.stopPropagation();
+      const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const point = new THREE.Vector3();
+      if (!e.ray.intersectPlane(ground, point)) return true;
+      addFreePost(snapDrag(point.x / MM), snapDrag(point.z / MM));
+      setPlacingPost(false);
+      return true;
+    },
+    [placingPost, addFreePost, setPlacingPost],
+  );
+  const onRemovePost = useCallback(
+    (id: string) => {
+      const freeId = freePostIdOf(id);
+      if (freeId) removeFreePost(freeId);
+      else removePost(id);
+    },
+    [removeFreePost, removePost],
+  );
+
   const onMemberClick = useCallback(
     (member: Member, e: ThreeEvent<MouseEvent>) => {
+      if (placePostAt(e)) return;
       if (measureMode) {
         addPoint(e.point);
         return;
@@ -95,10 +126,10 @@ export function Scene({ model }: { model: DerivedModel }) {
       const key = member.wallId ?? member.partitionId;
       if (key) selectWall(key);
     },
-    [measureMode, addPoint, selectWall, selectMember, neighbourMode],
+    [measureMode, addPoint, selectWall, selectMember, neighbourMode, placePostAt],
   );
   const onPostDragStart = useCallback((member: Member, e: ThreeEvent<PointerEvent>) => {
-    if (measureMode) return;
+    if (measureMode || placingPost) return;
     e.stopPropagation();
     (e.target as Element).setPointerCapture(e.pointerId);
     setDraggingPartitionId(member.partitionId ?? null);
@@ -107,18 +138,24 @@ export function Scene({ model }: { model: DerivedModel }) {
     // timber never fires click, so the neighbour distances would stay hidden.
     if (member.category === 'post') selectMember(member.id);
     useProjectStore.getState().setDragging(true);
-  }, [measureMode, selectMember]);
+  }, [measureMode, placingPost, selectMember]);
   const onPostDrag = useCallback((member: Member, e: ThreeEvent<PointerEvent>) => {
-    if (measureMode) return;
+    if (measureMode || placingPost) return;
     e.stopPropagation();
     const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const point = new THREE.Vector3();
     if (!e.ray.intersectPlane(ground, point)) return;
+    // Free posts move anywhere in plan; they are stored in world coordinates.
+    const freeId = freePostIdOf(member.id);
+    if (freeId) {
+      updateFreePost(freeId, { x: snapDrag(point.x / MM), z: snapDrag(point.z / MM) });
+      return;
+    }
     if (member.partitionId) {
       const partition = project.partitions.find((p) => p.id === member.partitionId);
       if (!partition) return;
       const offset = partitionDragAxis(partition.axis, { x: point.x / MM, z: point.z / MM });
-      updatePartition(member.partitionId, { offset: Math.round(offset / 50) * 50 });
+      updatePartition(member.partitionId, { offset: snapDrag(offset) });
       return;
     }
     // Post rows live in the canonical frame (see PostGrid): rotate the pointer into it and move
@@ -130,13 +167,13 @@ export function Scene({ model }: { model: DerivedModel }) {
     const midIndex = midPurlinIndex(member);
     if (midIndex !== null) {
       const across = params.roofScheme === 'sloped-purlins' ? canonicalPoint.x : canonicalPoint.z;
-      moveMidPurlin(midIndex, Math.round(across / 50) * 50);
+      moveMidPurlin(midIndex, snapDrag(across));
       return;
     }
     if (member.category !== 'post') return;
     const axisPosition = postKeyAxis(params.roofScheme, member.id) === 'x' ? canonicalPoint.x : canonicalPoint.z;
-    movePost(member.id, Math.round(axisPosition / 50) * 50);
-  }, [measureMode, movePost, moveMidPurlin, project.params, project.partitions, updatePartition]);
+    movePost(member.id, snapDrag(axisPosition));
+  }, [measureMode, placingPost, movePost, moveMidPurlin, project.params, project.partitions, updatePartition, updateFreePost]);
   const onPostDragEnd = useCallback((_member: Member, e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     (e.target as Element).releasePointerCapture(e.pointerId);
@@ -146,6 +183,7 @@ export function Scene({ model }: { model: DerivedModel }) {
   }, []);
   const onPanelClick = useCallback(
     (panel: Panel, e: ThreeEvent<MouseEvent>) => {
+      if (placePostAt(e)) return;
       if (measureMode) {
         addPoint(e.point);
         return;
@@ -154,12 +192,15 @@ export function Scene({ model }: { model: DerivedModel }) {
       const key = panel.wallId ?? panel.partitionId;
       if (key) selectWall(key);
     },
-    [measureMode, addPoint, selectWall, selectMember],
+    [measureMode, addPoint, selectWall, selectMember, placePostAt],
   );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') selectMember(null);
+      if (e.key === 'Escape') {
+        selectMember(null);
+        setPlacingPost(false);
+      }
       if (canDeleteSelectedPartition(e.key, selectedWallId, e.target as { tagName?: string; isContentEditable?: boolean } | null)) {
         e.preventDefault();
         removePartition(selectedWallId as string);
@@ -167,7 +208,7 @@ export function Scene({ model }: { model: DerivedModel }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [removePartition, selectMember, selectedWallId]);
+  }, [removePartition, selectMember, selectedWallId, setPlacingPost]);
 
   const centre: [number, number, number] = [(bounds.min.x + bounds.max.x) / 2, 0, (bounds.min.z + bounds.max.z) / 2];
   // Scene dressing scales with the structure so very large footprints are neither fogged out nor
@@ -184,14 +225,14 @@ export function Scene({ model }: { model: DerivedModel }) {
       dpr={[1, 1.75]}
       gl={{ antialias: true, preserveDrawingBuffer: true }}
       onPointerMissed={() => {
-        if (!measureMode && !isDragging) {
+        if (!measureMode && !isDragging && !placingPost) {
           selectWall(null);
           selectMember(null);
           selectVehicle(null);
           selectPavedArea(null);
         }
       }}
-      className={measureMode ? 'cursor-crosshair' : undefined}
+      className={measureMode || placingPost ? 'cursor-crosshair' : undefined}
     >
       <color attach="background" args={['#0b1220']} />
       <fog attach="fog" args={['#0b1220', fogNear, fogFar]} />
@@ -237,6 +278,7 @@ export function Scene({ model }: { model: DerivedModel }) {
         position={[centre[0], -0.003, centre[2]]}
         receiveShadow
         onClick={(e) => {
+          if (placePostAt(e)) return;
           if (measureMode) {
             e.stopPropagation();
             addPoint(e.point);
@@ -264,7 +306,7 @@ export function Scene({ model }: { model: DerivedModel }) {
               onPostDragStart={onPostDragStart}
               onPostDrag={onPostDrag}
               onPostDragEnd={onPostDragEnd}
-              onRemovePost={removePost}
+              onRemovePost={onRemovePost}
             />
           ))}
         {model.framing.panels.map((p) =>

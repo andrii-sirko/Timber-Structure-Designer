@@ -275,6 +275,16 @@ export interface ProjectState {
   vehicles: Vehicle[];
   pavedAreas: PavedArea[];
   postOverrides: Record<string, PostOverride>;
+  /** Extra posts placed freely in plan, independent of the purlin rows */
+  freePosts: FreePost[];
+}
+
+/** A single post placed anywhere inside the footprint; it carries no purlin of its own. */
+export interface FreePost {
+  id: string;
+  /** World X/Z of the post axis (mm) */
+  x: Millimeters;
+  z: Millimeters;
 }
 
 export interface PostOverride {

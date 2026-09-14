@@ -9,6 +9,9 @@ interface UiState {
   rightOpen: boolean;
   /** Result of the last statics auto-fix run, shown in the Statics tab */
   autoFixReport: StaticsActionResult | null;
+  /** The next click in the 3D view places a free post there */
+  placingPost: boolean;
+  setPlacingPost: (placing: boolean) => void;
   setAutoFixReport: (report: StaticsActionResult | null) => void;
   setResultsTab: (tab: ResultsTab) => void;
   toggleLeft: () => void;
@@ -21,6 +24,8 @@ export const useUiStore = create<UiState>((set) => ({
   leftOpen: true,
   rightOpen: true,
   autoFixReport: null,
+  placingPost: false,
+  setPlacingPost: (placingPost) => set({ placingPost }),
   setAutoFixReport: (autoFixReport) => set({ autoFixReport }),
   setResultsTab: (resultsTab) => set({ resultsTab }),
   toggleLeft: () => set((s) => ({ leftOpen: !s.leftOpen })),

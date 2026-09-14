@@ -1,4 +1,4 @@
-import type { BraceDirection, LayerVisibility, Opening, Partition, PavedArea, ProjectState, RoofDirection, RoofScheme, StructureParams, Vehicle, ViewSettings, Wall, WallId } from '@/types';
+import type { BraceDirection, FreePost, LayerVisibility, Opening, Partition, PavedArea, ProjectState, RoofDirection, RoofScheme, StructureParams, Vehicle, ViewSettings, Wall, WallId } from '@/types';
 import { BRACE_DIRECTIONS, ROOF_SCHEMES, WALL_IDS } from '@/types';
 import { uuid } from '@/engine/geometry';
 import { VEHICLE_CATALOG, VEHICLE_COLORS } from '@/engine/vehicles';
@@ -72,6 +72,7 @@ export function createDefaultProject(): ProjectState {
     vehicles: [{ id: uuid(), modelId: 'vw-golf', x: 3000, z: 1500, rotationDeg: 0, color: VEHICLE_COLORS[1] }],
     pavedAreas: [],
     postOverrides: {},
+    freePosts: [],
   };
 }
 
@@ -112,6 +113,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
       ],
       pavedAreas: [],
       postOverrides: {},
+      freePosts: [],
     }),
   },
   {
@@ -140,6 +142,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
         vehicles: [],
         pavedAreas: [],
       postOverrides: {},
+      freePosts: [],
       };
     },
   },
@@ -165,6 +168,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
       vehicles: [],
       pavedAreas: [],
       postOverrides: {},
+      freePosts: [],
     }),
   },
 ];
@@ -262,6 +266,11 @@ export function normalizeProject(input: unknown): ProjectState {
       return Object.keys(override).length ? [[key, override]] : [];
     }),
   ) : {};
+  const freePosts: FreePost[] = Array.isArray(src.freePosts)
+    ? (src.freePosts as Partial<FreePost>[])
+        .filter((p) => p && typeof p === 'object' && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.z)))
+        .map((p) => ({ id: typeof p.id === 'string' ? p.id : uuid(), x: Number(p.x), z: Number(p.z) }))
+    : [];
   return {
     id: typeof src.id === 'string' ? src.id : base.id,
     name: typeof src.name === 'string' && src.name.trim() ? src.name : base.name,
@@ -271,6 +280,7 @@ export function normalizeProject(input: unknown): ProjectState {
     vehicles,
     pavedAreas,
     postOverrides,
+    freePosts,
   };
 }
 
