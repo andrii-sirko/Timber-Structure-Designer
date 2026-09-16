@@ -64,7 +64,7 @@ test('the roof slopes down towards the chosen world wall', () => {
     for (const p of highPosts) assert.equal(p.length, 2600 - bh, `${dir} high post`);
     // posts stand on the correct world edge
     const edge = (w: WallId, p: { start: { x: number; z: number } }) =>
-      w === 'front' ? p.start.z : w === 'rear' ? 3000 - p.start.z : w === 'left' ? p.start.x : 6000 - p.start.x;
+      w === 'front' ? p.start.z : w === 'rear' ? 3000 - p.start.z : w === 'left' ? 6000 - p.start.x : p.start.x;
     for (const p of lowPosts) assert.ok(near(edge(dir, p), 60), `${dir} low post on edge (${p.start.x}, ${p.start.z})`);
     // rafters run across the slope
     const rafter = m.framing.members.find((x) => x.category === 'rafter')!;
@@ -92,9 +92,12 @@ test('world wall frames keep the world start-corner convention', () => {
     assert.deepEqual(frames.front.origin, { x: 0, y: 0, z: 0 }, dir);
     assert.deepEqual(frames.front.u, { x: 1, y: 0, z: 0 }, dir);
     assert.deepEqual(frames.rear.origin, { x: 0, y: 0, z: 3000 }, dir);
-    assert.deepEqual(frames.left.origin, { x: 0, y: 0, z: 0 }, dir);
+    // the world left wall sits at x = L (as seen standing in front of the structure)
+    assert.deepEqual(frames.left.origin, { x: 6000, y: 0, z: 0 }, dir);
     assert.deepEqual(frames.left.u, { x: 0, y: 0, z: 1 }, dir);
-    assert.deepEqual(frames.right.origin, { x: 6000, y: 0, z: 0 }, dir);
+    assert.deepEqual(frames.left.normal, { x: 1, y: 0, z: 0 }, dir);
+    assert.deepEqual(frames.right.origin, { x: 0, y: 0, z: 0 }, dir);
+    assert.deepEqual(frames.right.normal, { x: -1, y: 0, z: 0 }, dir);
     assert.equal(frames.front.length, 6000, dir);
     assert.equal(frames.left.length, 3000, dir);
     // post positions along u are sorted ascending after any mirroring

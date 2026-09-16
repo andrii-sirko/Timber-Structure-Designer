@@ -21,6 +21,7 @@ import {
   Waypoints,
   Car,
   BrickWall,
+  Rows3,
 } from 'lucide-react';
 import type { CameraPreset, HighlightMode, LayerVisibility } from '@/types';
 import { useProjectStore } from '@/store';
@@ -44,6 +45,7 @@ const LAYERS: { id: keyof LayerVisibility; label: string; icon: typeof Home }[] 
   { id: 'grid', label: 'Ground grid', icon: Grid3x3 },
   { id: 'vehicles', label: 'Vehicles', icon: Car },
   { id: 'paving', label: 'Paved floors', icon: BrickWall },
+  { id: 'floor', label: 'Timber floor deck', icon: Rows3 },
 ];
 
 const HIGHLIGHTS: { id: HighlightMode; label: string; icon: typeof Home }[] = [

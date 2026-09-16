@@ -7,12 +7,13 @@ import { computePostGrid, generateBraces, generatePosts, generatePurlins } from 
 import { clampPartition } from './partitions';
 import { computePartitionFrame, computeWallFrame, wallFrameToWorld, type WallFrame } from './wallFrame';
 import { generateWallFraming } from './walls';
+import { generateFloor } from './floor';
 import { generateFreePosts } from '../freePosts';
 import { canonicalizeProject, canonicalToWorldMap, canonicalWall, framingToWorld, partitionFlipped, relabelFraming, wallFlipped } from '../orientation';
 
 export { computeRoofLines } from './roofLines';
 export { computePostGrid, gridPostCount, rowPoint, rowPostTop } from './structure';
-export { computeWallFrame, computePartitionFrame, wallBays, PARTITION_TOP_GAP } from './wallFrame';
+export { computeWallFrame, computePartitionFrame, wallBays, wallExtent, MIN_WALL_LENGTH, PARTITION_TOP_GAP } from './wallFrame';
 export { clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH } from './partitions';
 export type { WallFrame, WallBay } from './wallFrame';
 export { clampOpening, openingLimits, headerHeight, OPENING_DEFAULTS, MIN_OPENING_SIZE, OPENING_SNAP } from './openings';
@@ -21,6 +22,8 @@ export type { OpeningPreset, DoorPreset, WindowPreset, DoorStyle, WindowStyle, P
 export { resizeOpening, resizableEdges, edgeHandleCentre, sizeChanged, OPENING_EDGES } from './openingResize';
 export type { OpeningEdge } from './openingResize';
 export { CLADDING_THICKNESS } from './walls';
+export { DECKING, FLOOR_DEFAULTS, FLOOR_LOAD_PRESETS, floorLayout, sanitizeFloor } from './floor';
+export type { DeckingSpec, FloorLayout } from './floor';
 
 /** Guard against geometrically impossible input without mutating the store. */
 /** Smallest plan dimension (mm) the post grid can still frame: two posts plus a bay. */
@@ -158,6 +161,11 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
     }
   }
 
+  const floor = generateFloor(project, params, members);
+  members.push(...floor.members);
+  if (floor.panel) panels.push(floor.panel);
+  warnings.push(...floor.warnings);
+
   // Global sanity warnings
   if (params.postsPerRow !== null && grid.postSpacing > params.maxPostSpacing + 1) {
     warnings.push({
@@ -186,5 +194,5 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
     warnings.push({ level: 'warning', message: 'Purlin overhang above 1.5 m – cantilevered purlin tails should be verified separately.' });
   }
 
-  return { members, panels, roof: roofBuild.geometry, grid, warnings };
+  return { members, panels, roof: roofBuild.geometry, grid, warnings, ...(floor.geometry ? { floor: floor.geometry } : {}) };
 }

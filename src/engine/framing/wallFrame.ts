@@ -1,10 +1,26 @@
 import type { Partition, PostGrid, StructureParams, Vec3, Wall, WallId } from '@/types';
-import { add, scale, X_AXIS, Y_AXIS, Z_AXIS, NEG_X, NEG_Z } from '../geometry';
+import { add, clamp, roundTo, scale, X_AXIS, Y_AXIS, Z_AXIS, NEG_X, NEG_Z } from '../geometry';
 import { mapPos, mapVec, type GroundMap } from '../orientation';
 import type { RoofLines } from './roofLines';
 
 /** Clearance between the top of a partition wall and the rafter underside (mm). */
 export const PARTITION_TOP_GAP = 10;
+
+/** Shortest closed stretch of an outer wall (mm). */
+export const MIN_WALL_LENGTH = 300;
+
+export interface WallExtent {
+  start: number;
+  end: number;
+}
+
+/** Closed stretch of an outer wall of `length` mm, clamped and snapped to 10 mm (full length when unset). */
+export function wallExtent(wall: Pick<Wall, 'start' | 'end'>, length: number): WallExtent {
+  if (length <= MIN_WALL_LENGTH) return { start: 0, end: length };
+  const start = roundTo(clamp(wall.start ?? 0, 0, length - MIN_WALL_LENGTH), 10);
+  const end = wall.end === undefined ? length : roundTo(clamp(wall.end, start + MIN_WALL_LENGTH, length), 10);
+  return { start, end: Math.min(end, length) };
+}
 
 /**
  * Local 2D coordinate frame of a wall (outer wall or interior partition).
@@ -35,6 +51,10 @@ export interface WallFrame {
   hasPurlin: boolean;
   /** Half width of the members at `postU` – bays start/end this far inside them */
   bayInset: number;
+  /** Closed stretch along u; bays are clipped to it and get an end stud where it ends inside a bay */
+  extent: WallExtent;
+  /** Width of an end stud along u */
+  studWidth: number;
   /** Underside of the top member (purlin, side rail or top plate) at u → top of the studs */
   studTopAt: (u: number) => number;
   /** Underside of the rafters on the outer face at u → top of the cladding */
@@ -69,7 +89,14 @@ export function computeWallFrame(
 
   const sloped = params.roofScheme === 'sloped-purlins';
   const rowPositions = (rowKey: string): number[] => grid.rows.find((r) => r.key === rowKey)?.positions ?? [];
-  const wallPosts = (wallId: WallId, mids: number[], span: number): number[] => [pw / 2, ...(wall.closed ? (grid.wallPosts[wallId]?.positions ?? []) : mids), span - pw / 2];
+  // Closed walls carry their own intermediate posts, but only along the closed stretch
+  const wallPosts = (wallId: WallId, mids: number[], span: number): number[] => {
+    if (!wall.closed) return [pw / 2, ...mids, span - pw / 2];
+    const ext = wallExtent(wall, span);
+    const inside = (pos: number): boolean => pos >= ext.start - pw / 2 && pos <= ext.end + pw / 2;
+    const own = (grid.wallPosts[wallId]?.positions ?? []).filter(inside);
+    return [pw / 2, ...[...own, ...mids.filter((m) => !inside(m))].sort((a, b) => a - b), span - pw / 2];
+  };
 
   switch (id) {
     case 'front':
@@ -133,6 +160,8 @@ export function computeWallFrame(
     sloped: isSloped,
     postU,
     bayInset: pw / 2,
+    extent: wallExtent(wall, length),
+    studWidth: timber.stud.width,
     studTopAt,
     claddingTopAt,
     toWorld: makeToWorld(origin, u, v, normal, axisInset),
@@ -192,6 +221,8 @@ export function computePartitionFrame(partition: Partition, params: StructurePar
     sloped,
     postU: [sw / 2, length - sw / 2],
     bayInset: sw / 2,
+    extent: { start: 0, end: length },
+    studWidth: sw,
     studTopAt,
     claddingTopAt,
     toWorld: makeToWorld(origin, u, v, normal, axisInset),
@@ -218,6 +249,7 @@ export function wallFrameToWorld(frame: WallFrame, m: GroundMap, flipped: boolea
     u,
     normal,
     postU: flipped ? frame.postU.map((uu) => length - uu).reverse() : frame.postU,
+    extent: flipped ? { start: length - frame.extent.end, end: length - frame.extent.start } : frame.extent,
     studTopAt: mirror(frame.studTopAt),
     claddingTopAt: mirror(frame.claddingTopAt),
     toWorld: makeToWorld(origin, u, frame.v, normal, frame.axisInset),
@@ -229,12 +261,24 @@ export interface WallBay {
   index: number;
   start: number; // inner face of the post at the start
   end: number; // inner face of the post at the end
+  /** The wall extent ends inside this bay: an end stud stands just before `start` / after `end` */
+  startStud?: boolean;
+  endStud?: boolean;
 }
 
 export function wallBays(frame: WallFrame): WallBay[] {
   const bays: WallBay[] = [];
+  const { extent, studWidth: sw } = frame;
   for (let i = 0; i < frame.postU.length - 1; i++) {
-    bays.push({ index: i, start: frame.postU[i] + frame.bayInset, end: frame.postU[i + 1] - frame.bayInset });
+    const start = frame.postU[i] + frame.bayInset;
+    const end = frame.postU[i + 1] - frame.bayInset;
+    if (extent.end <= start || extent.start >= end) continue;
+    const startStud = extent.start > start;
+    const endStud = extent.end < end;
+    const bay: WallBay = { index: i, start: startStud ? extent.start + sw : start, end: endStud ? extent.end - sw : end };
+    if (startStud) bay.startStud = true;
+    if (endStud) bay.endStud = true;
+    bays.push(bay);
   }
   return bays;
 }

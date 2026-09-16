@@ -9,7 +9,8 @@ export function canMovePost(isDragging: boolean): boolean {
 }
 
 export function canDragMember(member: Pick<{ category: MemberCategory; partitionId?: string; group: string; purlinRow?: string }, 'category' | 'partitionId' | 'group' | 'purlinRow'>): boolean {
-  return member.category === 'post' || isMidPurlin(member) || (member.category === 'stud' && Boolean(member.partitionId) && member.group === 'End stud (Eckständer)');
+  // Every piece of a partition is draggable: the body moves the wall, the end studs resize it (see partitionDrag).
+  return member.category === 'post' || isMidPurlin(member) || Boolean(member.partitionId);
 }
 
 /** Intermediate purlins can be dragged across the slope; eave purlins sit on the walls. */
@@ -36,5 +37,26 @@ export function partitionEdgeDistances(
   return {
     first: partition.offset - wallThickness / 2,
     second: span - partition.offset - wallThickness / 2,
+  };
+}
+
+/** Plan footprint of a post: world x/z extent (mm). */
+export interface PlanExtent {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+/** Clear distances from a post's faces to the footprint edges (x = 0 / length, z = 0 / width). */
+export function postEdgeDistances(
+  extent: PlanExtent,
+  bounds: { length: number; width: number },
+): { left: number; right: number; front: number; rear: number } {
+  return {
+    left: extent.minX,
+    right: bounds.length - extent.maxX,
+    front: extent.minZ,
+    rear: bounds.width - extent.maxZ,
   };
 }

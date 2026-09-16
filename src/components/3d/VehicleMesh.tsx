@@ -4,11 +4,13 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { Html, Line } from '@react-three/drei';
 import type { Vehicle, VehicleFit } from '@/types';
 import { useProjectStore } from '@/store';
-import { getVehicleModel, vehicleCorners } from '@/engine/vehicles';
+import { resolveVehicleModel, vehicleCorners } from '@/engine/vehicles';
 import { toRad } from '@/engine/geometry';
 import { MM } from './materials';
-import { clipSilhouette, GLASS, SILHOUETTES, WHEELS } from './vehicleShapes';
+import { clipSilhouette, FRAME_STYLES, GLASS, MATTE_STYLES, SILHOUETTES, WHEEL_LAYOUT, WHEELS } from './vehicleShapes';
+import { FurnitureBody } from './FurnitureBody';
 import { useMeasureStore } from './MeasureTool';
+import { openObjectSettings } from './openObjectSettings';
 import { DRAG_SNAP } from '@/engine/postDrag';
 
 const SNAP = DRAG_SNAP;
@@ -38,9 +40,10 @@ interface VehicleMeshProps {
   selected: boolean;
 }
 
-/** Simplified parametric car built from a side silhouette – exact footprint, height and mirror width. */
+/** Simplified parametric object built from a side silhouette (or a board frame) – exact footprint, height and mirror width. */
 export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }: VehicleMeshProps) {
-  const model = getVehicleModel(vehicle.modelId);
+  const model = useMemo(() => resolveVehicleModel(vehicle), [vehicle.modelId, vehicle.size?.length, vehicle.size?.width, vehicle.size?.height]);
+  const isFrame = FRAME_STYLES.has(model.style);
   const measureMode = useProjectStore((s) => s.view.measureMode);
   const updateVehicle = useProjectStore((s) => s.updateVehicle);
   const selectVehicle = useProjectStore((s) => s.selectVehicle);
@@ -49,7 +52,7 @@ export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }:
   const drag = useRef<{ offsetX: number; offsetZ: number } | null>(null);
   const hit = useMemo(() => new THREE.Vector3(), []);
 
-  const bodyGeometry = useMemo(() => extrude(SILHOUETTES[model.style], model.length, model.height, model.width), [model]);
+  const bodyGeometry = useMemo(() => (isFrame ? null : extrude(SILHOUETTES[model.style], model.length, model.height, model.width)), [model, isFrame]);
   const glassGeometry = useMemo(() => {
     const g = GLASS[model.style];
     if (!g) return null;
@@ -58,37 +61,56 @@ export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }:
   }, [model]);
   const wheel = WHEELS[model.style];
   const wheelGeometry = useMemo(() => {
+    if (!wheel) return null;
     const r = (wheel.diameter * model.height * MM) / 2;
     const w = wheel.width * model.width * MM;
     const geo = new THREE.CylinderGeometry(r, r, w, 24);
     geo.rotateX(Math.PI / 2);
     return geo;
   }, [wheel, model]);
-  useEffect(() => () => bodyGeometry.dispose(), [bodyGeometry]);
+  useEffect(() => () => bodyGeometry?.dispose(), [bodyGeometry]);
   useEffect(() => () => glassGeometry?.dispose(), [glassGeometry]);
-  useEffect(() => () => wheelGeometry.dispose(), [wheelGeometry]);
+  useEffect(() => () => wheelGeometry?.dispose(), [wheelGeometry]);
 
-  const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: vehicle.color, metalness: 0.55, roughness: 0.35 }), [vehicle.color]);
+  const matte = MATTE_STYLES.has(model.style);
+  const bodyMaterial = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: vehicle.color, metalness: matte ? 0.05 : 0.55, roughness: matte ? 0.75 : 0.35 }),
+    [vehicle.color, matte],
+  );
   useEffect(() => () => bodyMaterial.dispose(), [bodyMaterial]);
   useEffect(() => {
     bodyMaterial.emissive.set(selected ? '#0ea5e9' : '#000000');
     bodyMaterial.emissiveIntensity = selected ? 0.12 : 0;
   }, [bodyMaterial, selected]);
 
-  const wheelRadius = (wheel.diameter * model.height * MM) / 2;
-  const wheelInset = (model.width * MM) / 2 - (wheel.width * model.width * MM) / 2 - 0.02;
-  const wheelPositions: [number, number, number][] = [
-    [(wheel.front - 0.5) * model.length * MM, wheelRadius, wheelInset],
-    [(wheel.front - 0.5) * model.length * MM, wheelRadius, -wheelInset],
-    [(wheel.rear - 0.5) * model.length * MM, wheelRadius, wheelInset],
-    [(wheel.rear - 0.5) * model.length * MM, wheelRadius, -wheelInset],
-  ];
-  const wheelsToRender =
-    model.style === 'motorcycle' || model.style === 'bicycle'
-      ? [wheelPositions[0], wheelPositions[2]].map(([x, y]) => [x, y, 0] as [number, number, number])
-      : model.style === 'bin'
-        ? [wheelPositions[2], wheelPositions[3]]
-        : wheelPositions;
+  const wheelsToRender = useMemo((): [number, number, number][] => {
+    if (!wheel) return [];
+    const r = (wheel.diameter * model.height * MM) / 2;
+    const inset = (model.width * MM) / 2 - (wheel.width * model.width * MM) / 2 - 0.02;
+    const fx = (wheel.front - 0.5) * model.length * MM;
+    const rx = (wheel.rear - 0.5) * model.length * MM;
+    switch (WHEEL_LAYOUT[model.style] ?? 'quad') {
+      case 'single':
+        return [
+          [fx, r, 0],
+          [rx, r, 0],
+        ];
+      case 'frontSingle':
+        return [[fx, r, 0]];
+      case 'rearPair':
+        return [
+          [rx, r, inset],
+          [rx, r, -inset],
+        ];
+      default:
+        return [
+          [fx, r, inset],
+          [fx, r, -inset],
+          [rx, r, inset],
+          [rx, r, -inset],
+        ];
+    }
+  }, [wheel, model]);
 
   const footprint = useMemo(() => {
     const c = vehicleCorners(vehicle, model, true).map((p) => [p.x * MM, 0.004, p.z * MM] as [number, number, number]);
@@ -144,6 +166,7 @@ export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }:
             addPoint(e.point);
           }
         }}
+        onDoubleClick={(e) => openObjectSettings({ kind: 'vehicle', id: vehicle.id }, e)}
         onPointerOver={(e) => {
           e.stopPropagation();
           if (!measureMode) document.body.style.cursor = 'grab';
@@ -152,11 +175,12 @@ export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }:
           document.body.style.cursor = '';
         }}
       >
-        <mesh geometry={bodyGeometry} material={bodyMaterial} castShadow receiveShadow />
+        {bodyGeometry ? <mesh geometry={bodyGeometry} material={bodyMaterial} castShadow receiveShadow /> : <FurnitureBody style={model.style} model={model} material={bodyMaterial} />}
         {glassGeometry && <mesh geometry={glassGeometry} material={getGlass()} castShadow />}
-        {wheelsToRender.map((p, i) => (
-          <mesh key={i} geometry={wheelGeometry} material={getTyre()} position={p} castShadow />
-        ))}
+        {wheelGeometry &&
+          wheelsToRender.map((p, i) => (
+            <mesh key={i} geometry={wheelGeometry} material={getTyre()} position={p} castShadow />
+          ))}
       </group>
       {/* mirror-width footprint on the ground (world space), coloured by fit status */}
       <Line points={footprint} color={STATUS_COLOR[status]} lineWidth={selected ? 2 : 1} dashed dashSize={0.12} gapSize={0.06} transparent opacity={selected ? 0.95 : 0.6} />

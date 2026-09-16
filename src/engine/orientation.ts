@@ -23,15 +23,19 @@ import { toDeg, toRad } from './geometry';
  * wall that carries the low eave. This module rotates a world project into the canonical
  * frame (`canonicalizeProject`) and rotates the generated geometry back (`framingToWorld`).
  *
- * All four cases are proper rotations about Y around the footprint, so handedness, member
- * profiles and wall start-corner conventions survive; only the wall *ids* and, for the side
- * cases, the length/width roles are exchanged.
+ * The canonical frame keeps its left wall at x = 0, but the WORLD left wall sits at x = L so
+ * that "left" / "right" read correctly for someone standing in front of the structure (plan
+ * view with the front at the bottom). Every world ↔ canonical map is therefore a rotation
+ * composed with the mirror x ↦ L − x (all four have determinant −1). Member profiles are
+ * symmetric about their direction/up plane, so mirrored members render identically; the wall
+ * start-corner convention is restored by `wallFlipped`, and only the wall *ids* and, for the
+ * side cases, the length/width roles are exchanged.
  *
  *   direction  world → canonical (x', z')      L' W'
- *   rear       identity                         L  W
- *   front      (L − x, W − z)   180°            L  W
- *   left       (z, L − x)        90°            W  L
- *   right      (W − z, x)       −90°            W  L
+ *   rear       (L − x, z)                       L  W
+ *   front      (x, W − z)                       L  W
+ *   left       (z, x)                           W  L
+ *   right      (W − z, L − x)                   W  L
  */
 
 /** Affine map on the ground plane: x' = a·x + b·z + tx, z' = c·x + d·z + tz. */
@@ -44,8 +48,6 @@ export interface GroundMap {
   tz: number;
 }
 
-const IDENTITY: GroundMap = { a: 1, b: 0, c: 0, d: 1, tx: 0, tz: 0 };
-
 export const isSideDirection = (dir: RoofDirection): boolean => dir === 'left' || dir === 'right';
 
 /** Canonical (engine) length and width for the given world dimensions. */
@@ -57,13 +59,13 @@ export function canonicalDims(params: Pick<StructureParams, 'length' | 'width' |
 export function worldToCanonicalMap(dir: RoofDirection, L: number, W: number): GroundMap {
   switch (dir) {
     case 'rear':
-      return IDENTITY;
+      return { a: -1, b: 0, c: 0, d: 1, tx: L, tz: 0 };
     case 'front':
-      return { a: -1, b: 0, c: 0, d: -1, tx: L, tz: W };
+      return { a: 1, b: 0, c: 0, d: -1, tx: 0, tz: W };
     case 'left':
-      return { a: 0, b: 1, c: -1, d: 0, tx: 0, tz: L };
+      return { a: 0, b: 1, c: 1, d: 0, tx: 0, tz: 0 };
     case 'right':
-      return { a: 0, b: -1, c: 1, d: 0, tx: W, tz: 0 };
+      return { a: 0, b: -1, c: -1, d: 0, tx: W, tz: L };
   }
 }
 
@@ -71,13 +73,13 @@ export function worldToCanonicalMap(dir: RoofDirection, L: number, W: number): G
 export function canonicalToWorldMap(dir: RoofDirection, L: number, W: number): GroundMap {
   switch (dir) {
     case 'rear':
-      return IDENTITY;
+      return { a: -1, b: 0, c: 0, d: 1, tx: L, tz: 0 };
     case 'front':
-      return { a: -1, b: 0, c: 0, d: -1, tx: L, tz: W };
+      return { a: 1, b: 0, c: 0, d: -1, tx: 0, tz: W };
     case 'left':
-      return { a: 0, b: -1, c: 1, d: 0, tx: L, tz: 0 };
+      return { a: 0, b: 1, c: 1, d: 0, tx: 0, tz: 0 };
     case 'right':
-      return { a: 0, b: 1, c: -1, d: 0, tx: 0, tz: W };
+      return { a: 0, b: -1, c: -1, d: 0, tx: L, tz: W };
   }
 }
 
@@ -188,7 +190,6 @@ export function canonicalizeParams(params: StructureParams): StructureParams {
  */
 export function canonicalizeProject(project: ProjectState): ProjectState {
   const dir = project.params.roofDirection;
-  if (dir === 'rear') return project;
   const { length: L, width: W } = project.params;
   const m = worldToCanonicalMap(dir, L, W);
 
@@ -197,7 +198,15 @@ export function canonicalizeProject(project: ProjectState): ProjectState {
     const c = canonicalWall(dir, id);
     const wall = project.walls[id];
     const wallLength = id === 'front' || id === 'rear' ? L : W;
-    walls[c] = { ...wall, id: c, openings: wallFlipped(dir, id) ? flipOpenings(wall.openings, wallLength) : wall.openings };
+    walls[c] = wallFlipped(dir, id)
+      ? {
+          ...wall,
+          id: c,
+          openings: flipOpenings(wall.openings, wallLength),
+          start: wall.end === undefined ? undefined : wallLength - wall.end,
+          end: wall.start === undefined ? undefined : wallLength - wall.start,
+        }
+      : { ...wall, id: c };
   }
 
   const vehicles: Vehicle[] = project.vehicles.map((v) => ({ ...v, ...mapPoint(m, v), rotationDeg: mapHeading(m, v.rotationDeg) }));
@@ -242,7 +251,6 @@ function panelToWorld(m: GroundMap, dir: RoofDirection, panel: Panel): Panel {
  */
 export function framingToWorld(framing: FramingResult, params: StructureParams): FramingResult {
   const dir = params.roofDirection;
-  if (dir === 'rear') return framing;
   const m = canonicalToWorldMap(dir, params.length, params.width);
   return {
     ...framing,

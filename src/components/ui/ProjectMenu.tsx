@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { FolderOpen, Save, Upload, Download, FileText, LayoutTemplate, Trash2, RotateCcw } from 'lucide-react';
 import type { DerivedModel } from '@/types';
 import { PROJECT_TEMPLATES, useProjectStore } from '@/store';
@@ -18,14 +19,34 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent): void => {
-      if (wrapper.current && !wrapper.current.contains(e.target as Node)) setOpen(null);
+      const t = e.target as Node;
+      if (wrapper.current?.contains(t) || popoverRef.current?.contains(t)) return;
+      setOpen(null);
     };
+    const close = (): void => setOpen(null);
     document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    window.addEventListener('resize', close);
+    // The header scrolls horizontally on narrow screens; a fixed popover would detach from its button
+    const header = wrapper.current?.closest('header');
+    header?.addEventListener('scroll', close);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('resize', close);
+      header?.removeEventListener('scroll', close);
+    };
+  }, [open]);
+
+  // The header clips overflow (overflow-x-auto), so popovers are portalled and positioned against the viewport
+  useLayoutEffect(() => {
+    if (!open || !wrapper.current) return;
+    const r = wrapper.current.getBoundingClientRect();
+    setAnchor({ top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) });
   }, [open]);
 
   const onImport = async (file: File): Promise<void> => {
@@ -42,7 +63,8 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
     if (name && name.trim()) saveProjectAs(name.trim());
   };
 
-  const popover = 'absolute top-full right-0 z-30 mt-1 w-80 rounded-lg border border-slate-700 bg-slate-950 p-2 shadow-2xl';
+  const popover = 'fixed z-50 w-80 max-w-[calc(100vw-1rem)] rounded-lg border border-slate-700 bg-slate-950 p-2 shadow-2xl';
+  const popoverStyle = anchor ? { top: anchor.top, right: anchor.right } : undefined;
 
   return (
     <div ref={wrapper} className="relative flex items-center gap-1.5">
@@ -84,8 +106,8 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
       </Button>
       {error && <span className="text-[11px] text-rose-300">{error}</span>}
 
-      {open === 'templates' && (
-        <div className={popover}>
+      {open === 'templates' && anchor && createPortal(
+        <div ref={popoverRef} className={popover} style={popoverStyle}>
           <div className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-slate-400 uppercase">Start from a template</div>
           {PROJECT_TEMPLATES.map((t) => (
             <button
@@ -101,11 +123,12 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
               <div className="text-[11px] text-slate-500">{t.description}</div>
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {open === 'saved' && (
-        <div className={cx(popover, 'max-h-96 overflow-auto')}>
+      {open === 'saved' && anchor && createPortal(
+        <div ref={popoverRef} className={cx(popover, 'max-h-96 overflow-auto')} style={popoverStyle}>
           <div className="px-2 pb-1 text-[10px] font-semibold tracking-wide text-slate-400 uppercase">Saved presets (this browser)</div>
           {savedProjects.length === 0 && <p className="px-2 py-2 text-xs text-slate-500">Nothing saved yet. Use “Save preset”.</p>}
           {savedProjects.map((p) => (
@@ -128,7 +151,8 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
               </button>
             </div>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

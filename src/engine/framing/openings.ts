@@ -24,6 +24,7 @@ export function headerHeight(openingWidth: number): number {
 
 export function bayForOpening(frame: WallFrame, opening: Opening): WallBay {
   const bays = wallBays(frame);
+  if (bays.length === 0) return { index: 0, start: frame.extent.start, end: frame.extent.end };
   const centre = opening.x + opening.width / 2;
   const hit = bays.find((b) => centre >= b.start && centre <= b.end);
   if (hit) return hit;

@@ -12,21 +12,21 @@ export const WALL_DRAG_STEP = DRAG_SNAP;
 
 /**
  * New footprint dimension for dragging outer wall `wall` so that it follows the ground point
- * `point` (world mm). The footprint stays anchored at the origin: dragging the right / rear wall
- * moves that wall, dragging the left / front wall (which sits on the axis) grows the footprint
+ * `point` (world mm). The footprint stays anchored at the origin: dragging the left / rear wall
+ * moves that wall, dragging the right / front wall (which sits on the axis) grows the footprint
  * by the distance the pointer moved outwards, so "drag outwards = bigger" holds on every wall.
  */
 export function wallDragDimensionValue(wall: WallId, point: { x: number; z: number }, params: Pick<StructureParams, 'length' | 'width'>): number {
   const current = wallDragDimension(wall) === 'length' ? params.length : params.width;
   let raw: number;
   switch (wall) {
-    case 'right':
+    case 'left':
       raw = point.x;
       break;
     case 'rear':
       raw = point.z;
       break;
-    case 'left':
+    case 'right':
       raw = current - point.x;
       break;
     case 'front':
@@ -43,11 +43,11 @@ export function wallDragDimensionValue(wall: WallId, point: { x: number; z: numb
  */
 export function wallDragGrabOffset(wall: WallId, point: { x: number; z: number }, params: Pick<StructureParams, 'length' | 'width'>): number {
   switch (wall) {
-    case 'right':
+    case 'left':
       return point.x - params.length;
     case 'rear':
       return point.z - params.width;
-    case 'left':
+    case 'right':
       return point.x;
     case 'front':
       return point.z;
@@ -81,8 +81,8 @@ export function wallHandles(params: Pick<StructureParams, 'length' | 'width'>, g
   return [
     { wall: 'front', centre: { x: L / 2, z: -gap }, length: L, alongX: true },
     { wall: 'rear', centre: { x: L / 2, z: W + gap }, length: L, alongX: true },
-    { wall: 'left', centre: { x: -gap, z: W / 2 }, length: W, alongX: false },
-    { wall: 'right', centre: { x: L + gap, z: W / 2 }, length: W, alongX: false },
+    { wall: 'right', centre: { x: -gap, z: W / 2 }, length: W, alongX: false },
+    { wall: 'left', centre: { x: L + gap, z: W / 2 }, length: W, alongX: false },
   ];
 }
 

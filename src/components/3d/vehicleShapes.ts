@@ -17,7 +17,30 @@ export const SILHOUETTES: Record<VehicleBodyStyle, [number, number][]> = {
   // bicycle: thin frame outline – saddle (front, u≈0.3) to handlebar (rear, u≈0.75) – wheels are drawn separately
   bicycle: [[0.18, 0.32], [0.24, 0.62], [0.3, 0.66], [0.4, 0.66], [0.58, 0.56], [0.72, 0.6], [0.78, 0.72], [0.82, 0.7], [0.8, 0.6], [0.76, 0.52], [0.6, 0.5], [0.52, 0.36], [0.5, 0.26], [0.42, 0.28], [0.34, 0.38], [0.24, 0.27], [0.2, 0.26]],
   motorcycle: [[0.02, 0.3], [0.1, 0.42], [0.3, 0.55], [0.42, 0.72], [0.52, 0.78], [0.62, 0.66], [0.75, 0.62], [0.98, 0.55], [1, 0.45], [0.9, 0.3], [0.6, 0.28], [0.4, 0.3]],
+  // push mower: low cutting deck at the front, handlebar rising to the rear top
+  mower: [[0.02, 0.12], [0, 0.3], [0.04, 0.38], [0.36, 0.38], [0.44, 0.3], [0.86, 0.94], [0.92, 1], [1, 0.98], [0.98, 0.9], [0.5, 0.24], [0.5, 0.12]],
+  // ride-on mower: bonnet, seat with backrest, steering column, deck underneath
+  ridingMower: [[0, 0.22], [0, 0.42], [0.04, 0.5], [0.34, 0.52], [0.38, 0.6], [0.5, 0.62], [0.54, 0.48], [0.62, 0.48], [0.64, 0.9], [0.7, 0.9], [0.7, 0.62], [0.86, 0.62], [0.9, 0.5], [1, 0.45], [1, 0.22]],
+  // wheelbarrow: tub over the front wheel, handles rising to the rear
+  wheelbarrow: [[0.08, 0.35], [0.05, 0.55], [0.02, 0.92], [0.06, 0.96], [0.42, 0.96], [0.62, 0.9], [0.98, 1], [1, 0.92], [0.64, 0.8], [0.6, 0.36], [0.3, 0.25]],
+  // plain boxes – stacked logs, crates, and fallbacks for the procedural furniture styles
+  firewood: [[0, 0], [0, 1], [1, 1], [1, 0]],
+  box: [[0, 0], [0, 1], [1, 1], [1, 0]],
+  shelf: [[0, 0], [0, 1], [1, 1], [1, 0]],
+  table: [[0, 0], [0, 1], [1, 1], [1, 0]],
+  workbench: [[0, 0], [0, 1], [1, 1], [1, 0]],
+  bench: [[0, 0], [0, 1], [1, 1], [1, 0]],
+  barrel: [[0, 0], [0, 1], [1, 1], [1, 0]],
+  ladder: [[0, 0], [0, 1], [1, 1], [1, 0]],
+  gasGrill: [[0, 0], [0, 1], [1, 1], [1, 0]],
+  kettleGrill: [[0, 0], [0, 1], [1, 1], [1, 0]],
 };
+
+/** Styles rendered as a procedural frame (boards + legs) instead of an extruded silhouette. */
+export const FRAME_STYLES = new Set<VehicleBodyStyle>(['shelf', 'table', 'workbench', 'bench', 'barrel', 'ladder', 'gasGrill', 'kettleGrill']);
+
+/** Matte, non-metallic finish (wood, plastic, powder coat) – everything else is car paint. */
+export const MATTE_STYLES = new Set<VehicleBodyStyle>(['bin', 'container', 'mower', 'ridingMower', 'wheelbarrow', 'firewood', 'box', 'shelf', 'table', 'workbench', 'bench', 'barrel', 'ladder', 'gasGrill', 'kettleGrill']);
 
 export interface WheelSpec {
   /** Axle positions as fractions of the length (from the front bumper) */
@@ -29,7 +52,18 @@ export interface WheelSpec {
   width: number;
 }
 
-export const WHEELS: Record<VehicleBodyStyle, WheelSpec> = {
+/** Which of the four axle-corner positions get a wheel; `single` = one wheel on the centre line per axle. */
+export type WheelLayout = 'quad' | 'single' | 'rearPair' | 'frontSingle';
+
+export const WHEEL_LAYOUT: Partial<Record<VehicleBodyStyle, WheelLayout>> = {
+  motorcycle: 'single',
+  bicycle: 'single',
+  bin: 'rearPair',
+  wheelbarrow: 'frontSingle',
+};
+
+/** Wheel geometry per style; styles without an entry have no wheels. */
+export const WHEELS: Partial<Record<VehicleBodyStyle, WheelSpec>> = {
   city: { front: 0.17, rear: 0.82, diameter: 0.4, width: 0.12 },
   compact: { front: 0.17, rear: 0.8, diameter: 0.43, width: 0.13 },
   sedan: { front: 0.17, rear: 0.78, diameter: 0.45, width: 0.13 },
@@ -42,6 +76,9 @@ export const WHEELS: Record<VehicleBodyStyle, WheelSpec> = {
   bicycle: { front: 0.19, rear: 0.81, diameter: 0.66, width: 0.1 },
   bin: { front: 0.85, rear: 0.85, diameter: 0.2, width: 0.08 },
   container: { front: 0.15, rear: 0.85, diameter: 0.12, width: 0.08 },
+  mower: { front: 0.1, rear: 0.42, diameter: 0.22, width: 0.09 },
+  ridingMower: { front: 0.16, rear: 0.8, diameter: 0.38, width: 0.14 },
+  wheelbarrow: { front: 0.14, rear: 0.14, diameter: 0.6, width: 0.14 },
 };
 
 /** Glass band (fractions of height) and how far along the length windows extend. */

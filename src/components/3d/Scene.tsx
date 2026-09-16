@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, type ThreeEvent } from '@react-three/fiber';
 import { Grid, Html, OrbitControls, OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
@@ -7,22 +7,24 @@ import { useProjectStore } from '@/store';
 import { useNeighbours } from '@/store/useNeighbours';
 import { canDeleteSelectedPartition } from '@/engine/wallKeyboard';
 import { CameraRig, modelBounds } from './CameraRig';
-import { DimensionLines, MidPurlinDragDistances, PartitionDragDistances } from './DimensionLines';
-import { midPurlinIndex, partitionDragAxis, snapDrag } from '@/engine/postDrag';
+import { DimensionLines, MidPurlinDragDistances, PartitionDragDistances, PartitionResizeRuler, PostDragDistances } from './DimensionLines';
+import { midPurlinIndex, snapDrag } from '@/engine/postDrag';
+import { partitionDragCursor, partitionDragMode, partitionDragModeAt, partitionDragPatch, partitionGrabOffset, type PartitionDrag } from '@/engine/partitionDrag';
 import { worldPointToCanonical } from '@/engine/orientation';
 import { postKeyAxis } from '@/engine/postOverrides';
 import { freePostIdOf } from '@/engine/freePosts';
+import { openObjectSettings } from './openObjectSettings';
 import { useUiStore } from '@/store/uiStore';
 import { MM } from './materials';
 import { MeasureTool, useMeasureStore } from './MeasureTool';
 import { NeighbourDistances } from './NeighbourDistances';
 import { OpeningsEditor } from './OpeningsEditor';
 import { OpeningFixtures } from './OpeningFixtures';
+import { AnchorFixtures } from './AnchorFixtures';
 import { PanelMesh } from './PanelMesh';
 import { TimberMember } from './TimberMember';
 import { VehicleMesh } from './VehicleMesh';
 import { PavedAreaMesh } from './PavedAreaMesh';
-import { WallResizeHandles } from './WallResizeHandles';
 
 function HoverTooltip({ members }: { members: Member[] }) {
   const hoveredId = useProjectStore((s) => s.hoveredMemberId);
@@ -80,13 +82,21 @@ export function Scene({ model }: { model: DerivedModel }) {
   const neighbourMode = useProjectStore((s) => s.view.neighbourMode);
   const focusedNeighbourId = useProjectStore((s) => s.focusedNeighbourId);
   const addPoint = useMeasureStore((s) => s.addPoint);
-  const [draggingPartitionId, setDraggingPartitionId] = useState<string | null>(null);
+  const [partitionDrag, setPartitionDrag] = useState<PartitionDrag | null>(null);
+  // Mirror of the state for the pointer handlers, which must not re-subscribe on every move.
+  const partitionDragRef = useRef<PartitionDrag | null>(null);
   const [draggingMidPurlin, setDraggingMidPurlin] = useState<number | null>(null);
+  const [draggingPostId, setDraggingPostId] = useState<string | null>(null);
+  const draggingPartitionId = partitionDrag?.id ?? null;
 
   const { subject, links } = useNeighbours(model.framing.members);
   const neighbourIds = useMemo(() => new Set(links.map((l) => l.memberId)), [links]);
 
   const bounds = useMemo(() => modelBounds(model, project), [model, project]);
+  const draggingPost = useMemo(
+    () => (draggingPostId ? model.framing.members.find((m) => m.id === draggingPostId) ?? null : null),
+    [draggingPostId, model.framing.members],
+  );
   const draggingPartition = useMemo(
     () => (draggingPartitionId ? project.partitions.find((p) => p.id === draggingPartitionId) ?? null : null),
     [draggingPartitionId, project.partitions],
@@ -130,17 +140,56 @@ export function Scene({ model }: { model: DerivedModel }) {
     },
     [measureMode, addPoint, selectWall, selectMember, neighbourMode, placePostAt],
   );
+  const onMemberDoubleClick = useCallback((member: Member, e: ThreeEvent<MouseEvent>) => {
+    openObjectSettings({ kind: 'member', category: member.category, wallKey: member.wallId ?? member.partitionId, freePostId: freePostIdOf(member.id) }, e);
+  }, []);
+  const onPanelDoubleClick = useCallback((panel: Panel, e: ThreeEvent<MouseEvent>) => {
+    openObjectSettings({ kind: 'panel', panelKind: panel.kind, wallKey: panel.wallId ?? panel.partitionId }, e);
+  }, []);
+  /** Start moving / resizing a partition from the ground point under the pointer. */
+  const beginPartitionDrag = useCallback((partitionId: string, mode: 'move' | 'start' | 'end' | null, e: ThreeEvent<PointerEvent>) => {
+    const partition = useProjectStore.getState().project.partitions.find((p) => p.id === partitionId);
+    if (!partition || !mode) return;
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const point = new THREE.Vector3();
+    if (!e.ray.intersectPlane(ground, point)) return;
+    const drag: PartitionDrag = { id: partitionId, mode, grab: partitionGrabOffset(partition, mode, { x: point.x / MM, z: point.z / MM }) };
+    partitionDragRef.current = drag;
+    setPartitionDrag(drag);
+    document.body.style.cursor = partitionDragCursor(mode, partition.axis);
+  }, []);
   const onPostDragStart = useCallback((member: Member, e: ThreeEvent<PointerEvent>) => {
     if (measureMode || placingPost) return;
     e.stopPropagation();
     (e.target as Element).setPointerCapture(e.pointerId);
-    setDraggingPartitionId(member.partitionId ?? null);
+    if (member.partitionId) {
+      const partition = useProjectStore.getState().project.partitions.find((p) => p.id === member.partitionId);
+      if (partition) {
+        beginPartitionDrag(partition.id, partitionDragMode(member, partition, { x: e.point.x / MM, z: e.point.z / MM }), e);
+        selectWall(partition.id);
+      }
+    }
     setDraggingMidPurlin(midPurlinIndex(member));
+    setDraggingPostId(member.category === 'post' && !member.partitionId ? member.id : null);
     // Select on pointer-down, not only on click: a drag that ends over another
     // timber never fires click, so the neighbour distances would stay hidden.
     if (member.category === 'post') selectMember(member.id);
     useProjectStore.getState().setDragging(true);
-  }, [measureMode, placingPost, selectMember]);
+  }, [measureMode, placingPost, selectMember, selectWall, beginPartitionDrag]);
+  /** Move / resize the partition being dragged so it follows the ground point (world m). */
+  const applyPartitionDrag = useCallback((point: THREE.Vector3) => {
+    const drag = partitionDragRef.current;
+    if (!drag) return;
+    const partition = useProjectStore.getState().project.partitions.find((p) => p.id === drag.id);
+    if (!partition) return;
+    updatePartition(drag.id, partitionDragPatch(partition, drag.mode, { x: point.x / MM, z: point.z / MM }, drag.grab));
+  }, [updatePartition]);
+  const endPartitionDrag = useCallback(() => {
+    if (!partitionDragRef.current) return;
+    partitionDragRef.current = null;
+    setPartitionDrag(null);
+    document.body.style.cursor = '';
+  }, []);
   const onPostDrag = useCallback((member: Member, e: ThreeEvent<PointerEvent>) => {
     if (measureMode || placingPost) return;
     e.stopPropagation();
@@ -154,10 +203,7 @@ export function Scene({ model }: { model: DerivedModel }) {
       return;
     }
     if (member.partitionId) {
-      const partition = project.partitions.find((p) => p.id === member.partitionId);
-      if (!partition) return;
-      const offset = partitionDragAxis(partition.axis, { x: point.x / MM, z: point.z / MM });
-      updatePartition(member.partitionId, { offset: snapDrag(offset) });
+      applyPartitionDrag(point);
       return;
     }
     // Post rows live in the canonical frame (see PostGrid): rotate the pointer into it and move
@@ -175,14 +221,49 @@ export function Scene({ model }: { model: DerivedModel }) {
     if (member.category !== 'post') return;
     const axisPosition = postKeyAxis(params.roofScheme, member.id) === 'x' ? canonicalPoint.x : canonicalPoint.z;
     movePost(member.id, snapDrag(axisPosition));
-  }, [measureMode, placingPost, movePost, moveMidPurlin, project.params, project.partitions, updatePartition, updateFreePost]);
+  }, [measureMode, placingPost, movePost, moveMidPurlin, project.params, applyPartitionDrag, updateFreePost]);
   const onPostDragEnd = useCallback((_member: Member, e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     (e.target as Element).releasePointerCapture(e.pointerId);
-    setDraggingPartitionId(null);
+    endPartitionDrag();
     setDraggingMidPurlin(null);
+    setDraggingPostId(null);
     useProjectStore.getState().setDragging(false);
-  }, []);
+  }, [endPartitionDrag]);
+  // Partition cladding drags its wall like the framing does: near an end it resizes, elsewhere it moves.
+  const onPanelDragStart = useCallback((panel: Panel, e: ThreeEvent<PointerEvent>) => {
+    if (measureMode || placingPost || !panel.partitionId) return;
+    const partition = useProjectStore.getState().project.partitions.find((p) => p.id === panel.partitionId);
+    if (!partition) return;
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    beginPartitionDrag(partition.id, partitionDragModeAt(partition, { x: e.point.x / MM, z: e.point.z / MM }), e);
+    selectMember(null);
+    selectWall(panel.partitionId);
+    useProjectStore.getState().setDragging(true);
+  }, [measureMode, placingPost, beginPartitionDrag, selectMember, selectWall]);
+  const onPanelDrag = useCallback((_panel: Panel, e: ThreeEvent<PointerEvent>) => {
+    if (!partitionDragRef.current) return;
+    e.stopPropagation();
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const point = new THREE.Vector3();
+    if (!e.ray.intersectPlane(ground, point)) return;
+    applyPartitionDrag(point);
+  }, [applyPartitionDrag]);
+  const onPanelDragEnd = useCallback((_panel: Panel, e: ThreeEvent<PointerEvent>) => {
+    if (!partitionDragRef.current) return;
+    e.stopPropagation();
+    (e.target as Element).releasePointerCapture(e.pointerId);
+    endPartitionDrag();
+    useProjectStore.getState().setDragging(false);
+  }, [endPartitionDrag]);
+  const partitionsById = useMemo(() => new Map(project.partitions.map((p) => [p.id, p])), [project.partitions]);
+  const memberDragCursor = useCallback((member: Member): string | undefined => {
+    const partition = member.partitionId ? partitionsById.get(member.partitionId) : undefined;
+    if (!partition) return undefined;
+    const mode = partitionDragMode(member, partition);
+    return mode ? partitionDragCursor(mode, partition.axis) : undefined;
+  }, [partitionsById]);
   const onPanelClick = useCallback(
     (panel: Panel, e: ThreeEvent<MouseEvent>) => {
       if (placePostAt(e)) return;
@@ -305,15 +386,29 @@ export function Scene({ model }: { model: DerivedModel }) {
               selected={selectedMemberId === m.id || (selectedWallId !== null && (m.wallId ?? m.partitionId) === selectedWallId && (m.category === 'stud' || m.category === 'header' || m.category === 'sill' || m.category === 'plate'))}
               onHover={setHovered}
               onClick={onMemberClick}
+              onDoubleClick={onMemberDoubleClick}
               onPostDragStart={onPostDragStart}
               onPostDrag={onPostDrag}
               onPostDragEnd={onPostDragEnd}
               onRemovePost={onRemovePost}
+              dragCursor={measureMode || placingPost ? undefined : memberDragCursor(m)}
             />
           ))}
+        {layers.frame && !wireframe && <AnchorFixtures members={model.framing.members} />}
         {model.framing.panels.map((p) =>
-          (p.kind === 'roof' && layers.roof) || (p.kind === 'cladding' && layers.cladding) ? (
-            <PanelMesh key={p.id} panel={p} covering={project.params.loads.roofCovering} wireframe={wireframe} onClick={onPanelClick} />
+          (p.kind === 'roof' && layers.roof) || (p.kind === 'cladding' && layers.cladding) || (p.kind === 'floor' && layers.floor) ? (
+            <PanelMesh
+              key={p.id}
+              panel={p}
+              covering={project.params.loads.roofCovering}
+              wireframe={wireframe}
+              onClick={onPanelClick}
+              onDoubleClick={onPanelDoubleClick}
+              onDragStart={p.partitionId ? onPanelDragStart : undefined}
+              onDrag={p.partitionId ? onPanelDrag : undefined}
+              onDragEnd={p.partitionId ? onPanelDragEnd : undefined}
+              dragCursor={p.partitionId && !measureMode && !placingPost ? partitionDragCursor('move', partitionsById.get(p.partitionId)?.axis ?? 'x') : undefined}
+            />
           ) : null,
         )}
         {layers.paving &&
@@ -331,10 +426,11 @@ export function Scene({ model }: { model: DerivedModel }) {
             <VehicleMesh key={v.id} vehicle={v} fit={model.vehicles.find((f) => f.vehicleId === v.id)} selected={v.id === selectedVehicleId} />
           ))}
         {layers.dimensions && <DimensionLines model={model} />}
-        {draggingPartition && <PartitionDragDistances partition={draggingPartition} params={project.params} />}
+        {draggingPartition && partitionDrag?.mode === 'move' && <PartitionDragDistances partition={draggingPartition} params={project.params} />}
+        {draggingPartition && partitionDrag?.mode !== 'move' && <PartitionResizeRuler partition={draggingPartition} />}
+        {draggingPost && <PostDragDistances post={draggingPost} params={project.params} />}
         {draggingMidPurlin !== null && <MidPurlinDragDistances index={draggingMidPurlin} model={model} params={project.params} />}
         {layers.cladding && !wireframe && <OpeningFixtures />}
-        <WallResizeHandles params={project.params} />
         <OpeningsEditor />
         <MeasureTool />
         <NeighbourDistances subject={subject} links={links} members={model.framing.members} />

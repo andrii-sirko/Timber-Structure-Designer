@@ -3,8 +3,8 @@
  *
  * Units: all lengths are millimetres (mm) unless stated otherwise.
  * World coordinate system (right-handed, Y up):
- *   X → structure length (left ↔ right)
- *   Z → structure width (front ↔ rear)
+ *   X → structure length (right wall at x = 0, left wall at x = L – as seen standing in front)
+ *   Z → structure width (front wall at z = 0, rear wall at z = W)
  *   Y → up
  * Length (L) and width (W) are OUTER dimensions of the post frame.
  *
@@ -12,7 +12,8 @@
  * down from the front purlin (H1, high eave) to the rear purlin (H2, low eave) along +Z.
  * `StructureParams.roofDirection` names the world wall the roof slopes down towards; the
  * engine rotates the project into the canonical frame and rotates the geometry back
- * (see engine/orientation.ts). The rotation swaps L/W for 'left' / 'right'.
+ * (see engine/orientation.ts). The canonical frame keeps its left wall at x = 0, so every
+ * world ↔ canonical map includes a mirror in X; the side cases also swap L/W.
  */
 
 export type Millimeters = number;
@@ -115,6 +116,9 @@ export interface Wall {
   /** true → wall is framed with studs and clad; false → open bay (carport style) */
   closed: boolean;
   openings: Opening[];
+  /** Closed part along the wall (mm from the wall's start corner, same axis as opening x); omitted → full length */
+  start?: Millimeters;
+  end?: Millimeters;
 }
 
 export type PartitionAxis = 'x' | 'z';
@@ -143,18 +147,57 @@ export interface OpeningHost {
 export type WallKey = string;
 export const isOuterWall = (key: string): key is WallId => (WALL_IDS as readonly string[]).includes(key);
 
-export type VehicleBodyStyle = 'city' | 'compact' | 'sedan' | 'estate' | 'suv' | 'van' | 'pickup' | 'camper' | 'motorcycle' | 'bicycle' | 'bin' | 'container';
+export type VehicleBodyStyle =
+  | 'city'
+  | 'compact'
+  | 'sedan'
+  | 'estate'
+  | 'suv'
+  | 'van'
+  | 'pickup'
+  | 'camper'
+  | 'motorcycle'
+  | 'bicycle'
+  | 'bin'
+  | 'container'
+  // garden-house equipment
+  | 'mower'
+  | 'ridingMower'
+  | 'wheelbarrow'
+  | 'shelf'
+  | 'table'
+  | 'workbench'
+  | 'bench'
+  | 'firewood'
+  | 'box'
+  | 'barrel'
+  | 'ladder'
+  | 'gasGrill'
+  | 'kettleGrill';
+
+/** Purpose group shown in the object picker. */
+export type ObjectCategory = 'cars' | 'vans' | 'two-wheelers' | 'waste' | 'garden' | 'furniture' | 'storage' | 'water' | 'leisure';
 
 /** Catalogue entry with real-world exterior dimensions (approximate manufacturer data). */
 export interface VehicleModel {
   id: string;
   name: string;
   style: VehicleBodyStyle;
+  category: ObjectCategory;
   length: Millimeters;
   /** Body width without mirrors */
   width: Millimeters;
   /** Width including folded-out mirrors */
   mirrorWidth: Millimeters;
+  height: Millimeters;
+  /** Dimensions are only defaults – every placed instance may carry its own `size` */
+  customSize?: boolean;
+}
+
+/** Per-instance dimensions for catalogue entries with `customSize` (mm). */
+export interface ObjectSize {
+  length: Millimeters;
+  width: Millimeters;
   height: Millimeters;
 }
 
@@ -168,6 +211,8 @@ export interface Vehicle {
   /** Rotation about the vertical axis in degrees; 0 = length axis along X, front pointing +X */
   rotationDeg: number;
   color: string;
+  /** Overrides the catalogue dimensions (only honoured when the model has `customSize`) */
+  size?: ObjectSize;
 }
 
 export interface VehicleFit {
@@ -232,6 +277,36 @@ export interface PavingSummary {
 
 export type ConnectionMode = 'hardware' | 'traditional';
 
+/**
+ * How the timber floor is carried:
+ *  - 'slab'    sleepers (Lagerhölzer) laid on levelling pads on a concrete slab – low build-up
+ *  - 'bearers' joists on bearers (Unterzüge) standing on point foundations / pedestals – ventilated
+ */
+export type FloorSupport = 'slab' | 'bearers';
+export const FLOOR_SUPPORTS: readonly FloorSupport[] = ['slab', 'bearers'] as const;
+
+export type FloorDecking = 'spruce-boards' | 'osb' | 'larch-decking';
+export const FLOOR_DECKINGS: readonly FloorDecking[] = ['spruce-boards', 'osb', 'larch-decking'] as const;
+
+/** Timber floor (Holzfußboden) inside the post frame. */
+export interface FloorSettings {
+  enabled: boolean;
+  support: FloorSupport;
+  /** Floor joists / sleepers (Fußbodenbalken / Lagerhölzer), b × h */
+  joist: TimberSection;
+  /** Bearers under the joists (Unterzüge) – 'bearers' support only */
+  bearer: TimberSection;
+  /** Maximum joist centre spacing (board span) */
+  maxJoistSpacing: Millimeters;
+  /** Maximum bearer centre spacing (joist span) – 'bearers' support only */
+  maxBearerSpacing: Millimeters;
+  /** Maximum spacing of pads / foundations along a sleeper or bearer */
+  maxSupportSpacing: Millimeters;
+  decking: FloorDecking;
+  /** Characteristic imposed floor load q_k in kN/m² */
+  liveLoad: number;
+}
+
 export interface StructureParams {
   length: Millimeters;
   width: Millimeters;
@@ -270,6 +345,7 @@ export interface StructureParams {
   connectionMode: ConnectionMode;
   timber: TimberSpecs;
   loads: LoadSettings;
+  floor: FloorSettings;
 }
 
 export interface ProjectState {
@@ -285,7 +361,7 @@ export interface ProjectState {
   freePosts: FreePost[];
 }
 
-/** A single post placed anywhere inside the footprint; it carries no purlin of its own. */
+/** A single post placed anywhere under the roof (footprint + overhangs); it carries no purlin of its own. */
 export interface FreePost {
   id: string;
   /** World X/Z of the post axis (mm) */
@@ -323,7 +399,9 @@ export type MemberCategory =
   | 'plate'
   | 'header'
   | 'sill'
-  | 'brace';
+  | 'brace'
+  | 'joist'
+  | 'bearer';
 
 /** Angle of each end cut in degrees measured from a square (90°) cut. 0 = square. */
 export interface EndCuts {
@@ -373,7 +451,7 @@ export interface Member {
 /** Flat sheet-like element (cladding panel, roof deck) — rendered as an oriented slab. */
 export interface Panel {
   id: string;
-  kind: 'cladding' | 'roof';
+  kind: 'cladding' | 'roof' | 'floor';
   wallId?: WallId;
   partitionId?: string;
   /** Box centre when `size` is used; outline origin when `outline` is used (mm) */
@@ -390,6 +468,8 @@ export interface Panel {
   outline?: { outer: ProfilePoint[]; holes: ProfilePoint[][]; thickness: number };
   /** Net area in m² (openings subtracted) */
   areaM2: number;
+  /** Floor decks: deck material and the local axis the boards run along */
+  floorFinish?: { decking: FloorDecking; boardsAlong: 'u' | 'v' };
 }
 
 export interface RoofGeometry {
@@ -470,12 +550,39 @@ export interface FramingWarning {
   openingId?: string;
 }
 
+/** Summary of the generated timber floor (orientation-free). */
+export interface FloorGeometry {
+  support: FloorSupport;
+  decking: FloorDecking;
+  /** Net deck area in m² (posts and partitions cut out) */
+  areaM2: number;
+  /** Top of the deck above the base (mm) */
+  topHeight: Millimeters;
+  deckThickness: Millimeters;
+  joistCount: number;
+  joistSpacing: Millimeters;
+  /** Joist span between supports (bearer spacing, or pad spacing on a slab) */
+  joistSpan: Millimeters;
+  bearerCount: number;
+  bearerSpacing: Millimeters;
+  /** Bearer span between foundations */
+  bearerSpan: Millimeters;
+  /** Pads (slab) or point foundations (bearers) */
+  supportCount: number;
+  /** Joist-on-bearer crossings (bearers support) */
+  crossings: number;
+  /** Total length of timber lying on pads / foundations (sleepers or bearers), m */
+  bedLengthM: number;
+}
+
 export interface FramingResult {
   members: Member[];
   panels: Panel[];
   roof: RoofGeometry;
   grid: PostGrid;
   warnings: FramingWarning[];
+  /** Present when the timber floor is enabled */
+  floor?: FloorGeometry;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -542,7 +649,9 @@ export interface StaticsResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface BomLine {
-  category: MemberCategory | 'sheathing' | 'roofing';
+  category: MemberCategory | 'sheathing' | 'roofing' | 'flooring';
+  /** Flooring lines: the deck material */
+  decking?: FloorDecking;
   label: string;
   labelDe: string;
   section?: TimberSection;
@@ -575,10 +684,26 @@ export interface FixtureLine {
   materials: string[];
 }
 
+/** Non-timber material bought by quantity: roof battens & membranes, paving, … */
+export interface MaterialItem {
+  /** Unique line id */
+  id: string;
+  /** Price key in MaterialPrices.materialPerUnit */
+  priceKey: string;
+  name: string;
+  nameDe: string;
+  spec: string;
+  quantity: number;
+  unit: 'm' | 'm²' | 'pcs';
+  note?: string;
+}
+
 export interface BomResult {
   lines: BomLine[];
   /** Doors and windows to buy (not part of the timber lines) */
   fixtures: FixtureLine[];
+  /** Other materials (roof battens, membranes, flashing, paving build-up) */
+  materials: MaterialItem[];
   totalVolumeM3: number;
   totalLengthM: number;
   totalMassKg: number;
@@ -644,6 +769,12 @@ export interface MaterialPrices {
   roofingPerM2: Record<RoofCovering, number>;
   /** Hardware & fixings, EUR per piece (or per metre for 'm'-unit items), keyed by HardwareItem.id */
   hardwarePerUnit: Record<string, number>;
+  /** Floor deck material, EUR per m² */
+  flooringPerM2: Record<FloorDecking, number>;
+  /** Other materials, EUR per unit, keyed by MaterialItem.priceKey */
+  materialPerUnit: Record<string, number>;
+  /** Doors & windows: EUR per piece keyed by preset id; 'custom-door' / 'custom-window' are EUR per m² of frame */
+  fixturePrice: Record<string, number>;
 }
 
 export interface PricingLine {
@@ -665,12 +796,22 @@ export type PriceFieldRef =
   | { kind: 'claddingBoard' }
   | { kind: 'roofDeck' }
   | { kind: 'roofing'; covering: RoofCovering }
-  | { kind: 'hardware'; hardwareId: string };
+  | { kind: 'hardware'; hardwareId: string }
+  | { kind: 'flooring'; decking: FloorDecking }
+  | { kind: 'material'; priceKey: string }
+  | { kind: 'fixture'; key: string };
 
 export interface PricingResult {
+  /** Timber, boards, roof covering and floor deck */
   timberLines: PricingLine[];
+  /** Roof accessories, paving build-up and other bulk materials */
+  otherLines: PricingLine[];
+  /** Doors and windows */
+  fixtureLines: PricingLine[];
   hardwareLines: PricingLine[];
+  /** Timber + other materials */
   materialTotal: number;
+  fixtureTotal: number;
   hardwareTotal: number;
   grandTotal: number;
 }
@@ -700,6 +841,7 @@ export interface LayerVisibility {
   grid: boolean;
   vehicles: boolean;
   paving: boolean;
+  floor: boolean;
 }
 
 export interface ViewSettings {

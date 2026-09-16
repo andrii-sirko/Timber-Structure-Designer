@@ -1,5 +1,6 @@
 import type { FramingWarning, Member, MemberCategory, Opening, OpeningHost, Panel, ProfilePoint, StructureParams, Wall, WallId } from '@/types';
 import { cutProfile, nextId, profileArea, rectProfile, Y_AXIS } from '../geometry';
+import { floorLayout } from './floor';
 import { headerHeight, validateOpenings } from './openings';
 import type { RoofLines } from './roofLines';
 import { wallBays, type WallFrame } from './wallFrame';
@@ -128,9 +129,13 @@ export function generateWallFraming(
     }
   }
 
+  const floor = floorLayout(params);
   const bays = wallBays(frame);
   for (const bay of bays) {
     const span = bay.end - bay.start;
+    // End studs where a shortened outer wall stops inside a bay
+    if (bay.startStud) stud(bay.start - sw / 2, sillTop, frame.studTopAt(bay.start - sw / 2), `End stud ${wallLabel}`, 'Eckständer', 'End stud (Eckständer)');
+    if (bay.endStud) stud(bay.end + sw / 2, sillTop, frame.studTopAt(bay.end + sw / 2), `End stud ${wallLabel}`, 'Eckständer', 'End stud (Eckständer)');
     if (span < sw) continue;
     const openings = wall.openings
       .filter((o) => {
@@ -147,6 +152,13 @@ export function generateWallFraming(
       cursor = Math.max(cursor, b);
     }
     horizontal(cursor, bay.end, sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
+    // With a timber floor the plate gap would leave a hole through the wall: fill it up to the finished floor
+    if (floor) {
+      const top = Math.round(floor.deckTop);
+      for (const [a, b] of cuts) {
+        horizontal(Math.max(a, bay.start), Math.min(b, bay.end), top / 2, top, 'plate', `Door threshold ${wallLabel}`, 'Türschwelle', 'Door threshold (Türschwelle)', 'Top flush with the finished floor');
+      }
+    }
 
     // Regular stud grid
     const n = Math.max(1, Math.ceil(span / Math.max(params.maxStudSpacing, 200)));
@@ -229,8 +241,8 @@ export function generateWallFraming(
     const bh = timber.beam.height;
     const rowU = frame.sloped ? roof.purlins.map((p) => p.z) : [frame.postU[0], ...roof.midPurlinX, frame.postU[frame.postU.length - 1]];
     for (let k = 0; k < rowU.length - 1; k++) {
-      const uA = rowU[k] + bw / 2;
-      const uB = rowU[k + 1] - bw / 2;
+      const uA = Math.max(rowU[k] + bw / 2, frame.extent.start);
+      const uB = Math.min(rowU[k + 1] - bw / 2, frame.extent.end);
       if (uB - uA <= 100) continue;
       const name = rowU.length > 2 ? `Side rail ${wallLabel} (part ${k + 1})` : `Side rail ${wallLabel}`;
       if (!frame.sloped) {
@@ -276,11 +288,14 @@ export function generateWallFraming(
 
   // Cladding panel
   const th = CLADDING_THICKNESS;
-  let uStart = 0;
-  let uEnd = frame.length;
+  let uStart = frame.extent.start;
+  let uEnd = frame.extent.end;
   if (frame.sloped && !isPartition) {
-    if (walls.front.closed) uStart = -th;
-    if (walls.rear.closed) uEnd = frame.length + th;
+    // Side cladding wraps the corner only where the front / rear wall actually reaches it
+    const cornerU = frame.wallId === 'left' ? 0 : params.length;
+    const reaches = (w: Wall): boolean => w.closed && (cornerU === 0 ? (w.start ?? 0) <= 0.5 : w.end === undefined || w.end >= params.length - 0.5);
+    if (uStart <= 0.5 && reaches(walls.front)) uStart = -th;
+    if (uEnd >= frame.length - 0.5 && reaches(walls.rear)) uEnd = frame.length + th;
   }
   const outer: ProfilePoint[] = [
     { u: uStart, v: 0 },

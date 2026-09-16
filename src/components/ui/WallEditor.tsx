@@ -3,7 +3,7 @@ import { DoorOpen, PanelsTopLeft, Plus, RectangleHorizontal, Trash2, Move3d, Spl
 import type { Opening, OpeningType, WallId } from '@/types';
 import { isOuterWall, WALL_IDS } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
-import { MIN_PARTITION_LENGTH, OPENING_PRESETS, findPreset, frameSizeFor, openingHost, openingLimits, openingMaterials, partitionLimits, presetFits, presetMatches, presetsOfType } from '@/engine';
+import { MIN_PARTITION_LENGTH, OPENING_PRESETS, findPreset, frameSizeFor, openingHost, openingLimits, openingMaterials, partitionLimits, MIN_WALL_LENGTH, presetFits, presetMatches, presetsOfType } from '@/engine';
 import type { OpeningPreset } from '@/engine';
 import type { WallFrame } from '@/engine/framing';
 import { Button, NumberField, Section, SelectField, Toggle, cx } from './primitives';
@@ -97,6 +97,7 @@ export function WallEditor() {
   const selectWall = useProjectStore((s) => s.selectWall);
   const selectOpening = useProjectStore((s) => s.selectOpening);
   const setWallClosed = useProjectStore((s) => s.setWallClosed);
+  const setWallExtent = useProjectStore((s) => s.setWallExtent);
   const addOpening = useProjectStore((s) => s.addOpening);
   const addOpeningPreset = useProjectStore((s) => s.addOpeningPreset);
   const applyOpeningPreset = useProjectStore((s) => s.applyOpeningPreset);
@@ -120,6 +121,7 @@ export function WallEditor() {
     <Section
       title="Walls & openings"
       icon={PanelsTopLeft}
+      focusKey="walls"
       badge={openingCount > 0 ? <span className="rounded bg-slate-800 px-1.5 text-[10px] text-slate-300">{openingCount}</span> : undefined}
     >
       <div className="grid grid-cols-2 gap-1.5">
@@ -183,6 +185,17 @@ export function WallEditor() {
           {outerId && (
             <Toggle label={`${WALL_LABEL[outerId]} wall closed`} description="Framed with studs, bottom plate and 20 mm board cladding" checked={wall.closed} onChange={(v) => setWallClosed(outerId, v)} />
           )}
+          {outerId && wall.closed && (
+            <div className="space-y-2 rounded-md border border-slate-800 bg-slate-900/50 p-2">
+              <div className="grid grid-cols-2 gap-2">
+                <NumberField label="From" value={frame.extent.start} min={0} max={frame.length - MIN_WALL_LENGTH} step={50} compact onChange={(start) => setWallExtent(outerId, { start })} />
+                <NumberField label="To" value={frame.extent.end} min={MIN_WALL_LENGTH} max={frame.length} step={50} compact onChange={(end) => setWallExtent(outerId, { end })} />
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Closed over {Math.round(frame.extent.end - frame.extent.start)} of {Math.round(frame.length)} mm. End studs are added where the wall stops between posts.
+              </p>
+            </div>
+          )}
           {partition && lim && (
             <div className="space-y-2 rounded-md border border-slate-800 bg-slate-900/50 p-2">
               <div className="flex items-center gap-2">
@@ -214,6 +227,7 @@ export function WallEditor() {
               <p className="text-[11px] text-slate-500">
                 Stud wall {params.timber.stud.height} mm thick, {Math.round(partition.end - partition.start)} mm long, boarded on one side, top plate under the rafters.
               </p>
+              <p className="text-[11px] text-slate-500">In the viewport: drag the wall to move it, drag it near either end (or an end stud) to change its length.</p>
             </div>
           )}
           <PresetPicker frame={frame} onAdd={(id) => addOpeningPreset(selectedWallId, id)} />
@@ -241,6 +255,7 @@ export function WallEditor() {
             return (
               <div
                 key={o.id}
+                data-focus-key={`walls/${o.id}`}
                 className={cx('space-y-2 rounded-md border p-2', selected ? 'border-sky-500/60 bg-sky-950/30' : 'border-slate-800 bg-slate-900/50')}
                 onClick={() => selectOpening(selectedWallId, o.id)}
               >

@@ -23,6 +23,7 @@ export function PavingPanel({ model }: { model: DerivedModel }) {
     <Section
       title="Paved floor (Pflaster)"
       icon={BrickWall}
+      focusKey="paving"
       badge={areas.length > 0 ? <span className="rounded bg-slate-800 px-1.5 font-mono text-[10px] text-slate-300">{paving.totalAreaM2.toFixed(1)} m²</span> : undefined}
     >
       <div className="flex items-center gap-2">
@@ -57,6 +58,7 @@ export function PavingPanel({ model }: { model: DerivedModel }) {
         return (
           <div
             key={a.id}
+            data-focus-key={`paving/${a.id}`}
             className={cx('space-y-2 rounded-md border p-2', selected ? 'border-sky-500/60 bg-sky-950/30' : 'border-slate-800 bg-slate-900/50')}
             onClick={() => {
               if (!selected) selectPavedArea(a.id);

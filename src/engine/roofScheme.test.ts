@@ -31,7 +31,8 @@ test('sloped purlins: rafters are level along X, purlins slope along Z', () => {
   const rafters = byCat(framing.members, 'rafter');
   assert.ok(rafters.length > 2);
   for (const r of rafters) {
-    assert.deepEqual(r.direction, { x: 1, y: 0, z: 0 });
+    // canonical +X lands on world −X (the world frame is the canonical one mirrored in X)
+    assert.deepEqual(r.direction, { x: -1, y: 0, z: 0 });
     assert.deepEqual(r.up, { x: 0, y: 1, z: 0 });
   }
   const purlins = framing.members.filter((m) => m.group.startsWith('Purlin'));
@@ -66,8 +67,8 @@ test('sloped purlins: posts step down along each row and carry the purlin unders
   const cos = Math.cos(framing.roof.pitchRad);
   const frontTop = Math.max(...sorted[0].profile.map((q) => q.u));
   assert.ok(near(frontTop, p.params.frontHeight - bh / cos, 2 + (p.params.timber.post.height / 2) * Math.tan(framing.roof.pitchRad)));
-  // all posts sit on a row line (x = pw/2, mid, L − pw/2)
-  const rowX = framing.grid.rows.map((r) => r.offset);
+  // all posts sit on a row line (canonical x = pw/2, mid, L − pw/2 → world x = L − offset)
+  const rowX = framing.grid.rows.map((r) => p.params.length - r.offset);
   for (const post of byCat(framing.members, 'post')) assert.ok(rowX.some((x) => near(x, post.start.x)), `post ${post.id} on a row`);
 });
 
@@ -86,7 +87,7 @@ test('sloped purlins: closed front / rear walls get a level rail between the row
   const rails = framing.members.filter((m) => m.group.startsWith('Side rail'));
   assert.ok(rails.length >= 4, 'two bays per front / rear wall');
   for (const r of rails) {
-    assert.deepEqual(r.direction, { x: 1, y: 0, z: 0 });
+    assert.deepEqual(r.direction, { x: -1, y: 0, z: 0 });
     assert.ok(r.wallId === 'front' || r.wallId === 'rear');
   }
   const frames = computeAllWallFrames(project('rear', true));
@@ -115,7 +116,7 @@ test('sloped purlins: mirrored directions give the same member set, statics and 
   const right = buildModel(project('right'));
   for (const purlin of right.framing.members.filter((m) => m.group.startsWith('Purlin'))) {
     assert.ok(near(purlin.direction.z, 0, 1e-9));
-    assert.ok(purlin.direction.x > 0.99);
+    assert.ok(Math.abs(purlin.direction.x) > 0.99);
   }
   for (const r of byCat(right.framing.members, 'rafter')) assert.ok(near(Math.abs(r.direction.z), 1, 1e-9));
 });
@@ -125,7 +126,7 @@ test('classic scheme is unchanged in shape: rafters down the slope, purlins leve
   p.params = { ...p.params, roofScheme: 'classic' };
   const framing = buildFraming(p);
   for (const r of byCat(framing.members, 'rafter')) assert.ok(near(r.direction.x, 0, 1e-9) && r.direction.z > 0.99);
-  for (const b of framing.members.filter((m) => m.group.startsWith('Purlin'))) assert.deepEqual(b.direction, { x: 1, y: 0, z: 0 });
+  for (const b of framing.members.filter((m) => m.group.startsWith('Purlin'))) assert.deepEqual(b.direction, { x: -1, y: 0, z: 0 });
   assert.deepEqual(
     framing.grid.rows.map((r) => r.key),
     ['front', 'mid0', 'rear'],

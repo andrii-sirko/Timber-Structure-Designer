@@ -12,8 +12,8 @@ interface Bounds {
 
 export function modelBounds(model: DerivedModel, project: { params: { length: number; width: number; overhangs: { front: number; rear: number; left: number; right: number } } }): Bounds {
   const p = project.params;
-  const min = new THREE.Vector3(-p.overhangs.left * MM, 0, -p.overhangs.front * MM);
-  const max = new THREE.Vector3((p.length + p.overhangs.right) * MM, model.framing.roof.ridgeHeight * MM, (p.width + p.overhangs.rear) * MM);
+  const min = new THREE.Vector3(-p.overhangs.right * MM, 0, -p.overhangs.front * MM);
+  const max = new THREE.Vector3((p.length + p.overhangs.left) * MM, model.framing.roof.ridgeHeight * MM, (p.width + p.overhangs.rear) * MM);
   return { min, max };
 }
 
@@ -66,7 +66,8 @@ export function CameraRig({ bounds }: { bounds: Bounds }) {
         case 'top':
           fitW = extent.x;
           fitH = extent.z;
-          position = centre.clone().add(new THREE.Vector3(0, dist(fitW, fitH) + extent.y, 0.0001));
+          // tiny −Z offset: screen-up = +Z, so the plan reads with the front at the bottom (left wall on the left)
+          position = centre.clone().add(new THREE.Vector3(0, dist(fitW, fitH) + extent.y, -0.0001));
           break;
         case 'front':
           fitW = extent.x;
@@ -81,12 +82,12 @@ export function CameraRig({ bounds }: { bounds: Bounds }) {
         case 'left':
           fitW = extent.z;
           fitH = extent.y;
-          position = centre.clone().add(new THREE.Vector3(-dist(fitW, fitH) - extent.x / 2, 0, 0));
+          position = centre.clone().add(new THREE.Vector3(dist(fitW, fitH) + extent.x / 2, 0, 0));
           break;
         case 'right':
           fitW = extent.z;
           fitH = extent.y;
-          position = centre.clone().add(new THREE.Vector3(dist(fitW, fitH) + extent.x / 2, 0, 0));
+          position = centre.clone().add(new THREE.Vector3(-dist(fitW, fitH) - extent.x / 2, 0, 0));
           break;
         case 'wall': {
           const frame = wallForPreset ? (frames[wallForPreset] ?? null) : null;

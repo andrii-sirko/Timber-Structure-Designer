@@ -8,6 +8,7 @@ import { edgeMidpoint, offsetEdge } from '@/engine/paving';
 import { MM } from './materials';
 import { Dimension } from './DimensionLines';
 import { useMeasureStore } from './MeasureTool';
+import { openObjectSettings } from './openObjectSettings';
 import { DRAG_SNAP } from '@/engine/postDrag';
 
 const SNAP = DRAG_SNAP;
@@ -270,6 +271,7 @@ export const PavedAreaMesh = memo(function PavedAreaMesh({ area, summary, select
               addPoint(e.point);
             }
           }}
+          onDoubleClick={(e) => openObjectSettings({ kind: 'pavedArea', id: area.id }, e)}
           onPointerOver={(e) => {
             e.stopPropagation();
             if (!measureMode) document.body.style.cursor = 'grab';

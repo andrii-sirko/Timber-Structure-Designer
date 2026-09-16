@@ -40,14 +40,14 @@ export function buildModel(project: ProjectState): DerivedModel {
   };
 }
 
-export { buildFraming, buildFramingCanonical, canonicalProject, computeAllWallFrames, openingHost, clampOpening, openingLimits, OPENING_DEFAULTS, OPENING_PRESETS, findPreset, presetsOfType, presetMatches, presetFits, openingFromPreset, openingMaterials, frameSizeFor, resizeOpening, resizableEdges, edgeHandleCentre, sizeChanged, sanitizeParams, MIN_PLAN_DIM, minWallHeight, clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH } from './framing';
+export { buildFraming, buildFramingCanonical, canonicalProject, computeAllWallFrames, openingHost, clampOpening, openingLimits, OPENING_DEFAULTS, OPENING_PRESETS, findPreset, presetsOfType, presetMatches, presetFits, openingFromPreset, openingMaterials, frameSizeFor, resizeOpening, resizableEdges, edgeHandleCentre, sizeChanged, sanitizeParams, MIN_PLAN_DIM, minWallHeight, clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH, wallExtent, MIN_WALL_LENGTH } from './framing';
 export type { WallFrames } from './framing';
 export { computeStatics } from './statics';
 export { autoFixStatics, costOptimizeStatics } from './statics/autofix';
 export type { AutoFixResult, AutoFixChange, CostOptimizationResult, StaticsActionResult } from './statics/autofix';
 export { computeBom } from './bom';
 export { computeConnections } from './joinery';
-export { VEHICLE_CATALOG, VEHICLE_COLORS, getVehicleModel, vehicleCorners, findVehicleSpot, checkVehicleFit } from './vehicles';
+export { VEHICLE_CATALOG, VEHICLE_COLORS, OBJECT_SIZE_LIMITS, getVehicleModel, resolveVehicleModel, defaultObjectSize, vehicleCorners, findVehicleSpot, checkVehicleFit } from './vehicles';
 export { PAVING_COLORS, PAVING_PATTERNS, PAVING_DEFAULTS, defaultPavedArea, summarizePaving, polygonAreaM2 } from './paving';
 
 export { canonicalizeProject, canonicalDims, canonicalWall, worldWall, worldPointToCanonical, canonicalPointToWorld, isSideDirection, relabelSides } from './orientation';

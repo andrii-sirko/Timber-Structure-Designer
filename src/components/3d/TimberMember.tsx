@@ -49,10 +49,13 @@ interface TimberMemberProps {
   focused?: boolean;
   onHover: (id: string | null) => void;
   onClick?: (member: Member, e: ThreeEvent<MouseEvent>) => void;
+  onDoubleClick?: (member: Member, e: ThreeEvent<MouseEvent>) => void;
   onPostDragStart?: (member: Member, e: ThreeEvent<PointerEvent>) => void;
   onPostDrag?: (member: Member, e: ThreeEvent<PointerEvent>) => void;
   onPostDragEnd?: (member: Member, e: ThreeEvent<PointerEvent>) => void;
   onRemovePost?: (id: string) => void;
+  /** CSS cursor shown while hovering a draggable member (partition move / resize) */
+  dragCursor?: string;
 }
 
 export const TimberMember = memo(function TimberMember({
@@ -65,10 +68,12 @@ export const TimberMember = memo(function TimberMember({
   focused = false,
   onHover,
   onClick,
+  onDoubleClick,
   onPostDragStart,
   onPostDrag,
   onPostDragEnd,
   onRemovePost,
+  dragCursor,
 }: TimberMemberProps) {
   const postDragging = useRef(false);
   const geometry = useMemberGeometry(member);
@@ -104,14 +109,19 @@ export const TimberMember = memo(function TimberMember({
       onPointerOver={(e) => {
         e.stopPropagation();
         onHover(member.id);
+        if (dragCursor) document.body.style.cursor = dragCursor;
       }}
-      onPointerOut={() => onHover(null)}
+      onPointerOut={() => {
+        onHover(null);
+        if (dragCursor && !postDragging.current) document.body.style.cursor = '';
+      }}
       onClick={(e) => {
         if (onClick) {
           e.stopPropagation();
           onClick(member, e);
         }
       }}
+      onDoubleClick={onDoubleClick ? (e) => onDoubleClick(member, e) : undefined}
       onPointerDown={canDrag && onPostDragStart ? (e) => {
         postDragging.current = true;
         onPostDragStart(member, e);

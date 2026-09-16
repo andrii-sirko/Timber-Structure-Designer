@@ -1,9 +1,9 @@
-import { Cable, CloudSnow, MapPin, MapPinned, Plus, Ruler, Settings2, Trash2, TreePine, Triangle } from 'lucide-react';
-import { useState } from 'react';
-import type { BraceDirection, DerivedModel, RoofCovering, RoofDirection, RoofScheme, StructureParams, TimberSection, WallId } from '@/types';
-import { gridPostCount, MIN_PLAN_DIM, minWallHeight } from '@/engine/framing';
+import { useEffect, useRef } from 'react';
+import { Cable, CloudSnow, MapPin, MapPinned, Plus, Rows3, Ruler, Settings2, Trash2, TreePine, Triangle } from 'lucide-react';
+import type { BraceDirection, DerivedModel, FloorDecking, FloorSupport, RoofCovering, RoofDirection, RoofScheme, StructureParams, TimberSection, WallId } from '@/types';
+import { DECKING, FLOOR_LOAD_PRESETS, gridPostCount, MIN_PLAN_DIM, minWallHeight } from '@/engine/framing';
 import { midPurlinBounds } from '@/engine/framing/roofLines';
-import { freePostMemberId } from '@/engine/freePosts';
+import { freePostBounds, freePostMemberId } from '@/engine/freePosts';
 import { worldWall } from '@/engine/orientation';
 import { useProjectStore } from '@/store';
 import { useUiStore } from '@/store/uiStore';
@@ -13,7 +13,7 @@ import { StaticsBadge } from './StaticsBadge';
 import { WallEditor } from './WallEditor';
 import { VehiclesPanel } from './VehiclesPanel';
 import { PavingPanel } from './PavingPanel';
-import { SIDEBAR_TABS, type SidebarTabId } from './sidebarNavigation';
+import { focusFallbacks, SIDEBAR_TABS } from './sidebarNavigation';
 
 const ROOF_DIRECTION_OPTIONS: { value: RoofDirection; label: string }[] = [
   { value: 'rear', label: 'Rear – high eave at the front' },
@@ -42,6 +42,80 @@ function SectionPair({ label, value, onChange, hint }: { label: string; value: T
   );
 }
 
+/** Timber floor inside the post frame: support system, deck, sections, spacings and imposed load. */
+function FloorEditor({ model, params }: { model: DerivedModel; params: StructureParams }) {
+  const setFloor = useProjectStore((s) => s.setFloor);
+  const floor = params.floor;
+  const geo = model.framing.floor;
+  const bearers = floor.support === 'bearers';
+  return (
+    <Section title="Timber floor (Holzfußboden)" icon={Rows3} defaultOpen={floor.enabled} focusKey="floor">
+      <Toggle label="Timber floor" description="Joists and floor deck inside the post frame" checked={floor.enabled} onChange={(enabled) => setFloor({ enabled })} />
+      {floor.enabled && (
+        <>
+          <SelectField<FloorSupport>
+            label="Support"
+            value={floor.support}
+            onChange={(support) => setFloor({ support })}
+            options={[
+              { value: 'bearers', label: 'Joists on bearers & point foundations (ventilated)' },
+              { value: 'slab', label: 'Sleepers on pads on a concrete slab (low build-up)' },
+            ]}
+          />
+          <SelectField<FloorDecking>
+            label="Deck"
+            value={floor.decking}
+            onChange={(decking) => setFloor({ decking })}
+            options={(Object.keys(DECKING) as FloorDecking[]).map((k) => ({ value: k, label: `${DECKING[k].label} (joists ≤ ${DECKING[k].maxSpan} mm)` }))}
+          />
+          <SectionPair label={bearers ? 'Floor joists (Balken)' : 'Sleepers (Lagerhölzer)'} value={floor.joist} onChange={(joist) => setFloor({ joist })} />
+          {bearers && <SectionPair label="Bearers (Unterzüge)" value={floor.bearer} onChange={(bearer) => setFloor({ bearer })} />}
+          <NumberField label="Max joist spacing" value={floor.maxJoistSpacing} min={250} max={1000} step={25} hint={geo ? `→ ${geo.joistCount} pcs @ ${geo.joistSpacing} mm` : undefined} onChange={(maxJoistSpacing) => setFloor({ maxJoistSpacing })} />
+          {bearers && (
+            <NumberField label="Max bearer spacing" value={floor.maxBearerSpacing} min={500} max={3000} step={50} hint={geo ? `→ ${geo.bearerCount} pcs @ ${geo.bearerSpacing} mm` : undefined} onChange={(maxBearerSpacing) => setFloor({ maxBearerSpacing })} />
+          )}
+          <NumberField
+            label={bearers ? 'Max foundation spacing' : 'Max pad spacing'}
+            value={floor.maxSupportSpacing}
+            min={400}
+            max={3000}
+            step={50}
+            hint={geo ? `→ ${geo.supportCount} ${bearers ? 'foundations' : 'pads'}` : undefined}
+            onChange={(maxSupportSpacing) => setFloor({ maxSupportSpacing })}
+          />
+          <SelectField
+            label="Floor use"
+            value={String(FLOOR_LOAD_PRESETS.find((p) => Math.abs(p.value - floor.liveLoad) < 0.001)?.value ?? 'custom')}
+            onChange={(v) => {
+              if (v !== 'custom') setFloor({ liveLoad: Number(v) });
+            }}
+            options={[...FLOOR_LOAD_PRESETS.map((p) => ({ value: String(p.value), label: p.label })), { value: 'custom', label: 'Custom' }]}
+          />
+          <NumberField label="Imposed floor load q_k" value={floor.liveLoad} min={0} max={10} step={0.25} unit="kN/m²" onChange={(liveLoad) => setFloor({ liveLoad })} />
+          {geo ? (
+            <dl className="grid grid-cols-3 gap-2 rounded-md border border-slate-800 bg-slate-900/60 p-2 text-[11px]">
+              <div>
+                <dt className="text-slate-500">Deck area</dt>
+                <dd className="font-mono text-slate-200">{geo.areaM2.toFixed(1)} m²</dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Floor top</dt>
+                <dd className="font-mono text-slate-200">+{geo.topHeight} mm</dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Joist span</dt>
+                <dd className="font-mono text-slate-200">{geo.joistSpan} mm</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="text-[11px] text-amber-300">The post frame is too small for a floor.</p>
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
 /**
  * Posts placed freely in plan, outside the purlin-row grid: click-to-place in the 3D view,
  * or type the world X / Z of each post axis here.
@@ -56,11 +130,12 @@ function FreePostsEditor({ params }: { params: StructureParams }) {
   const placingPost = useUiStore((s) => s.placingPost);
   const setPlacingPost = useUiStore((s) => s.setPlacingPost);
   const half = params.timber.post.width / 2;
+  const bounds = freePostBounds(params);
   return (
     <div className="space-y-2 border-t border-slate-800 pt-2">
       <div className="flex items-baseline justify-between text-[11px] font-medium tracking-wide text-slate-400 uppercase">
         <span>Free posts</span>
-        <span className="text-[10px] font-normal normal-case text-slate-500">Without purlin, anywhere in plan</span>
+        <span className="text-[10px] font-normal normal-case text-slate-500">Without purlin, anywhere under the roof</span>
       </div>
       <div className="flex gap-2">
         <Button
@@ -85,6 +160,7 @@ function FreePostsEditor({ params }: { params: StructureParams }) {
             return (
               <li
                 key={post.id}
+                data-focus-key={`posts/${post.id}`}
                 className={`rounded-md border p-2 ${selected ? 'border-sky-500/60 bg-sky-500/10' : 'border-slate-800 bg-slate-900/60'}`}
                 onClick={() => selectMember(memberId)}
               >
@@ -104,8 +180,8 @@ function FreePostsEditor({ params }: { params: StructureParams }) {
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <NumberField label="X" value={post.x} min={half} max={params.length - half} step={10} compact onChange={(x) => updateFreePost(post.id, { x })} />
-                  <NumberField label="Z" value={post.z} min={half} max={params.width - half} step={10} compact onChange={(z) => updateFreePost(post.id, { z })} />
+                  <NumberField label="X" value={post.x} min={bounds.minX + half} max={bounds.maxX - half} step={10} compact onChange={(x) => updateFreePost(post.id, { x })} />
+                  <NumberField label="Z" value={post.z} min={bounds.minZ + half} max={bounds.maxZ - half} step={10} compact onChange={(z) => updateFreePost(post.id, { z })} />
                 </div>
               </li>
             );
@@ -117,7 +193,10 @@ function FreePostsEditor({ params }: { params: StructureParams }) {
 }
 
 export function ParameterSidebar({ model }: { model: DerivedModel }) {
-  const [activeTab, setActiveTab] = useState<SidebarTabId>('dimensions');
+  const activeTab = useUiStore((s) => s.sidebarTab);
+  const setActiveTab = useUiStore((s) => s.setSidebarTab);
+  const settingsFocus = useUiStore((s) => s.settingsFocus);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const params = useProjectStore((s) => s.project.params);
   const setParam = useProjectStore((s) => s.setParam);
   const moveMidPurlin = useProjectStore((s) => s.moveMidPurlin);
@@ -130,6 +209,21 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
   const highWall = worldWall(params.roofDirection, 'front');
   const midRows = model.framing.grid.rows.filter((r): r is typeof r & { index: number } => r.index !== undefined);
   const midBounds = midPurlinBounds(params);
+
+  // Double-clicking an object in 3D: sections expand themselves (Section focusKey); once they have
+  // rendered, scroll to the object's card, or to its section when the card is not shown.
+  useEffect(() => {
+    if (!settingsFocus) return;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        const root = scrollRef.current;
+        const target = root && focusFallbacks(settingsFocus.path).map((key) => root.querySelector(`[data-focus-key="${CSS.escape(key)}"]`)).find(Boolean);
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        useUiStore.setState({ settingsFocus: null });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [settingsFocus]);
   const midAxisFrom = params.roofScheme === 'sloped-purlins' ? `${worldWall(params.roofDirection, 'left')} wall post axis` : `high-eave (${highWall}) post axis`;
 
   return (
@@ -153,7 +247,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
           <StaticsBadge statics={model.statics} />
         </div>
       </div>
-      <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="scroll-thin min-h-0 flex-1 overflow-y-auto">
         {activeTab === 'dimensions' && <>
         <Section title="Structure shape" icon={Ruler}>
           <div className="grid grid-cols-1 gap-2">
@@ -189,7 +283,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
             </div>
           </dl>
         </Section>
-        <Section title="Post layout" icon={Settings2} defaultOpen={false}>
+        <Section title="Post layout" icon={Settings2} defaultOpen={false} focusKey="posts">
           <Toggle
             label="Automatic post count"
             description={params.postsPerRow === null ? `${gridPostCount(model.framing.grid)} posts at ${Math.round(model.framing.grid.postSpacing)} mm centres` : 'Set the number of posts manually'}
@@ -202,7 +296,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
         </Section>
         </>}
 
-        {activeTab === 'roof' && <Section title="Mono-pitch roof" icon={Triangle}>
+        {activeTab === 'roof' && <Section title="Mono-pitch roof" icon={Triangle} focusKey="roof">
           <div className="grid grid-cols-2 gap-2">
             <NumberField label="Overhang front" value={params.overhangs.front} min={0} max={2500} step={50} onChange={(v) => setOverhang('front', v)} />
             <NumberField label="Overhang rear" value={params.overhangs.rear} min={0} max={2500} step={50} onChange={(v) => setOverhang('rear', v)} />
@@ -268,7 +362,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
         </Section>}
 
         {activeTab === 'structure' && <>
-        <Section title="Timber sections" icon={TreePine}>
+        <Section title="Timber sections" icon={TreePine} focusKey="timber">
           <SelectField
             label="Strength class"
             value={params.timber.strengthClass}
@@ -282,7 +376,9 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
           <SectionPair label="Knee braces (Kopfbänder)" value={params.timber.brace} onChange={(s) => setTimber('brace', s)} />
         </Section>
 
-        <Section title="Framing rules" icon={Settings2} defaultOpen={false}>
+        <FloorEditor model={model} params={params} />
+
+        <Section title="Framing rules" icon={Settings2} defaultOpen={false} focusKey="framing">
           <NumberField label="Max stud spacing" value={params.maxStudSpacing} min={300} max={1000} step={25} onChange={(v) => setParam('maxStudSpacing', v)} />
           <NumberField label="Max stock length" value={params.maxStockLength} min={3000} max={13000} step={500} hint="purlins spliced above" onChange={(v) => setParam('maxStockLength', v)} />
           <Toggle label="Knee braces (Kopfbänder)" description="45° braces post ↔ purlin for longitudinal stiffness" checked={params.braces} onChange={(v) => setParam('braces', v)} />

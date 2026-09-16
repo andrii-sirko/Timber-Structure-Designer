@@ -6,11 +6,12 @@ import {
   Download,
   FileText,
   Info,
+  Package,
   ShieldAlert,
   Wand2,
   X,
 } from "lucide-react";
-import { getVehicleModel } from "@/engine/vehicles";
+import { resolveVehicleModel } from "@/engine/vehicles";
 import type { DerivedModel } from "@/types";
 import { useProjectStore } from "@/store";
 import { useUiStore, type ResultsTab } from "@/store/uiStore";
@@ -218,6 +219,45 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                     ))}
                   </div>
                 </details>
+              </div>
+            )}
+            {bom.materials.length > 0 && (
+              <div className="border-t border-slate-800">
+                <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                  <Package className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
+                    Other materials (Sonstige Materialien)
+                  </span>
+                </div>
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className={th}>Item</th>
+                      <th className={th}>Spec</th>
+                      <th className={cx(th, "text-right")}>Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bom.materials.map((m) => (
+                      <tr
+                        key={m.id}
+                        className="border-t border-slate-800/80 hover:bg-slate-900/60"
+                      >
+                        <td className={td}>
+                          <div>{m.name}</div>
+                          <div className="text-[10px] text-slate-500">
+                            {m.nameDe}
+                            {m.note ? ` · ${m.note}` : ""}
+                          </div>
+                        </td>
+                        <td className={td}>{m.spec}</td>
+                        <td className={cx(td, mono, "text-right whitespace-nowrap")}>
+                          {m.quantity.toFixed(m.unit === "pcs" ? 0 : 2)} {m.unit}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -561,7 +601,7 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                   <span className="text-slate-200">
                     <span className="font-medium">
                       {vehicle
-                        ? getVehicleModel(vehicle.modelId).name
+                        ? resolveVehicleModel(vehicle).name
                         : f.vehicleId}
                     </span>
                     : {f.messages.join(" ")}

@@ -7,6 +7,7 @@ import type { WallFrame } from '@/engine/framing';
 import { findPreset } from '@/engine/framing';
 import { getDoorLeafMaterial, getFrameMaterial, getGlassMaterial, getHardwareMaterial, getSashMaterial, MM } from './materials';
 import { basisQuaternion } from './TimberMember';
+import { openObjectSettings } from './openObjectSettings';
 
 /** Frame legs / head: width into the opening and depth through the wall (mm). */
 const FRAME_WIDTH = 60;
@@ -138,7 +139,7 @@ const Fixture = memo(function Fixture({ opening, hostKey, frame }: { opening: Op
     selectOpening(hostKey, opening.id);
   };
   return (
-    <group position={[frame.origin.x * MM, frame.origin.y * MM, frame.origin.z * MM]} quaternion={quaternion} onClick={onClick}>
+    <group position={[frame.origin.x * MM, frame.origin.y * MM, frame.origin.z * MM]} quaternion={quaternion} onClick={onClick} onDoubleClick={(e) => openObjectSettings({ kind: 'opening', id: opening.id }, e)}>
       {boxes.map((b, i) => (
         <mesh key={i} position={[b.u * MM, b.v * MM, b.n * MM]} material={MATERIALS[b.material]()} castShadow={b.material !== 'glass'} receiveShadow>
           <boxGeometry args={[b.w * MM, b.h * MM, b.d * MM]} />

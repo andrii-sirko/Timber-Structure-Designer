@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, type LucideIcon } from 'lucide-react';
+import { useUiStore } from '@/store/uiStore';
+import { focusContains } from './sidebarNavigation';
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
@@ -140,18 +142,31 @@ export function NumberField({ label, value, onChange, min, max, step = 10, unit 
   );
 }
 
+/** Runs `onContains` when a double-click focus request (see `openSettings`) targets `key` or something inside it. */
+function useSettingsFocusOpen(key: string | undefined, onContains: () => void): void {
+  const focus = useUiStore((s) => s.settingsFocus);
+  const onContainsRef = useRef(onContains);
+  onContainsRef.current = onContains;
+  useEffect(() => {
+    if (key && focus && focusContains(key, focus.path)) onContainsRef.current();
+  }, [key, focus]);
+}
+
 interface SectionProps {
   title: string;
   icon?: LucideIcon;
   defaultOpen?: boolean;
   badge?: ReactNode;
+  /** Opens and scrolls to this section when a double-clicked object's focus path is inside it */
+  focusKey?: string;
   children: ReactNode;
 }
 
-export function Section({ title, icon: Icon, defaultOpen = true, badge, children }: SectionProps) {
+export function Section({ title, icon: Icon, defaultOpen = true, badge, focusKey, children }: SectionProps) {
   const [open, setOpen] = useState(defaultOpen);
+  useSettingsFocusOpen(focusKey, () => setOpen(true));
   return (
-    <section className="border-b border-slate-800">
+    <section data-focus-key={focusKey} className="border-b border-slate-800">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

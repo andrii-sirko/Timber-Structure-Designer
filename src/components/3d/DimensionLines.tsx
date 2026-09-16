@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { Html, Line } from '@react-three/drei';
-import type { DerivedModel, Partition, StructureParams } from '@/types';
+import type { DerivedModel, Member, Partition, StructureParams } from '@/types';
 import { useProjectStore } from '@/store';
 import { computeRoofLines, sanitizeParams } from '@/engine/framing';
 import { canonicalizeParams, canonicalToWorldMap, mapPoint, mapVec } from '@/engine/orientation';
-import { partitionEdgeDistances } from '@/engine/postDrag';
+import { memberObb } from '@/engine/neighbours';
+import { partitionEdgeDistances, postEdgeDistances } from '@/engine/postDrag';
 import { midPurlinRuler } from '@/engine/purlinDrag';
 import { MM } from './materials';
 
@@ -69,7 +70,7 @@ export function DimensionLines({ model }: { model: DerivedModel }) {
     const gap = 0.7;
     const list: DimensionProps[] = [];
     list.push({ a: [0, 0, 0], b: [L * MM, 0, 0], offset: [0, 0, -(o.front * MM + gap)], label: `L ${L} mm` });
-    list.push({ a: [0, 0, 0], b: [0, 0, W * MM], offset: [-(o.left * MM + gap), 0, 0], label: `W ${W} mm` });
+    list.push({ a: [0, 0, 0], b: [0, 0, W * MM], offset: [-(o.right * MM + gap), 0, 0], label: `W ${W} mm` });
     // Post spacing chains: high-eave row outside its edge, low-eave row outside the opposite edge.
     // Each row has its own positions (posts can be moved or removed individually).
     const gridRows = model.framing.grid.rows;
@@ -152,6 +153,16 @@ export function MidPurlinDragDistances({ index, model, params }: { index: number
   );
 }
 
+/** Ruler along a partition while one of its ends is dragged: the wall's running length. */
+export function PartitionResizeRuler({ partition }: { partition: Partition }) {
+  const y = 0.03;
+  const u = partition.offset * MM;
+  const a: V = partition.axis === 'x' ? [partition.start * MM, y, u] : [u, y, partition.start * MM];
+  const b: V = partition.axis === 'x' ? [partition.end * MM, y, u] : [u, y, partition.end * MM];
+  const offset: V = partition.axis === 'x' ? [0, 0.18, 0.35] : [0.35, 0.18, 0];
+  return <Dimension a={a} b={b} offset={offset} label={`${Math.round(partition.end - partition.start)} mm`} color="#fbbf24" />;
+}
+
 export function PartitionDragDistances({ partition, params }: { partition: Partition; params: StructureParams }) {
   const dims = useMemo(() => {
     const thickness = params.timber.stud.height;
@@ -171,6 +182,35 @@ export function PartitionDragDistances({ partition, params }: { partition: Parti
       { a: [secondEdge, y, uMid] as V, b: [params.length * MM, y, uMid] as V, label: `right ${Math.round(distances.second)} mm` },
     ];
   }, [params, partition]);
+
+  return (
+    <group>
+      {dims.map((dim) => (
+        <Dimension key={dim.label} {...dim} offset={[0, 0.18, 0]} color="#fbbf24" />
+      ))}
+    </group>
+  );
+}
+
+/** Clear distances from a dragged post's faces to the four footprint edges, drawn at ground level. */
+export function PostDragDistances({ post, params }: { post: Member; params: StructureParams }) {
+  const dims = useMemo(() => {
+    const box = memberObb(post);
+    // Project the box half sizes onto world X / Z to get the plan footprint.
+    const reach = (axis: 'x' | 'z') => box.axes.reduce((sum, a, i) => sum + Math.abs(a[axis]) * box.half[i], 0);
+    const rx = reach('x');
+    const rz = reach('z');
+    const { x, z } = box.centre;
+    const extent = { minX: x - rx, maxX: x + rx, minZ: z - rz, maxZ: z + rz };
+    const d = postEdgeDistances(extent, params);
+    const y = 0.03;
+    return [
+      { a: [0, y, z * MM] as V, b: [extent.minX * MM, y, z * MM] as V, label: `left ${Math.round(d.left)} mm` },
+      { a: [extent.maxX * MM, y, z * MM] as V, b: [params.length * MM, y, z * MM] as V, label: `right ${Math.round(d.right)} mm` },
+      { a: [x * MM, y, 0] as V, b: [x * MM, y, extent.minZ * MM] as V, label: `front ${Math.round(d.front)} mm` },
+      { a: [x * MM, y, extent.maxZ * MM] as V, b: [x * MM, y, params.width * MM] as V, label: `rear ${Math.round(d.rear)} mm` },
+    ];
+  }, [params, post]);
 
   return (
     <group>

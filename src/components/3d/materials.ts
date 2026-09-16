@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { MemberCategory, RoofCovering } from '@/types';
+import type { FloorDecking, MemberCategory, RoofCovering } from '@/types';
 
 /** Scene scale: 1 unit = 1 m; engine works in mm. */
 export const MM = 0.001;
@@ -79,12 +79,12 @@ function createWoodTexture(seed: number, base: string, dark: string): THREE.Canv
 }
 
 /** Vertical board cladding: one board per tile (120 mm wide, 1.2 m tall). */
-function createBoardTexture(): THREE.CanvasTexture {
+function createBoardTexture(base = '#b98a55', boardWidthM = 0.12, rotate = false): THREE.CanvasTexture {
   const w = 128;
   const h = 1280;
   const ctx = makeCanvas(w, h);
   const rnd = mulberry32(7);
-  ctx.fillStyle = '#b98a55';
+  ctx.fillStyle = base;
   ctx.fillRect(0, 0, w, h);
   ctx.strokeStyle = '#8d6236';
   for (let i = 0; i < 40; i++) {
@@ -101,7 +101,9 @@ function createBoardTexture(): THREE.CanvasTexture {
   ctx.fillRect(0, 0, 6, h); // shadow gap between boards
   ctx.fillStyle = 'rgba(255,255,255,0.12)';
   ctx.fillRect(6, 0, 4, h); // highlight edge
-  return finishTexture(ctx, [1 / 0.12, 1 / 1.2]);
+  const texture = finishTexture(ctx, rotate ? [1 / 1.2, 1 / boardWidthM] : [1 / boardWidthM, 1 / 1.2]);
+  if (rotate) texture.rotation = Math.PI / 2;
+  return texture;
 }
 
 function createTrapezoidalTexture(): THREE.CanvasTexture {
@@ -187,6 +189,8 @@ const CATEGORY_TINT: Record<MemberCategory, string> = {
   plate: '#c99c62',
   header: '#d6ad70',
   sill: '#d6ad70',
+  bearer: '#a98252',
+  joist: '#cfa66c',
 };
 
 export function getWoodMaterial(category: MemberCategory): THREE.MeshStandardMaterial {
@@ -236,6 +240,17 @@ export function getNeighbourMaterial(): THREE.MeshStandardMaterial {
 
 export function getCladdingMaterial(): THREE.MeshStandardMaterial {
   return cached('cladding', () => new THREE.MeshStandardMaterial({ map: createBoardTexture(), roughness: 0.9, side: THREE.DoubleSide }));
+}
+
+/** Floor deck: boards running along the panel's local u or v axis, or plain OSB sheets. */
+export function getFloorMaterial(finish: { decking: FloorDecking; boardsAlong: 'u' | 'v' } | undefined): THREE.MeshStandardMaterial {
+  const decking = finish?.decking ?? 'spruce-boards';
+  const along = finish?.boardsAlong ?? 'v';
+  return cached(`floor-${decking}-${along}`, () => {
+    if (decking === 'osb') return new THREE.MeshStandardMaterial({ color: '#c9a56b', roughness: 0.95, side: THREE.DoubleSide });
+    const base = decking === 'larch-decking' ? '#b0714a' : '#d2ab78';
+    return new THREE.MeshStandardMaterial({ map: createBoardTexture(base, 0.145, along === 'u'), roughness: 0.85, side: THREE.DoubleSide });
+  });
 }
 
 export function getRoofMaterial(covering: RoofCovering): THREE.Material {
@@ -300,6 +315,11 @@ export function getGlassMaterial(): THREE.MeshPhysicalMaterial {
 
 export function getHardwareMaterial(): THREE.MeshStandardMaterial {
   return cached('hardware', () => new THREE.MeshStandardMaterial({ color: '#3f3f46', roughness: 0.4, metalness: 0.7 }));
+}
+
+/** Hot-dip galvanised anchors and post bases. */
+export function getGalvanisedMaterial(): THREE.MeshStandardMaterial {
+  return cached('galvanised', () => new THREE.MeshStandardMaterial({ color: '#b6bcc4', roughness: 0.45, metalness: 0.6 }));
 }
 
 /** Grip bars on the edges of the selected opening. */

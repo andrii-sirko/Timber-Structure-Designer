@@ -1,38 +1,88 @@
-import type { FramingResult, ProjectState, Vehicle, VehicleFit, VehicleModel, WallId } from '@/types';
+import type { FramingResult, ObjectCategory, ObjectSize, ProjectState, Vehicle, VehicleFit, VehicleModel, WallId } from '@/types';
 import { WALL_IDS } from '@/types';
-import { sanitizeParams } from './framing';
+import { sanitizeParams, wallExtent } from './framing';
 import { computeRoofLines } from './framing/roofLines';
 import { braceSides } from './framing/structure';
 import { toRad } from './geometry';
 
 /** Exterior dimensions in mm (approximate manufacturer data, current generations). */
 export const VEHICLE_CATALOG: VehicleModel[] = [
-  { id: 'vw-up', name: 'VW up! – city car', style: 'city', length: 3600, width: 1641, mirrorWidth: 1910, height: 1504 },
-  { id: 'vw-golf', name: 'VW Golf – compact', style: 'compact', length: 4284, width: 1789, mirrorWidth: 2027, height: 1456 },
-  { id: 'bmw-3', name: 'BMW 3 Series – sedan', style: 'sedan', length: 4709, width: 1827, mirrorWidth: 2068, height: 1442 },
-  { id: 'vw-passat-variant', name: 'VW Passat Variant – estate', style: 'estate', length: 4767, width: 1832, mirrorWidth: 2083, height: 1477 },
-  { id: 'opel-astra-k-sports-tourer', name: 'Opel Astra K Sports Tourer – estate', style: 'estate', length: 4702, width: 1809, mirrorWidth: 2042, height: 1510 },
-  { id: 'tesla-model-y', name: 'Tesla Model Y – SUV', style: 'suv', length: 4751, width: 1921, mirrorWidth: 2129, height: 1624 },
-  { id: 'vw-tiguan', name: 'VW Tiguan – SUV', style: 'suv', length: 4509, width: 1839, mirrorWidth: 2100, height: 1675 },
-  { id: 'cupra-formentor', name: 'Cupra Formentor (2026) – crossover SUV', style: 'suv', length: 4451, width: 1839, mirrorWidth: 2108, height: 1511 },
-  { id: 'bmw-x5', name: 'BMW X5 – large SUV', style: 'suv', length: 4922, width: 2004, mirrorWidth: 2218, height: 1745 },
-  { id: 'vw-multivan', name: 'VW Multivan T6.1 – van', style: 'van', length: 4904, width: 1904, mirrorWidth: 2297, height: 1970 },
-  { id: 'ford-ranger', name: 'Ford Ranger – pickup', style: 'pickup', length: 5370, width: 1918, mirrorWidth: 2180, height: 1848 },
-  { id: 'fiat-ducato-camper', name: 'Fiat Ducato L2H2 – camper van', style: 'camper', length: 5413, width: 2050, mirrorWidth: 2470, height: 2524 },
-  { id: 'mercedes-sprinter', name: 'Mercedes Sprinter L2H2 – panel van', style: 'camper', length: 5932, width: 2020, mirrorWidth: 2345, height: 2620 },
-  { id: 'motorcycle', name: 'Motorcycle – touring', style: 'motorcycle', length: 2250, width: 900, mirrorWidth: 980, height: 1400 },
+  { id: 'vw-up', name: 'VW up! – city car', style: 'city', category: 'cars', length: 3600, width: 1641, mirrorWidth: 1910, height: 1504 },
+  { id: 'vw-golf', name: 'VW Golf – compact', style: 'compact', category: 'cars', length: 4284, width: 1789, mirrorWidth: 2027, height: 1456 },
+  { id: 'bmw-3', name: 'BMW 3 Series – sedan', style: 'sedan', category: 'cars', length: 4709, width: 1827, mirrorWidth: 2068, height: 1442 },
+  { id: 'vw-passat-variant', name: 'VW Passat Variant – estate', style: 'estate', category: 'cars', length: 4767, width: 1832, mirrorWidth: 2083, height: 1477 },
+  { id: 'opel-astra-k-sports-tourer', name: 'Opel Astra K Sports Tourer – estate', style: 'estate', category: 'cars', length: 4702, width: 1809, mirrorWidth: 2042, height: 1510 },
+  { id: 'tesla-model-y', name: 'Tesla Model Y – SUV', style: 'suv', category: 'cars', length: 4751, width: 1921, mirrorWidth: 2129, height: 1624 },
+  { id: 'vw-tiguan', name: 'VW Tiguan – SUV', style: 'suv', category: 'cars', length: 4509, width: 1839, mirrorWidth: 2100, height: 1675 },
+  { id: 'cupra-formentor', name: 'Cupra Formentor (2026) – crossover SUV', style: 'suv', category: 'cars', length: 4451, width: 1839, mirrorWidth: 2108, height: 1511 },
+  { id: 'bmw-x5', name: 'BMW X5 – large SUV', style: 'suv', category: 'cars', length: 4922, width: 2004, mirrorWidth: 2218, height: 1745 },
+  { id: 'vw-multivan', name: 'VW Multivan T6.1 – van', style: 'van', category: 'vans', length: 4904, width: 1904, mirrorWidth: 2297, height: 1970 },
+  { id: 'ford-ranger', name: 'Ford Ranger – pickup', style: 'pickup', category: 'vans', length: 5370, width: 1918, mirrorWidth: 2180, height: 1848 },
+  { id: 'fiat-ducato-camper', name: 'Fiat Ducato L2H2 – camper van', style: 'camper', category: 'vans', length: 5413, width: 2050, mirrorWidth: 2470, height: 2524 },
+  { id: 'mercedes-sprinter', name: 'Mercedes Sprinter L2H2 – panel van', style: 'camper', category: 'vans', length: 5932, width: 2020, mirrorWidth: 2345, height: 2620 },
+  { id: 'motorcycle', name: 'Motorcycle – touring', style: 'motorcycle', category: 'two-wheelers', length: 2250, width: 900, mirrorWidth: 980, height: 1400 },
   // Bicycle: typical adult city/trekking bike; "mirror width" = handlebar width
-  { id: 'bicycle', name: 'Bicycle – city / trekking', style: 'bicycle', length: 1800, width: 450, mirrorWidth: 640, height: 1050 },
+  { id: 'bicycle', name: 'Bicycle – city / trekking', style: 'bicycle', category: 'two-wheelers', length: 1800, width: 450, mirrorWidth: 640, height: 1050 },
   // Waste bins (EN 840 two- and four-wheeled containers; length = depth front-to-back)
-  { id: 'bin-120', name: 'Waste bin 120 L', style: 'bin', length: 555, width: 480, mirrorWidth: 480, height: 940 },
-  { id: 'bin-240', name: 'Waste bin 240 L', style: 'bin', length: 740, width: 580, mirrorWidth: 580, height: 1075 },
-  { id: 'bin-1100', name: 'Waste container 1100 L', style: 'container', length: 1070, width: 1370, mirrorWidth: 1370, height: 1370 },
+  { id: 'bin-120', name: 'Waste bin 120 L', style: 'bin', category: 'waste', length: 555, width: 480, mirrorWidth: 480, height: 940 },
+  { id: 'bin-240', name: 'Waste bin 240 L', style: 'bin', category: 'waste', length: 740, width: 580, mirrorWidth: 580, height: 1075 },
+  { id: 'bin-1100', name: 'Waste container 1100 L', style: 'container', category: 'waste', length: 1070, width: 1370, mirrorWidth: 1370, height: 1370 },
+  // Garden-house equipment (typical retail dimensions; length = handle-to-front for mowers)
+  { id: 'mower-push', name: 'Lawn mower – push / electric', style: 'mower', category: 'garden', length: 1550, width: 550, mirrorWidth: 550, height: 1050 },
+  { id: 'mower-riding', name: 'Ride-on lawn mower', style: 'ridingMower', category: 'garden', length: 2000, width: 1050, mirrorWidth: 1050, height: 1150 },
+  { id: 'wheelbarrow', name: 'Wheelbarrow', style: 'wheelbarrow', category: 'garden', length: 1450, width: 650, mirrorWidth: 650, height: 650 },
+  { id: 'shelf-tools', name: 'Tool shelf (free size)', style: 'shelf', category: 'furniture', length: 1000, width: 400, mirrorWidth: 400, height: 1800, customSize: true },
+  { id: 'table-custom', name: 'Table (free size)', style: 'table', category: 'furniture', length: 1600, width: 800, mirrorWidth: 800, height: 750, customSize: true },
+  { id: 'workbench', name: 'Workbench (free size)', style: 'workbench', category: 'furniture', length: 1500, width: 700, mirrorWidth: 700, height: 900, customSize: true },
+  { id: 'bench-garden', name: 'Garden bench', style: 'bench', category: 'furniture', length: 1500, width: 600, mirrorWidth: 600, height: 850, customSize: true },
+  { id: 'firewood', name: 'Firewood stack (free size)', style: 'firewood', category: 'storage', length: 2000, width: 400, mirrorWidth: 400, height: 1500, customSize: true },
+  { id: 'box-custom', name: 'Storage box / crate (free size)', style: 'box', category: 'storage', length: 800, width: 600, mirrorWidth: 600, height: 600, customSize: true },
+  // Water storage: round rain barrel (Ø = length = width) and a 1000 L IBC tank on a pallet
+  { id: 'rain-barrel', name: 'Rain barrel 300 L (free size)', style: 'barrel', category: 'water', length: 800, width: 800, mirrorWidth: 800, height: 950, customSize: true },
+  { id: 'ibc-tank', name: 'IBC water tank 1000 L', style: 'box', category: 'water', length: 1200, width: 1000, mirrorWidth: 1000, height: 1160 },
+  // Leaning ladder: height = ladder length, width = horizontal reach of the tilted rails (≈ 1/4 of the height)
+  { id: 'ladder', name: 'Ladder – leaning (free size)', style: 'ladder', category: 'garden', length: 450, width: 700, mirrorWidth: 700, height: 2800, customSize: true },
+  // Grills: gas grill with side tables, lid closed; kettle grill Ø 570 on three legs
+  { id: 'grill-gas', name: 'Gas grill with side tables', style: 'gasGrill', category: 'leisure', length: 1400, width: 600, mirrorWidth: 600, height: 1150 },
+  { id: 'grill-kettle', name: 'Kettle grill Ø 570', style: 'kettleGrill', category: 'leisure', length: 650, width: 650, mirrorWidth: 650, height: 1000 },
 ];
 
-export const VEHICLE_COLORS = ['#b91c1c', '#1d4ed8', '#e5e7eb', '#111827', '#9ca3af', '#166534', '#d97706', '#0e7490'];
+/** Size limits for free-size objects (mm). */
+export const OBJECT_SIZE_LIMITS = { min: 100, max: 6000 } as const;
+
+/** Picker groups in display order. */
+export const OBJECT_CATEGORIES: { id: ObjectCategory; label: string }[] = [
+  { id: 'cars', label: 'Cars (Pkw)' },
+  { id: 'vans', label: 'Vans & pickups (Transporter)' },
+  { id: 'two-wheelers', label: 'Two-wheelers (Zweiräder)' },
+  { id: 'waste', label: 'Waste bins (Mülltonnen)' },
+  { id: 'garden', label: 'Garden tools (Gartengeräte)' },
+  { id: 'furniture', label: 'Furniture & workshop (Möbel)' },
+  { id: 'storage', label: 'Storage (Lager)' },
+  { id: 'water', label: 'Water (Wasser)' },
+  { id: 'leisure', label: 'Leisure (Freizeit)' },
+];
+
+export const VEHICLE_COLORS = ['#b91c1c', '#1d4ed8', '#e5e7eb', '#111827', '#9ca3af', '#166534', '#d97706', '#0e7490', '#8b5a2b'];
 
 export function getVehicleModel(modelId: string): VehicleModel {
   return VEHICLE_CATALOG.find((m) => m.id === modelId) ?? VEHICLE_CATALOG[1];
+}
+
+const clampSize = (n: number, fallback: number): number =>
+  Number.isFinite(n) ? Math.min(OBJECT_SIZE_LIMITS.max, Math.max(OBJECT_SIZE_LIMITS.min, Math.round(n))) : fallback;
+
+/** Catalogue entry with the instance's own dimensions applied (free-size objects only). */
+export function resolveVehicleModel(vehicle: Pick<Vehicle, 'modelId' | 'size'>): VehicleModel {
+  const model = getVehicleModel(vehicle.modelId);
+  if (!model.customSize || !vehicle.size) return model;
+  const width = clampSize(vehicle.size.width, model.width);
+  return { ...model, length: clampSize(vehicle.size.length, model.length), width, mirrorWidth: width, height: clampSize(vehicle.size.height, model.height) };
+}
+
+/** Default per-instance size for a free-size catalogue entry; undefined for fixed-size models. */
+export function defaultObjectSize(model: VehicleModel): ObjectSize | undefined {
+  return model.customSize ? { length: model.length, width: model.width, height: model.height } : undefined;
 }
 
 export interface Point2 {
@@ -67,8 +117,8 @@ function footprintBounds(corners: Point2[]): { minX: number; maxX: number; minZ:
 
 /** True when two vehicles' mirror footprints (axis-aligned bounds + margin) overlap. */
 export function vehiclesOverlap(a: Vehicle, b: Vehicle, margin = 300): boolean {
-  const ba = footprintBounds(vehicleCorners(a, getVehicleModel(a.modelId)));
-  const bb = footprintBounds(vehicleCorners(b, getVehicleModel(b.modelId)));
+  const ba = footprintBounds(vehicleCorners(a, resolveVehicleModel(a)));
+  const bb = footprintBounds(vehicleCorners(b, resolveVehicleModel(b)));
   return ba.minX - margin < bb.maxX && ba.maxX + margin > bb.minX && ba.minZ - margin < bb.maxZ && ba.maxZ + margin > bb.minZ;
 }
 
@@ -88,7 +138,7 @@ export function findVehicleSpot(project: ProjectState, model: VehicleModel): { x
       color: '',
     };
     const b = footprintBounds(vehicleCorners(spot, model));
-    const inside = b.minX >= -project.params.overhangs.left && b.maxX <= L + project.params.overhangs.right && b.minZ >= -project.params.overhangs.front && b.maxZ <= W + project.params.overhangs.rear;
+    const inside = b.minX >= -project.params.overhangs.right && b.maxX <= L + project.params.overhangs.left && b.minZ >= -project.params.overhangs.front && b.maxZ <= W + project.params.overhangs.rear;
     if (!inside && k !== 0) continue;
     if (!project.vehicles.some((v) => vehiclesOverlap(v, spot))) return { x: spot.x, z: spot.z, rotationDeg };
   }
@@ -102,7 +152,7 @@ export function findVehicleSpot(project: ProjectState, model: VehicleModel): { x
  */
 export function checkVehicleFit(vehicle: Vehicle, project: ProjectState, framing: FramingResult): VehicleFit {
   const params = sanitizeParams(project.params);
-  const model = getVehicleModel(vehicle.modelId);
+  const model = resolveVehicleModel(vehicle);
   const roof = computeRoofLines(params);
   const { overhangs: o, timber, length: L, width: W } = params;
   const pw = timber.post.width;
@@ -111,8 +161,8 @@ export function checkVehicleFit(vehicle: Vehicle, project: ProjectState, framing
 
   const corners = vehicleCorners(vehicle, model, true);
   const b = footprintBounds(corners);
-  const roofMinX = -o.left;
-  const roofMaxX = L + o.right;
+  const roofMinX = -o.right;
+  const roofMaxX = L + o.left;
   const roofMinZ = -o.front;
   const roofMaxZ = W + o.rear;
   const uncoveredMm = Math.max(0, roofMinX - b.minX, b.maxX - roofMaxX, roofMinZ - b.minZ, b.maxZ - roofMaxZ);
@@ -177,8 +227,8 @@ export function checkVehicleFit(vehicle: Vehicle, project: ProjectState, framing
   const wallLines: Record<WallId, [number, number, number, number]> = {
     front: [0, pw / 2, L, pw / 2],
     rear: [0, W - pw / 2, L, W - pw / 2],
-    left: [pw / 2, 0, pw / 2, W],
-    right: [L - pw / 2, 0, L - pw / 2, W],
+    right: [pw / 2, 0, pw / 2, W],
+    left: [L - pw / 2, 0, L - pw / 2, W],
   };
   const wallCollisions: string[] = [];
   const crossesLine = (x0: number, z0: number, x1: number, z1: number): boolean => {
@@ -191,7 +241,11 @@ export function checkVehicleFit(vehicle: Vehicle, project: ProjectState, framing
   };
   for (const id of WALL_IDS) {
     if (!project.walls[id].closed) continue;
-    if (crossesLine(...wallLines[id])) wallCollisions.push(id);
+    const [x0, z0, x1, z1] = wallLines[id];
+    const alongX = id === 'front' || id === 'rear';
+    const ext = wallExtent(project.walls[id], alongX ? L : W);
+    const line: [number, number, number, number] = alongX ? [ext.start, z0, ext.end, z1] : [x0, ext.start, x1, ext.end];
+    if (crossesLine(...line)) wallCollisions.push(id);
   }
   for (const p of project.partitions) {
     const line: [number, number, number, number] = p.axis === 'x' ? [p.start, p.offset, p.end, p.offset] : [p.offset, p.start, p.offset, p.end];

@@ -14,8 +14,12 @@ test('free post member ids round-trip through the prefix', () => {
   assert.equal(freePostIdOf('front:2'), null);
 });
 
-test('clamps a free post axis inside the footprint by half a post width', () => {
-  assert.deepEqual(clampFreePost({ x: -500, z: 9000 }, params), { x: 60, z: 2940 });
+test('clamps a free post axis under the roof (footprint + overhangs) by half a post width', () => {
+  const o = params.overhangs;
+  const half = params.timber.post.width / 2;
+  assert.deepEqual(clampFreePost({ x: -5000, z: 90000 }, params), { x: -o.right + half, z: params.width + o.rear - half });
+  assert.deepEqual(clampFreePost({ x: -5000, z: 90000 }, params, 'canonical'), { x: -o.left + half, z: params.width + o.rear - half });
+  assert.deepEqual(clampFreePost({ x: 99999, z: -99999 }, params), { x: params.length + o.left - half, z: -o.front + half });
   assert.deepEqual(clampFreePost({ x: 2500, z: 1500 }, params), { x: 2500, z: 1500 });
 });
 

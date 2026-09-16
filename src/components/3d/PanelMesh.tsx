@@ -1,8 +1,8 @@
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { Panel, RoofCovering } from '@/types';
-import { getCladdingMaterial, getRoofMaterial, getWireframeMaterial, MM } from './materials';
+import { getCladdingMaterial, getFloorMaterial, getRoofMaterial, getWireframeMaterial, MM } from './materials';
 import { basisQuaternion } from './TimberMember';
 
 interface PanelMeshProps {
@@ -10,9 +10,18 @@ interface PanelMeshProps {
   covering: RoofCovering;
   wireframe: boolean;
   onClick?: (panel: Panel, e: ThreeEvent<MouseEvent>) => void;
+  onDoubleClick?: (panel: Panel, e: ThreeEvent<MouseEvent>) => void;
+  /** Pointer drag (partition cladding moves its wall); the panel only listens when all three are set */
+  onDragStart?: (panel: Panel, e: ThreeEvent<PointerEvent>) => void;
+  onDrag?: (panel: Panel, e: ThreeEvent<PointerEvent>) => void;
+  onDragEnd?: (panel: Panel, e: ThreeEvent<PointerEvent>) => void;
+  /** CSS cursor shown while hovering a draggable panel */
+  dragCursor?: string;
 }
 
-export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, onClick }: PanelMeshProps) {
+export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, onClick, onDoubleClick, onDragStart, onDrag, onDragEnd, dragCursor }: PanelMeshProps) {
+  const dragging = useRef(false);
+  const draggable = Boolean(onDragStart && onDrag && onDragEnd);
   const geometry = useMemo(() => {
     if (panel.outline) {
       const shape = new THREE.Shape(panel.outline.outer.map((p) => new THREE.Vector2(p.u * MM, p.v * MM)));
@@ -31,7 +40,13 @@ export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, o
     () => [panel.anchor.x * MM, panel.anchor.y * MM, panel.anchor.z * MM],
     [panel.anchor],
   );
-  const material = wireframe ? getWireframeMaterial() : panel.kind === 'roof' ? getRoofMaterial(covering) : getCladdingMaterial();
+  const material = wireframe
+    ? getWireframeMaterial()
+    : panel.kind === 'roof'
+      ? getRoofMaterial(covering)
+      : panel.kind === 'floor'
+        ? getFloorMaterial(panel.floorFinish)
+        : getCladdingMaterial();
 
   return (
     <mesh
@@ -48,6 +63,29 @@ export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, o
           onClick(panel, e);
         }
       }}
+      onDoubleClick={onDoubleClick ? (e) => onDoubleClick(panel, e) : undefined}
+      onPointerOver={dragCursor ? (e) => {
+        e.stopPropagation();
+        document.body.style.cursor = dragCursor;
+      } : undefined}
+      onPointerOut={dragCursor ? () => {
+        if (!dragging.current) document.body.style.cursor = '';
+      } : undefined}
+      onPointerDown={draggable ? (e) => {
+        dragging.current = true;
+        onDragStart!(panel, e);
+      } : undefined}
+      onPointerMove={draggable ? (e) => {
+        if (dragging.current) onDrag!(panel, e);
+      } : undefined}
+      onPointerUp={draggable ? (e) => {
+        dragging.current = false;
+        onDragEnd!(panel, e);
+      } : undefined}
+      onPointerCancel={draggable ? (e) => {
+        dragging.current = false;
+        onDragEnd!(panel, e);
+      } : undefined}
     />
   );
 });

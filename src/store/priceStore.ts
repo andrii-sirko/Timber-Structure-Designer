@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type { MaterialPrices, MemberCategory, RoofCovering } from '@/types';
+import type { FloorDecking, MaterialPrices, MemberCategory, RoofCovering } from '@/types';
 import { createDefaultPrices, normalizePrices } from '@/engine/pricing';
 
 const STORAGE_KEY = 'timber-structure-designer-prices-v1';
@@ -12,6 +12,9 @@ export interface PriceStore {
   setRoofDeckPrice: (value: number) => void;
   setRoofingPrice: (covering: RoofCovering, value: number) => void;
   setHardwarePrice: (id: string, value: number) => void;
+  setFlooringPrice: (decking: FloorDecking, value: number) => void;
+  setMaterialPrice: (priceKey: string, value: number) => void;
+  setFixturePrice: (key: string, value: number) => void;
   resetPrices: () => void;
 }
 
@@ -27,6 +30,12 @@ export const usePriceStore = create<PriceStore>()(
         set((s) => ({ prices: { ...s.prices, roofingPerM2: { ...s.prices.roofingPerM2, [covering]: value } } })),
       setHardwarePrice: (id, value) =>
         set((s) => ({ prices: { ...s.prices, hardwarePerUnit: { ...s.prices.hardwarePerUnit, [id]: value } } })),
+      setFlooringPrice: (decking, value) =>
+        set((s) => ({ prices: { ...s.prices, flooringPerM2: { ...s.prices.flooringPerM2, [decking]: value } } })),
+      setMaterialPrice: (priceKey, value) =>
+        set((s) => ({ prices: { ...s.prices, materialPerUnit: { ...s.prices.materialPerUnit, [priceKey]: value } } })),
+      setFixturePrice: (key, value) =>
+        set((s) => ({ prices: { ...s.prices, fixturePrice: { ...s.prices.fixturePrice, [key]: value } } })),
       resetPrices: () => set({ prices: createDefaultPrices() }),
     }),
     {

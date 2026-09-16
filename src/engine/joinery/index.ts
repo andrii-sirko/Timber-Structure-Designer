@@ -1,5 +1,5 @@
 import type { ConnectionsResult, FramingResult, HardwareItem, JoineryItem, ProjectState } from '@/types';
-import { ROOF_COVERING_LOAD } from '../statics/materials';
+import { plateAnchors } from './anchors';
 
 /**
  * Derives connector quantities (hardware mode) or traditional carpentry joints
@@ -20,8 +20,7 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   const nSidePosts = nPosts - nRowPosts;
   const nBraces = count((m) => m.category === 'brace');
   const nStuds = count((m) => m.category === 'stud');
-  const nPlates = count((m) => m.category === 'plate');
-  const plateLengthM = members.filter((m) => m.category === 'plate').reduce((s, m) => s + m.length, 0) / 1000;
+  const nPlateAnchors = plateAnchors(members).length;
   const nHeaders = count((m) => m.category === 'header');
   const nSills = count((m) => m.category === 'sill');
   const nPurlinPieces = count((m) => m.group.startsWith('Purlin'));
@@ -29,7 +28,6 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   const nRails = count((m) => m.group.startsWith('Side rail'));
   const claddingArea = framing.panels.filter((p) => p.kind === 'cladding').reduce((s, p) => s + p.areaM2, 0);
   const roofArea = framing.roof.areaM2;
-  const covering = ROOF_COVERING_LOAD[params.loads.roofCovering];
 
   const hardware: HardwareItem[] = [];
   const joinery: JoineryItem[] = [];
@@ -54,7 +52,7 @@ export function computeConnections(project: ProjectState, framing: FramingResult
     hw('side-post-screws', 'Structural screws (side posts → rail)', 'Konstruktionsschrauben', '8 × 200 mm', nSidePosts * 2 + nRails * 4);
     hw('stud-screws', 'Wood screws (toe-screwed studs)', 'Holzbauschrauben', '6 × 140 mm', nStuds * 4, '2 per stud end');
     hw('header-screws', 'Structural screws (headers & sills)', 'Konstruktionsschrauben', '8 × 200 mm', nHeaders * 6 + nSills * 4);
-    hw('plate-anchor', 'Frame anchors (bottom plate → slab)', 'Rahmendübel', '10 × 135 mm', Math.max(nPlates * 2, plateLengthM / 0.8));
+    hw('plate-anchor', 'Frame anchors (bottom plate → slab)', 'Rahmendübel', '10 × 135 mm', nPlateAnchors, 'Max. 800 mm apart, 150 mm from plate ends');
     hw('splice-bolt', 'Splice bolts with washers', 'Stoßverschraubung', 'M12 × 200 mm', nSplices * 2);
     hw('splice-plate', 'Flat connector plates', 'Flachverbinder', '300 × 40 × 3 mm', nSplices * 2);
   } else {
@@ -69,7 +67,7 @@ export function computeConnections(project: ProjectState, framing: FramingResult
     jn('housing', 'Housed headers & sills', 'Eingelassene Stürze/Riegel', nHeaders * 2 + nSills * 2);
     hw('rafter-screw', slopedPurlins ? 'Rafter screws (secures seat)' : 'Rafter screws (secures birdsmouth)', 'Sparrenschrauben', '8 × 280 mm', nBearings, '1 per rafter bearing');
     hw('splice-bolt', 'Scarf joint bolts', 'Stoßverschraubung', 'M12 × 200 mm', nSplices * 2);
-    hw('plate-anchor', 'Frame anchors (bottom plate → slab)', 'Rahmendübel', '10 × 135 mm', Math.max(nPlates * 2, plateLengthM / 0.8));
+    hw('plate-anchor', 'Frame anchors (bottom plate → slab)', 'Rahmendübel', '10 × 135 mm', nPlateAnchors, 'Max. 800 mm apart, 150 mm from plate ends');
   }
 
   // Cladding & roofing fixings (both modes)
@@ -85,9 +83,37 @@ export function computeConnections(project: ProjectState, framing: FramingResult
       hw('roof-nails', 'Roofing nails, galvanised', 'Dachpappnägel', '2.8 × 25 mm', roofArea * 50, '≈ 50 per m²');
       hw('deck-screws', 'OSB deck screws', 'Holzbauschrauben', '4.5 × 60 mm', roofArea * 15);
     } else {
-      hw('deck-screws', 'OSB deck screws', 'Holzbauschrauben', '4.5 × 60 mm', roofArea * 15, `${covering.label}: battens/counter battens not itemised`);
+      hw('deck-screws', 'OSB deck screws', 'Holzbauschrauben', '4.5 × 60 mm', roofArea * 15, params.loads.roofCovering === 'roof-tiles' ? 'Battens & counter battens: see other materials' : undefined);
+    }
+    if (params.loads.roofCovering === 'roof-tiles') {
+      hw('batten-nails', 'Batten nails, galvanised', 'Lattennägel', '3.1 × 80 mm', (roofArea / 0.33) * 2 + roofArea * 4, '2 per batten crossing');
     }
   }
+
+  // Timber floor (both modes)
+  const floor = framing.floor;
+  if (floor) {
+    const bearers = floor.support === 'bearers';
+    if (bearers) {
+      hw('floor-footing', 'Point foundation with adjustable beam support', 'Punktfundament mit U-Stützenfuß', '40×40×80 cm concrete + U-support', floor.supportCount, '1 per bearer support');
+      hw('joist-screws', 'Structural screws (joist → bearer)', 'Konstruktionsschrauben', `6 × ${Math.round((params.floor.joist.height + 40) / 20) * 20} mm`, floor.crossings * 2, '2 per crossing');
+    } else {
+      hw('floor-pad', 'Rubber levelling pads', 'Terrassenpads / Unterlegplatten', '90×60×10 mm', floor.supportCount, '1 per sleeper support');
+      hw('sleeper-anchor', 'Angle brackets with concrete screws (sleeper → slab)', 'Winkelverbinder mit Betonschrauben', '70×70×55 mm', floor.joistCount * 2, '2 per sleeper');
+    }
+    const deckScrewsPerM2 =
+      floor.decking === 'osb' ? 12 : Math.ceil((2 * 1000) / Math.max(floor.joistSpacing, 1) / 0.14);
+    if (floor.decking === 'larch-decking') {
+      hw('decking-screws-a2', 'Stainless decking screws', 'Terrassenschrauben A2', '5 × 60 mm', floor.areaM2 * deckScrewsPerM2, '2 per board per joist');
+    } else {
+      hw('floor-screws', floor.decking === 'osb' ? 'Flooring panel screws' : 'Floorboard screws', 'Dielenschrauben', '4.5 × 60 mm', floor.areaM2 * deckScrewsPerM2, floor.decking === 'osb' ? '≈ 12 per m²' : '2 per board per joist');
+    }
+  }
+
+  // Door & window fitting kits (closed walls and partitions)
+  const openings = [...Object.values(project.walls).filter((w) => w.closed).flatMap((w) => w.openings), ...project.partitions.flatMap((p) => p.openings)];
+  hw('door-fitting-kit', 'Door fitting kit', 'Türmontage-Set', 'Compression tape, PU foam, frame screws, threshold, drip cap', openings.filter((o) => o.type === 'door').length, '1 per door');
+  hw('window-fitting-kit', 'Window fitting kit', 'Fenstermontage-Set', 'Compression tape, PU foam, frame screws, sills, drip cap, cover strips', openings.filter((o) => o.type === 'window').length, '1 per window');
 
   return { mode: params.connectionMode, hardware, joinery };
 }

@@ -114,6 +114,18 @@ export async function exportCutListPdf(
     headStyles: { fillColor: [92, 61, 28] },
   });
 
+  if (bom.materials.length > 0) {
+    const afterBom = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+    doc.text('Other materials', 14, afterBom + 10);
+    autoTable(doc, {
+      startY: afterBom + 13,
+      head: [['Item', 'Spec', 'Qty', 'Note']],
+      body: bom.materials.map((m) => [`${m.name} (${m.nameDe})`, m.spec, `${m.quantity.toFixed(m.unit === 'pcs' ? 0 : 2)} ${m.unit}`, m.note ?? '']),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [92, 61, 28] },
+    });
+  }
+
   doc.addPage();
   doc.setFontSize(12);
   doc.text(`Statics check (simplified EC5) – overall: ${statics.status.toUpperCase()}`, 14, 14);

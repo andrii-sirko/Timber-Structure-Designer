@@ -5,6 +5,7 @@ import type {
   CameraPreset,
   HighlightMode,
   LayerVisibility,
+  FloorSettings,
   LoadSettings,
   Measurement,
   Opening,
@@ -27,8 +28,8 @@ import type {
   WallKey,
 } from '@/types';
 import { isOuterWall } from '@/types';
-import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, openingFromPreset, OPENING_DEFAULTS, sizeChanged } from '@/engine';
-import { findVehicleSpot, getVehicleModel, VEHICLE_COLORS } from '@/engine/vehicles';
+import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, MIN_WALL_LENGTH, openingFromPreset, OPENING_DEFAULTS, sizeChanged, wallExtent } from '@/engine';
+import { defaultObjectSize, findVehicleSpot, getVehicleModel, VEHICLE_COLORS } from '@/engine/vehicles';
 import { defaultPavedArea, insertVertex, PAVING_COLORS, resizePolygon, translatePolygon } from '@/engine/paving';
 import { clampFreePost, freePostMemberId } from '@/engine/freePosts';
 import { uuid } from '@/engine/geometry';
@@ -109,8 +110,12 @@ interface ProjectStoreBase {
   setTimber: (key: TimberKey, section: TimberSection) => void;
   setStrengthClass: (cls: StrengthClass) => void;
   setLoad: <K extends keyof LoadSettings>(key: K, value: LoadSettings[K]) => void;
+  /** Patch the timber floor settings */
+  setFloor: (patch: Partial<FloorSettings>) => void;
 
   setWallClosed: (id: WallId, closed: boolean) => void;
+  /** Shorten a closed outer wall: closed stretch along the wall (mm from its start corner) */
+  setWallExtent: (id: WallId, patch: { start?: number; end?: number }) => void;
   addOpening: (wallKey: WallKey, type: OpeningType) => string;
   /** Add a door / window from the catalogue (OPENING_PRESETS) */
   addOpeningPreset: (wallKey: WallKey, presetId: string) => string | null;
@@ -277,10 +282,33 @@ export const useProjectStore = create<ProjectStore>()(
       setLoad: (key, value) =>
         set((s) => ({ project: { ...s.project, params: { ...s.project.params, loads: { ...s.project.params.loads, [key]: value } } } })),
 
+      setFloor: (patch) =>
+        set((s) => ({ project: { ...s.project, params: { ...s.project.params, floor: { ...s.project.params.floor, ...patch } } } })),
+
       setWallClosed: (id, closed) =>
         set((s) => ({
           project: clampAllOpenings({ ...s.project, walls: { ...s.project.walls, [id]: { ...s.project.walls[id], closed } } }),
         })),
+
+      setWallExtent: (id, patch) =>
+        set((s) => {
+          const { params } = s.project;
+          const wall = s.project.walls[id];
+          const span = id === 'front' || id === 'rear' ? params.length : params.width;
+          const current = wallExtent(wall, span);
+          const start = patch.start ?? current.start;
+          const end = patch.end ?? current.end;
+          // Moving one end past the other pushes the other along instead of snapping back
+          const ext =
+            patch.start !== undefined
+              ? wallExtent({ start, end: Math.max(end, start + MIN_WALL_LENGTH) }, span)
+              : wallExtent({ start: Math.min(start, end - MIN_WALL_LENGTH), end }, span);
+          const full = ext.start <= 0 && ext.end >= span;
+          const { start: _s, end: _e, ...rest } = wall;
+          return {
+            project: clampAllOpenings({ ...s.project, walls: { ...s.project.walls, [id]: full ? rest : { ...rest, start: ext.start, end: ext.end } } }),
+          };
+        }),
 
       addOpening: (wallKey, type) => {
         const id = uuid();
@@ -417,7 +445,8 @@ export const useProjectStore = create<ProjectStore>()(
         set((s) => {
           const model = getVehicleModel(modelId);
           const spot = findVehicleSpot(s.project, model);
-          const vehicle: Vehicle = { id, modelId: model.id, ...spot, color: VEHICLE_COLORS[s.project.vehicles.length % VEHICLE_COLORS.length] };
+          const size = defaultObjectSize(model);
+          const vehicle: Vehicle = { id, modelId: model.id, ...spot, color: VEHICLE_COLORS[s.project.vehicles.length % VEHICLE_COLORS.length], ...(size ? { size } : {}) };
           return {
             project: { ...s.project, vehicles: [...s.project.vehicles, vehicle] },
             selectedVehicleId: id,

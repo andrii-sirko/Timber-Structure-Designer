@@ -12,11 +12,24 @@ export function freePostIdOf(memberId: string): string | null {
   return memberId.startsWith(FREE_POST_ID_PREFIX) ? memberId.slice(FREE_POST_ID_PREFIX.length) : null;
 }
 
-/** Keep a free post axis inside the footprint so the post never stands outside the walls. */
-export function clampFreePost(point: { x: number; z: number }, params: Pick<StructureParams, 'length' | 'width' | 'timber'>): { x: number; z: number } {
+type RoofExtentParams = Pick<StructureParams, 'length' | 'width' | 'overhangs' | 'timber'>;
+
+/**
+ * Plan extent of the roof (footprint + overhangs) a free post may stand under.
+ * World frame: the right wall sits on x = 0; canonical frame: the left eave is at x < 0.
+ */
+export function freePostBounds(params: RoofExtentParams, frame: 'world' | 'canonical' = 'world'): { minX: number; maxX: number; minZ: number; maxZ: number } {
+  const { length: L, width: W, overhangs: o } = params;
+  const [xBefore, xAfter] = frame === 'world' ? [o.right, o.left] : [o.left, o.right];
+  return { minX: -xBefore, maxX: L + xAfter, minZ: -o.front, maxZ: W + o.rear };
+}
+
+/** Keep a free post axis under the roof (footprint + overhangs) so the post never stands in the open. */
+export function clampFreePost(point: { x: number; z: number }, params: RoofExtentParams, frame: 'world' | 'canonical' = 'world'): { x: number; z: number } {
   const half = params.timber.post.width / 2;
-  const clamp = (v: number, max: number): number => Math.min(Math.max(v, half), Math.max(half, max - half));
-  return { x: clamp(point.x, params.length), z: clamp(point.z, params.width) };
+  const b = freePostBounds(params, frame);
+  const clamp = (v: number, min: number, max: number): number => Math.min(Math.max(v, min + half), Math.max(min + half, max - half));
+  return { x: clamp(point.x, b.minX, b.maxX), z: clamp(point.z, b.minZ, b.maxZ) };
 }
 
 /**
@@ -45,7 +58,7 @@ export function freePostTop(
 export function generateFreePosts(params: StructureParams, roof: RoofLines, grid: PostGrid, freePosts: FreePost[]): Member[] {
   const section = { width: params.timber.post.width, height: params.timber.post.height };
   return freePosts.map((post, i) => {
-    const p = clampFreePost(post, params);
+    const p = clampFreePost(post, params, 'canonical');
     const { centreHeight, sloped, underPurlin } = freePostTop(p, params, roof, grid);
     const pitch = Math.round(Math.abs(roof.pitchDeg) * 10) / 10;
     return {

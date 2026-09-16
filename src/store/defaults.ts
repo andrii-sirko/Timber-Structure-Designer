@@ -1,9 +1,10 @@
-import type { BraceDirection, FreePost, LayerVisibility, Opening, Partition, PavedArea, ProjectState, RoofDirection, RoofScheme, StructureParams, Vehicle, ViewSettings, Wall, WallId } from '@/types';
+import type { BraceDirection, FreePost, LayerVisibility, ObjectSize, Opening, Partition, PavedArea, ProjectState, RoofDirection, RoofScheme, StructureParams, Vehicle, ViewSettings, Wall, WallId } from '@/types';
 import { BRACE_DIRECTIONS, ROOF_SCHEMES, WALL_IDS } from '@/types';
 import { uuid } from '@/engine/geometry';
 import { VEHICLE_CATALOG, VEHICLE_COLORS } from '@/engine/vehicles';
 import { NEIGHBOUR_DEFAULTS } from '@/engine/neighbours';
 import { PAVING_COLORS, PAVING_DEFAULTS, PAVING_PATTERNS } from '@/engine/paving';
+import { FLOOR_DEFAULTS, sanitizeFloor } from '@/engine/framing/floor';
 
 export const DEFAULT_PARAMS: StructureParams = {
   length: 6000,
@@ -33,6 +34,7 @@ export const DEFAULT_PARAMS: StructureParams = {
     strengthClass: 'C24',
   },
   loads: { snowLoad: 0.85, roofCovering: 'trapezoidal-sheet', serviceClass: 2, windLoad: 0.65 },
+  floor: structuredClone(FLOOR_DEFAULTS),
 };
 
 export function emptyWalls(closed = false): Record<WallId, Wall> {
@@ -49,6 +51,7 @@ export const DEFAULT_LAYERS: LayerVisibility = {
   grid: true,
   vehicles: true,
   paving: true,
+  floor: true,
 };
 
 export const DEFAULT_VIEW: ViewSettings = {
@@ -136,6 +139,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
           overhangs: { front: 250, rear: 250, left: 150, right: 150 },
           braces: false,
           loads: { snowLoad: 0.85, roofCovering: 'bitumen-shingles', serviceClass: 2, windLoad: 0.65 },
+          floor: { ...structuredClone(FLOOR_DEFAULTS), enabled: true },
         },
         walls,
         partitions: [],
@@ -193,6 +197,7 @@ export function normalizeProject(input: unknown): ProjectState {
       brace: { ...base.params.timber.brace, ...(p.timber?.brace ?? {}) },
     },
     loads: { ...base.params.loads, ...(p.loads ?? {}) },
+    floor: sanitizeFloor(p.floor),
     midPurlinPositions: Array.isArray(p.midPurlinPositions) ? p.midPurlinPositions.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)) : [],
     roofDirection: (WALL_IDS as readonly string[]).includes(p.roofDirection as string) ? (p.roofDirection as RoofDirection) : 'rear',
     roofScheme: (ROOF_SCHEMES as readonly string[]).includes(p.roofScheme as string) ? (p.roofScheme as RoofScheme) : 'classic',
@@ -207,6 +212,8 @@ export function normalizeProject(input: unknown): ProjectState {
       id,
       closed: Boolean(w.closed),
       openings: normalizeOpenings(w.openings),
+      ...(typeof w.start === 'number' && Number.isFinite(w.start) ? { start: w.start } : {}),
+      ...(typeof w.end === 'number' && Number.isFinite(w.end) ? { end: w.end } : {}),
     };
   }
   const partitions: Partition[] = Array.isArray(src.partitions)
@@ -222,6 +229,15 @@ export function normalizeProject(input: unknown): ProjectState {
           openings: normalizeOpenings(p.openings),
         }))
     : [];
+  const normalizeObjectSize = (raw: unknown): { size?: ObjectSize } => {
+    if (!raw || typeof raw !== 'object') return {};
+    const r = raw as Record<string, unknown>;
+    const length = Number(r.length);
+    const width = Number(r.width);
+    const height = Number(r.height);
+    if (![length, width, height].every((n) => Number.isFinite(n) && n > 0)) return {};
+    return { size: { length, width, height } };
+  };
   const vehicles: Vehicle[] = Array.isArray(src.vehicles)
     ? src.vehicles
         .filter((v) => v && typeof v === 'object')
@@ -232,6 +248,7 @@ export function normalizeProject(input: unknown): ProjectState {
           z: Number.isFinite(Number(v.z)) ? Number(v.z) : params.width / 2,
           rotationDeg: Number.isFinite(Number(v.rotationDeg)) ? Number(v.rotationDeg) : 0,
           color: typeof v.color === 'string' ? v.color : VEHICLE_COLORS[i % VEHICLE_COLORS.length],
+          ...normalizeObjectSize(v.size),
         }))
     : [];
   const pavedAreas: PavedArea[] = Array.isArray(src.pavedAreas)

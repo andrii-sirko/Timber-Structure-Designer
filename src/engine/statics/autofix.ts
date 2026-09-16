@@ -22,6 +22,8 @@ const POST_SIZES = [100, 120, 140, 160, 180, 200, 220, 240];
 const STUD_DEPTHS = [100, 120, 140, 160, 180, 200];
 const RAFTER_SPACINGS = [1250, 1000, 800, 625, 500, 400, 300];
 const RAFTER_LENGTHS = [13000, 12000, 10000, 8000, 7000, 6000, 5000, 4500, 4000, 3500, 3000];
+/** Joist span (bearer spacing) and pad / foundation spacing ladder of the timber floor */
+const FLOOR_SPACINGS = [2500, 2000, 1750, 1500, 1250, 1000, 800, 600];
 const MIN_POST_SPACING = 1000;
 const POST_SPACING_STEP = 500;
 const MAX_ITERATIONS = 60;
@@ -101,6 +103,18 @@ function applyFix(params: StructureParams, check: StaticsCheck): StructureParams
     if (bigger) return { ...params, timber: { ...timber, post: { width: bigger, height: bigger } } };
     return addPosts(params);
   }
+  if (check.id === 'floor-joist' || check.id === 'floor-bearer') {
+    const floor = params.floor;
+    const key = check.id === 'floor-joist' ? 'joist' : 'bearer';
+    const deeper = nextUp(STANDARD_DEPTHS, floor[key].height);
+    if (deeper) return { ...params, floor: { ...floor, [key]: { ...floor[key], height: deeper } } };
+    if (key === 'joist' && floor.support === 'bearers') {
+      const closer = nextDown(FLOOR_SPACINGS, floor.maxBearerSpacing);
+      return closer ? { ...params, floor: { ...floor, maxBearerSpacing: closer } } : undefined;
+    }
+    const closer = nextDown(FLOOR_SPACINGS, floor.maxSupportSpacing);
+    return closer ? { ...params, floor: { ...floor, maxSupportSpacing: closer } } : undefined;
+  }
   if (check.id.startsWith('header')) {
     const deeper = nextUp(STUD_DEPTHS, timber.stud.height);
     return deeper ? { ...params, timber: { ...timber, stud: { ...timber.stud, height: deeper } } } : undefined;
@@ -140,6 +154,10 @@ function diffParams(before: StructureParams, after: StructureParams): AutoFixCha
   push('Max rafter length', `${before.maxRafterLength} mm`, `${after.maxRafterLength} mm`);
   push('Max post spacing', `${before.maxPostSpacing} mm`, `${after.maxPostSpacing} mm`);
   push('Posts per row', String(before.postsPerRow ?? 'auto'), String(after.postsPerRow ?? 'auto'));
+  push('Floor joists (Fußbodenbalken)', sec(before.floor.joist), sec(after.floor.joist));
+  push('Floor bearers (Unterzüge)', sec(before.floor.bearer), sec(after.floor.bearer));
+  push('Max floor bearer spacing', `${before.floor.maxBearerSpacing} mm`, `${after.floor.maxBearerSpacing} mm`);
+  push('Max floor support spacing', `${before.floor.maxSupportSpacing} mm`, `${after.floor.maxSupportSpacing} mm`);
   return changes;
 }
 
@@ -190,6 +208,18 @@ export function costOptimizeStatics(project: ProjectState): CostOptimizationResu
       if (smaller.height !== current.height) {
         params = replaceSection(params, key, smaller);
         changed = true;
+      }
+    }
+
+    if (params.floor.enabled) {
+      for (const key of params.floor.support === 'bearers' ? (['joist', 'bearer'] as const) : (['joist'] as const)) {
+        const current = params.floor[key];
+        const withSection = (p: StructureParams, section: TimberSection): StructureParams => ({ ...p, floor: { ...p.floor, [key]: section } });
+        const smaller = findSmallestValidSection(current, STANDARD_DEPTHS, (section) => isStaticsOk(project, withSection(params, section)));
+        if (smaller.height !== current.height) {
+          params = withSection(params, smaller);
+          changed = true;
+        }
       }
     }
 

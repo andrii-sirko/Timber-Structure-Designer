@@ -1,5 +1,5 @@
 import type { FramingResult, PostRow, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection, WallId } from '@/types';
-import { sanitizeParams } from '../framing';
+import { DECKING, floorLayout, sanitizeParams, wallExtent } from '../framing';
 import { braceLayout, rowPostTop, type BracePlacement } from '../framing/structure';
 import { computeRoofLines, type RoofLines } from '../framing/roofLines';
 import { sectionLabel } from '../geometry';
@@ -332,11 +332,16 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
   const lengthM = (params.length + overhangs.left + overhangs.right) / 1000;
   const widthM = (params.width + overhangs.front + overhangs.rear) / 1000;
   const avgHeight = (params.frontHeight + params.rearHeight) / 2;
+  // A shortened wall only contributes its closed stretch
+  const closedShare = (id: WallId, span: number): number => {
+    const ext = wallExtent(project.walls[id], span);
+    return span > 0 ? (ext.end - ext.start) / span : 1;
+  };
   const faceArea: Record<WallId, number> = {
-    front: (params.length * params.frontHeight) / 1e6,
-    rear: (params.length * params.rearHeight) / 1e6,
-    left: (params.width * avgHeight) / 1e6,
-    right: (params.width * avgHeight) / 1e6,
+    front: ((params.length * params.frontHeight) / 1e6) * closedShare('front', params.length),
+    rear: ((params.length * params.rearHeight) / 1e6) * closedShare('rear', params.length),
+    left: ((params.width * avgHeight) / 1e6) * closedShare('left', params.width),
+    right: ((params.width * avgHeight) / 1e6) * closedShare('right', params.width),
   };
   const totalPosts = grid.rows.reduce((n, r) => n + r.positions.length, 0) + Object.values(grid.wallPosts).reduce((n, w) => n + (w?.positions.length ?? 0), 0);
 
@@ -824,10 +829,90 @@ function collapsePressure(ctx: Context, q0: number): { q: number; element: strin
   return { q: hi, element: atHi.element };
 }
 
+/**
+ * Timber floor: joists (or sleepers between pads) and bearers as simply supported beams under
+ * deck + self weight and the imposed floor load (medium-term, k_mod as for snow). Independent of
+ * wind, so they are kept out of the collapse-gust search.
+ */
+function computeFloorChecks(ctx: Context): StaticsCheck[] {
+  const layout = floorLayout(ctx.params);
+  if (!layout) return [];
+  const { settings } = layout;
+  const { mat, k, density } = ctx;
+  const deckLoad = (DECKING[settings.decking].thickness / 1000) * ((DECKING[settings.decking].density * G_ACCEL) / 1000); // kN/m²
+  const selfWeight = (s: TimberSection): number => density * (s.width / 1000) * (s.height / 1000); // kN/m
+  const bearers = settings.support === 'bearers';
+  const checks: StaticsCheck[] = [];
+
+  const push = (id: string, element: string, elementDe: string, sectionIn: TimberSection, span: number, loads: BeamLoads, detail: string, recommend: (better?: number) => string): void => {
+    const res = checkBeam({ section: sectionIn, span, cantilever: 0, ...loads }, mat, k);
+    const status = statusOf(res.utilisation);
+    let recommendation: string | undefined;
+    if (status !== 'ok') {
+      const better = STANDARD_DEPTHS.find((h) => h > sectionIn.height && checkBeam({ section: { width: sectionIn.width, height: h }, span, cantilever: 0, ...loads }, mat, k).utilisation <= OK_LIMIT);
+      recommendation = recommend(better);
+    }
+    checks.push({
+      id,
+      kind: 'vertical',
+      element,
+      elementDe,
+      section: sectionIn,
+      span: Math.round(span),
+      loadUls: res.qd,
+      loadSls: loads.qG + slsVariable(loads),
+      stressUtil: res.stressUtil,
+      deflectionUtil: res.deflectionUtil,
+      deflection: res.wFin,
+      deflectionLimit: res.wLimit,
+      utilisation: res.utilisation,
+      status,
+      recommendation,
+      detail: `${detail} Governing ${res.governing.replace('S', 'Q')}: σ_m,d = ${fmt(res.sigma)} ≤ f_m,d = ${fmt(res.fmd)} N/mm² (${pct(res.stressUtil)}), shear ${pct(res.shearUtil)}, w_fin = ${fmt(res.wFin)} mm ≤ ${fmt(res.wLimit)} mm.`,
+    });
+  };
+
+  const joistSpacingM = Math.max(layout.joistSpacing, 1) / 1000;
+  const joistLoads: BeamLoads = { qG: deckLoad * joistSpacingM + selfWeight(settings.joist), qS: settings.liveLoad * joistSpacingM, qW: 0 };
+  push(
+    'floor-joist',
+    bearers ? 'Floor joist' : 'Sleeper',
+    bearers ? 'Fußbodenbalken' : 'Lagerholz',
+    settings.joist,
+    layout.joistSpan,
+    joistLoads,
+    `${bearers ? 'Simply supported between bearers' : 'Simply supported between levelling pads'}, span ${fmt(layout.joistSpan / 1000, 2)} m, spacing ${layout.joistSpacing} mm, imposed load ${fmt(settings.liveLoad, 2)} kN/m².`,
+    (better) =>
+      better
+        ? `Increase the floor ${bearers ? 'joists' : 'sleepers'} to ${settings.joist.width}×${better} mm, or reduce the ${bearers ? 'bearer' : 'pad'} spacing.`
+        : `Reduce the ${bearers ? 'bearer' : 'pad'} spacing to shorten the span.`,
+  );
+
+  if (bearers) {
+    const tributaryM = Math.max(layout.bearerSpacing, 1) / 1000;
+    const bearerLoads: BeamLoads = {
+      qG: (deckLoad + selfWeight(settings.joist) / joistSpacingM) * tributaryM + selfWeight(settings.bearer),
+      qS: settings.liveLoad * tributaryM,
+      qW: 0,
+    };
+    push(
+      'floor-bearer',
+      'Floor bearer',
+      'Unterzug',
+      settings.bearer,
+      layout.bearerSpan,
+      bearerLoads,
+      `Simply supported between point foundations, span ${fmt(layout.bearerSpan / 1000, 2)} m, tributary width ${layout.bearerSpacing} mm.`,
+      (better) => (better ? `Increase the bearers to ${settings.bearer.width}×${better} mm, or reduce the foundation spacing.` : 'Reduce the foundation spacing to shorten the bearer span.'),
+    );
+  }
+  return checks;
+}
+
 export function computeStatics(project: ProjectState, framing: FramingResult): StaticsResult {
   const ctx = buildContext(project, framing);
   const q = Math.max(Number.isFinite(ctx.params.loads.windLoad) ? ctx.params.loads.windLoad : 0.65, 0);
-  const checks = computeChecks(ctx, q);
+  const checks = [...computeChecks(ctx, q), ...computeFloorChecks(ctx)];
   const collapse = collapsePressure(ctx, q);
   const { deadLoad, snowLoadRoof } = ctx;
   return {

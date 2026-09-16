@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { computePricing, createDefaultPrices, timberM3RateFromPerMeter, timberPricePerMeter } from "@/engine/pricing";
 import { usePriceStore, useProjectStore } from "@/store";
-import type { DerivedModel, PriceFieldRef } from "@/types";
+import type { DerivedModel, PriceFieldRef, PricingLine } from "@/types";
 import { Button, cx } from "./primitives";
 
 const defaultPrices = createDefaultPrices();
@@ -83,111 +83,31 @@ function PriceInput({
   );
 }
 
-export function PricingPanel({ model }: { model: DerivedModel }) {
-  const roofCovering = useProjectStore((s) => s.project.params.loads.roofCovering);
-  const prices = usePriceStore((s) => s.prices);
-  const setTimberPrice = usePriceStore((s) => s.setTimberPrice);
-  const setCladdingBoardPrice = usePriceStore((s) => s.setCladdingBoardPrice);
-  const setRoofDeckPrice = usePriceStore((s) => s.setRoofDeckPrice);
-  const setRoofingPrice = usePriceStore((s) => s.setRoofingPrice);
-  const setHardwarePrice = usePriceStore((s) => s.setHardwarePrice);
-  const resetPrices = usePriceStore((s) => s.resetPrices);
-
-  const pricing = computePricing(model.bom, model.connections, prices, roofCovering);
-
-  const applyChange = (ref: PriceFieldRef, value: number): void => {
-    // `value` is always what's shown in the input — EUR/lfm for timber — so timber
-    // converts back to the stored EUR/m³ rate before writing it to the price store.
-    if (ref.kind === "timber") setTimberPrice(ref.category, timberM3RateFromPerMeter(ref.section, value));
-    else if (ref.kind === "claddingBoard") setCladdingBoardPrice(value);
-    else if (ref.kind === "roofDeck") setRoofDeckPrice(value);
-    else if (ref.kind === "roofing") setRoofingPrice(ref.covering, value);
-    else setHardwarePrice(ref.hardwareId, value);
-  };
-
-  const defaultFor = (ref: PriceFieldRef): number => {
-    const d = defaultPrices;
-    if (ref.kind === "timber") return timberPricePerMeter(ref.category, ref.section, d);
-    if (ref.kind === "claddingBoard") return d.claddingBoardPerM2;
-    if (ref.kind === "roofDeck") return d.roofDeckPerM2;
-    if (ref.kind === "roofing") return d.roofingPerM2[ref.covering];
-    return d.hardwarePerUnit[ref.hardwareId] ?? 0;
-  };
-
+function PriceTable({
+  title,
+  lines,
+  subtotalLabel,
+  subtotal,
+  empty,
+  onChange,
+  defaultFor,
+}: {
+  title: string;
+  lines: PricingLine[];
+  subtotalLabel: string;
+  subtotal: number;
+  empty?: string;
+  onChange: (ref: PriceFieldRef, value: number) => void;
+  defaultFor: (ref: PriceFieldRef) => number;
+}) {
+  if (lines.length === 0 && !empty) return null;
   return (
-    <div>
-      <div className="flex items-center gap-2 border-b border-slate-800 p-2">
-        <p className="flex-1 text-[11px] text-slate-500">
-          Default unit prices are EUR, Berlin/Potsdam-area estimates — timber
-          is priced per running metre (lfm), boards and roofing per m², like a
-          supplier quote. Edit any price to match your own.
-        </p>
-        <Button size="sm" icon={RotateCcw} onClick={() => resetPrices()}>
-          Reset all
-        </Button>
-      </div>
-
+    <>
       <h3 className="px-2 pt-3 pb-1 text-[10px] font-semibold tracking-wide text-timber-200 uppercase">
-        Material
+        {title}
       </h3>
-      <table className="w-full border-collapse">
-        <thead className="sticky top-0 bg-slate-950">
-          <tr>
-            <th className={th}>Item</th>
-            <th className={cx(th, "text-right")}>Qty</th>
-            <th className={cx(th, "text-right")}>Unit price</th>
-            <th className={cx(th, "text-right")}>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pricing.timberLines.map((l) => (
-            <tr
-              key={l.id}
-              className="border-t border-slate-800/80 hover:bg-slate-900/60"
-            >
-              <td className={td}>
-                <div>{l.label}</div>
-                {l.labelDe && (
-                  <div className="text-[10px] text-slate-500">{l.labelDe}</div>
-                )}
-              </td>
-              <td className={cx(td, mono, "text-right whitespace-nowrap")}>
-                {l.quantity.toFixed(l.unit === "pcs" ? 0 : 2)} {l.unit}
-              </td>
-              <td className={cx(td, "text-right")}>
-                <PriceInput
-                  value={l.unitPrice}
-                  onChange={(v) => applyChange(l.priceRef, v)}
-                  onReset={() => applyChange(l.priceRef, defaultFor(l.priceRef))}
-                  isDefault={l.unitPrice === defaultFor(l.priceRef)}
-                />
-              </td>
-              <td className={cx(td, mono, "text-right font-semibold")}>
-                €{l.lineTotal.toFixed(2)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-slate-700 bg-slate-900/70 font-semibold">
-            <td className={td} colSpan={3}>
-              Material subtotal
-            </td>
-            <td className={cx(td, mono, "text-right")}>
-              €{pricing.materialTotal.toFixed(2)}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
-
-      <h3 className="px-2 pt-3 pb-1 text-[10px] font-semibold tracking-wide text-timber-200 uppercase">
-        Hardware & fixings
-      </h3>
-      {pricing.hardwareLines.length === 0 ? (
-        <p className="px-2 pb-3 text-[11px] text-slate-500">
-          No hardware quantities yet — add posts, rafters or braces to see
-          connector costs here.
-        </p>
+      {lines.length === 0 ? (
+        <p className="px-2 pb-3 text-[11px] text-slate-500">{empty}</p>
       ) : (
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-slate-950">
@@ -199,7 +119,7 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
             </tr>
           </thead>
           <tbody>
-            {pricing.hardwareLines.map((l) => (
+            {lines.map((l) => (
               <tr
                 key={l.id}
                 className="border-t border-slate-800/80 hover:bg-slate-900/60"
@@ -213,15 +133,13 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
                   )}
                 </td>
                 <td className={cx(td, mono, "text-right whitespace-nowrap")}>
-                  {l.quantity.toFixed(0)} {l.unit}
+                  {l.quantity.toFixed(l.unit === "pcs" ? 0 : 2)} {l.unit}
                 </td>
                 <td className={cx(td, "text-right")}>
                   <PriceInput
                     value={l.unitPrice}
-                    onChange={(v) => applyChange(l.priceRef, v)}
-                    onReset={() =>
-                      applyChange(l.priceRef, defaultFor(l.priceRef))
-                    }
+                    onChange={(v) => onChange(l.priceRef, v)}
+                    onReset={() => onChange(l.priceRef, defaultFor(l.priceRef))}
                     isDefault={l.unitPrice === defaultFor(l.priceRef)}
                   />
                 </td>
@@ -234,15 +152,109 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
           <tfoot>
             <tr className="border-t-2 border-slate-700 bg-slate-900/70 font-semibold">
               <td className={td} colSpan={3}>
-                Hardware subtotal
+                {subtotalLabel}
               </td>
               <td className={cx(td, mono, "text-right")}>
-                €{pricing.hardwareTotal.toFixed(2)}
+                €{subtotal.toFixed(2)}
               </td>
             </tr>
           </tfoot>
         </table>
       )}
+    </>
+  );
+}
+
+export function PricingPanel({ model }: { model: DerivedModel }) {
+  const roofCovering = useProjectStore((s) => s.project.params.loads.roofCovering);
+  const prices = usePriceStore((s) => s.prices);
+  const setTimberPrice = usePriceStore((s) => s.setTimberPrice);
+  const setCladdingBoardPrice = usePriceStore((s) => s.setCladdingBoardPrice);
+  const setRoofDeckPrice = usePriceStore((s) => s.setRoofDeckPrice);
+  const setRoofingPrice = usePriceStore((s) => s.setRoofingPrice);
+  const setHardwarePrice = usePriceStore((s) => s.setHardwarePrice);
+  const setFlooringPrice = usePriceStore((s) => s.setFlooringPrice);
+  const setMaterialPrice = usePriceStore((s) => s.setMaterialPrice);
+  const setFixturePrice = usePriceStore((s) => s.setFixturePrice);
+  const resetPrices = usePriceStore((s) => s.resetPrices);
+
+  const pricing = computePricing(model.bom, model.connections, prices, roofCovering);
+  const timberSubtotal = pricing.timberLines.reduce((s, l) => s + l.lineTotal, 0);
+  const otherSubtotal = pricing.otherLines.reduce((s, l) => s + l.lineTotal, 0);
+
+  const applyChange = (ref: PriceFieldRef, value: number): void => {
+    // `value` is always what's shown in the input — EUR/lfm for timber — so timber
+    // converts back to the stored EUR/m³ rate before writing it to the price store.
+    if (ref.kind === "timber") setTimberPrice(ref.category, timberM3RateFromPerMeter(ref.section, value));
+    else if (ref.kind === "claddingBoard") setCladdingBoardPrice(value);
+    else if (ref.kind === "roofDeck") setRoofDeckPrice(value);
+    else if (ref.kind === "roofing") setRoofingPrice(ref.covering, value);
+    else if (ref.kind === "flooring") setFlooringPrice(ref.decking, value);
+    else if (ref.kind === "material") setMaterialPrice(ref.priceKey, value);
+    else if (ref.kind === "fixture") setFixturePrice(ref.key, value);
+    else setHardwarePrice(ref.hardwareId, value);
+  };
+
+  const defaultFor = (ref: PriceFieldRef): number => {
+    const d = defaultPrices;
+    if (ref.kind === "timber") return timberPricePerMeter(ref.category, ref.section, d);
+    if (ref.kind === "claddingBoard") return d.claddingBoardPerM2;
+    if (ref.kind === "roofDeck") return d.roofDeckPerM2;
+    if (ref.kind === "roofing") return d.roofingPerM2[ref.covering];
+    if (ref.kind === "flooring") return d.flooringPerM2[ref.decking];
+    if (ref.kind === "material") return d.materialPerUnit[ref.priceKey] ?? 0;
+    if (ref.kind === "fixture") return d.fixturePrice[ref.key] ?? 0;
+    return d.hardwarePerUnit[ref.hardwareId] ?? 0;
+  };
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 border-b border-slate-800 p-2">
+        <p className="flex-1 text-[11px] text-slate-500">
+          Default unit prices are EUR, Berlin/Potsdam-area estimates — timber
+          is priced per running metre (lfm), boards, roofing and floor decks
+          per m², doors and windows per piece. Edit any price to match your
+          own.
+        </p>
+        <Button size="sm" icon={RotateCcw} onClick={() => resetPrices()}>
+          Reset all
+        </Button>
+      </div>
+
+      <PriceTable
+        title="Timber, boards & roofing"
+        lines={pricing.timberLines}
+        subtotalLabel="Timber subtotal"
+        subtotal={timberSubtotal}
+        empty="No timber yet."
+        onChange={applyChange}
+        defaultFor={defaultFor}
+      />
+      <PriceTable
+        title="Other materials"
+        lines={pricing.otherLines}
+        subtotalLabel="Other materials subtotal"
+        subtotal={otherSubtotal}
+        onChange={applyChange}
+        defaultFor={defaultFor}
+      />
+      <PriceTable
+        title="Doors & windows"
+        lines={pricing.fixtureLines}
+        subtotalLabel="Doors & windows subtotal"
+        subtotal={pricing.fixtureTotal}
+        onChange={applyChange}
+        defaultFor={defaultFor}
+      />
+      <PriceTable
+        title="Hardware & fixings"
+        lines={pricing.hardwareLines}
+        subtotalLabel="Hardware subtotal"
+        subtotal={pricing.hardwareTotal}
+        empty="No hardware quantities yet — add posts, rafters or braces to see connector costs here."
+        onChange={applyChange}
+        defaultFor={defaultFor}
+      />
 
       <div className="m-2 flex items-center justify-between rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2">
         <span className="text-sm font-medium text-slate-100">
@@ -253,11 +265,10 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
         </span>
       </div>
       <p className="px-2 pb-3 text-[11px] leading-snug text-slate-500">
-        Material and hardware only — excludes delivery, cutting waste beyond
-        what the BOM already allows for, and labour. Traditional joinery
-        (mortise & tenon, pegs, etc.) is not priced since it's technique, not
-        purchased material — switch "Loads & connections" to traditional mode
-        to see joint counts without hardware cost.
+        Materials, doors & windows and hardware only — excludes delivery,
+        cutting waste beyond what the BOM already allows for, concrete for the
+        post foundations, and labour. Traditional joints themselves are
+        technique, not purchased material; only their oak pegs are priced.
       </p>
     </div>
   );
