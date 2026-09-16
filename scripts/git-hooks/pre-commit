@@ -1,0 +1,4 @@
+#!/bin/sh
+# Bump the patch version on every commit so the app shows a unique version.
+npm version patch --no-git-tag-version --ignore-scripts >/dev/null || exit 1
+git add package.json package-lock.json

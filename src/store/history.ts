@@ -95,6 +95,7 @@ const COALESCE: Record<string, (...args: never[]) => string> = {
   setLoad: (key: string) => `load:${key}`,
   updateOpening: (_wall: string, id: string) => `opening:${id}`,
   updatePartition: (id: string) => `partition:${id}`,
+  setWallExtent: (id: string) => `wallExtent:${id}`,
   updateVehicle: (id: string) => `vehicle:${id}`,
   nudgeVehicle: (id: string) => `vehicle:${id}`,
   rotateVehicle: (id: string) => `vehicle:rot:${id}`,

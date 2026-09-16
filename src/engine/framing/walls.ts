@@ -144,14 +144,16 @@ export function generateWallFraming(
       })
       .sort((a, b) => a.x - b.x);
 
-    // Bottom plate – interrupted at doors / passages
+    // Bottom plate – interrupted at doors / passages; runs under the end studs so they (and the anchors) sit on it
+    const plateStart = bay.startStud || (isPartition && bay.index === 0) ? bay.start - sw : bay.start;
+    const plateEnd = bay.endStud || (isPartition && bay.index === frame.postU.length - 2) ? bay.end + sw : bay.end;
     const cuts = openings.filter((o) => o.type !== 'window').map((o) => [o.x, o.x + o.width] as const);
-    let cursor = bay.start;
+    let cursor = plateStart;
     for (const [a, b] of cuts) {
-      horizontal(cursor, Math.min(a, bay.end), sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
+      horizontal(cursor, Math.min(a, plateEnd), sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
       cursor = Math.max(cursor, b);
     }
-    horizontal(cursor, bay.end, sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
+    horizontal(cursor, plateEnd, sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
     // With a timber floor the plate gap would leave a hole through the wall: fill it up to the finished floor
     if (floor) {
       const top = Math.round(floor.deckTop);

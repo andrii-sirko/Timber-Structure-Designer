@@ -30,6 +30,7 @@ export function AreaInfo({ model }: { model: DerivedModel }) {
         <Row label="Max height" value={fmtM(maxHeightMm)} />
         <Row label="Est. total cost" value={fmtEur(pricing.grandTotal)} strong />
       </dl>
+      <div className="mt-1.5 border-t border-slate-800 pt-1 text-right font-mono text-[10px] text-slate-500">v{__APP_VERSION__}</div>
     </div>
   );
 }

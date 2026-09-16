@@ -15,8 +15,8 @@ interface PanelMeshProps {
   onDragStart?: (panel: Panel, e: ThreeEvent<PointerEvent>) => void;
   onDrag?: (panel: Panel, e: ThreeEvent<PointerEvent>) => void;
   onDragEnd?: (panel: Panel, e: ThreeEvent<PointerEvent>) => void;
-  /** CSS cursor shown while hovering a draggable panel */
-  dragCursor?: string;
+  /** CSS cursor shown while hovering a draggable panel, or picked from the hovered point */
+  dragCursor?: string | ((panel: Panel, point: THREE.Vector3) => string | undefined);
 }
 
 export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, onClick, onDoubleClick, onDragStart, onDrag, onDragEnd, dragCursor }: PanelMeshProps) {
@@ -64,7 +64,7 @@ export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, o
         }
       }}
       onDoubleClick={onDoubleClick ? (e) => onDoubleClick(panel, e) : undefined}
-      onPointerOver={dragCursor ? (e) => {
+      onPointerOver={typeof dragCursor === 'string' ? (e) => {
         e.stopPropagation();
         document.body.style.cursor = dragCursor;
       } : undefined}
@@ -77,6 +77,7 @@ export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, o
       } : undefined}
       onPointerMove={draggable ? (e) => {
         if (dragging.current) onDrag!(panel, e);
+        else if (typeof dragCursor === 'function') document.body.style.cursor = dragCursor(panel, e.point) ?? '';
       } : undefined}
       onPointerUp={draggable ? (e) => {
         dragging.current = false;

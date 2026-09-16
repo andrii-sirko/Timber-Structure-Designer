@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Html, Line } from '@react-three/drei';
 import type { DerivedModel, Member, Partition, StructureParams } from '@/types';
 import { useProjectStore } from '@/store';
-import { computeRoofLines, sanitizeParams } from '@/engine/framing';
+import { computeRoofLines, sanitizeParams, type WallFrame } from '@/engine/framing';
 import { canonicalizeParams, canonicalToWorldMap, mapPoint, mapVec } from '@/engine/orientation';
 import { memberObb } from '@/engine/neighbours';
 import { partitionEdgeDistances, postEdgeDistances } from '@/engine/postDrag';
@@ -161,6 +161,23 @@ export function PartitionResizeRuler({ partition }: { partition: Partition }) {
   const b: V = partition.axis === 'x' ? [partition.end * MM, y, u] : [u, y, partition.end * MM];
   const offset: V = partition.axis === 'x' ? [0, 0.18, 0.35] : [0.35, 0.18, 0];
   return <Dimension a={a} b={b} offset={offset} label={`${Math.round(partition.end - partition.start)} mm`} color="#fbbf24" />;
+}
+
+/** Length of an outer wall's closed stretch while one of its ends is dragged, just outside the wall. */
+export function WallExtentRuler({ frame }: { frame: WallFrame }) {
+  const y = 0.03;
+  const a = frame.toWorld(frame.extent.start, 0, 0);
+  const b = frame.toWorld(frame.extent.end, 0, 0);
+  const offset: V = [frame.normal.x * 0.35, 0.18, frame.normal.z * 0.35];
+  return (
+    <Dimension
+      a={[a.x * MM, y, a.z * MM]}
+      b={[b.x * MM, y, b.z * MM]}
+      offset={offset}
+      label={`${Math.round(frame.extent.end - frame.extent.start)} mm`}
+      color="#fbbf24"
+    />
+  );
 }
 
 export function PartitionDragDistances({ partition, params }: { partition: Partition; params: StructureParams }) {

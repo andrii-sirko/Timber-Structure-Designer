@@ -2,14 +2,15 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import * as THREE from 'three';
 import { Canvas, type ThreeEvent } from '@react-three/fiber';
 import { Grid, Html, OrbitControls, OrthographicCamera, PerspectiveCamera } from '@react-three/drei';
-import type { DerivedModel, Member, Panel } from '@/types';
-import { useProjectStore } from '@/store';
+import type { DerivedModel, Member, Panel, WallId } from '@/types';
+import { useProjectStore, useWallFrames } from '@/store';
 import { useNeighbours } from '@/store/useNeighbours';
 import { canDeleteSelectedPartition } from '@/engine/wallKeyboard';
 import { CameraRig, modelBounds } from './CameraRig';
-import { DimensionLines, MidPurlinDragDistances, PartitionDragDistances, PartitionResizeRuler, PostDragDistances } from './DimensionLines';
+import { DimensionLines, MidPurlinDragDistances, PartitionDragDistances, PartitionResizeRuler, PostDragDistances, WallExtentRuler } from './DimensionLines';
 import { midPurlinIndex, snapDrag } from '@/engine/postDrag';
 import { partitionDragCursor, partitionDragMode, partitionDragModeAt, partitionDragPatch, partitionGrabOffset, type PartitionDrag } from '@/engine/partitionDrag';
+import { wallExtentCursor, wallExtentDragModeAt, wallExtentDragPatch, wallExtentGrabOffset, wallExtentMemberMode, type WallExtentDrag, type WallExtentDragMode } from '@/engine/wallExtentDrag';
 import { worldPointToCanonical } from '@/engine/orientation';
 import { postKeyAxis } from '@/engine/postOverrides';
 import { freePostIdOf } from '@/engine/freePosts';
@@ -88,6 +89,9 @@ export function Scene({ model }: { model: DerivedModel }) {
   const [draggingMidPurlin, setDraggingMidPurlin] = useState<number | null>(null);
   const [draggingPostId, setDraggingPostId] = useState<string | null>(null);
   const draggingPartitionId = partitionDrag?.id ?? null;
+  const wallFrames = useWallFrames();
+  const setWallExtent = useProjectStore((s) => s.setWallExtent);
+  const [wallExtentDrag, setWallExtentDrag] = useState<WallExtentDrag | null>(null);
 
   const { subject, links } = useNeighbours(model.framing.members);
   const neighbourIds = useMemo(() => new Set(links.map((l) => l.memberId)), [links]);
@@ -158,8 +162,57 @@ export function Scene({ model }: { model: DerivedModel }) {
     setPartitionDrag(drag);
     document.body.style.cursor = partitionDragCursor(mode, partition.axis);
   }, []);
+  /**
+   * Pull one end of an outer wall's closed stretch. The drag follows window pointer events, not the
+   * grabbed mesh: shortening the wall rebuilds (and can remove) the stud or cladding under the pointer.
+   */
+  const beginWallExtentDrag = useCallback((wallId: WallId, mode: WallExtentDragMode, e: ThreeEvent<PointerEvent>) => {
+    const frame = wallFrames[wallId];
+    if (!frame) return;
+    e.stopPropagation();
+    // The pointer is projected onto the line along the wall through the grabbed point, so the drag
+    // works from any view (plan, elevation, perspective) where a ground-plane hit would degenerate.
+    const along = new THREE.Vector3(frame.u.x, 0, frame.u.z);
+    const reach = Math.max(frame.length * MM, 1) * 4;
+    const lineStart = e.point.clone().addScaledVector(along, -reach);
+    const lineEnd = e.point.clone().addScaledVector(along, reach);
+    const onLine = new THREE.Vector3();
+    const run = { origin: frame.origin, u: frame.u, extent: frame.extent };
+    const drag: WallExtentDrag = { wallId, mode, grab: wallExtentGrabOffset(run, mode, { x: e.point.x / MM, z: e.point.z / MM }) };
+    const canvas = e.nativeEvent.target as HTMLElement;
+    const camera = e.camera;
+    const raycaster = new THREE.Raycaster();
+    const onMove = (ev: PointerEvent): void => {
+      const rect = canvas.getBoundingClientRect();
+      raycaster.setFromCamera(new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1), camera);
+      raycaster.ray.distanceSqToSegment(lineStart, lineEnd, undefined, onLine);
+      setWallExtent(wallId, wallExtentDragPatch(run, mode, { x: onLine.x / MM, z: onLine.z / MM }, drag.grab));
+    };
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      setWallExtentDrag(null);
+      document.body.style.cursor = '';
+      useProjectStore.getState().setDragging(false);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    setWallExtentDrag(drag);
+    document.body.style.cursor = wallExtentCursor(frame.u);
+    selectMember(null);
+    selectWall(wallId);
+    useProjectStore.getState().setDragging(true);
+  }, [wallFrames, setWallExtent, selectMember, selectWall]);
   const onPostDragStart = useCallback((member: Member, e: ThreeEvent<PointerEvent>) => {
     if (measureMode || placingPost) return;
+    if (member.wallId && member.category !== 'post') {
+      const frame = wallFrames[member.wallId];
+      const mode = frame ? wallExtentMemberMode(member, frame) : null;
+      if (mode) beginWallExtentDrag(member.wallId, mode, e);
+      return;
+    }
     e.stopPropagation();
     (e.target as Element).setPointerCapture(e.pointerId);
     if (member.partitionId) {
@@ -175,7 +228,7 @@ export function Scene({ model }: { model: DerivedModel }) {
     // timber never fires click, so the neighbour distances would stay hidden.
     if (member.category === 'post') selectMember(member.id);
     useProjectStore.getState().setDragging(true);
-  }, [measureMode, placingPost, selectMember, selectWall, beginPartitionDrag]);
+  }, [measureMode, placingPost, selectMember, selectWall, beginPartitionDrag, wallFrames, beginWallExtentDrag]);
   /** Move / resize the partition being dragged so it follows the ground point (world m). */
   const applyPartitionDrag = useCallback((point: THREE.Vector3) => {
     const drag = partitionDragRef.current;
@@ -191,7 +244,7 @@ export function Scene({ model }: { model: DerivedModel }) {
     document.body.style.cursor = '';
   }, []);
   const onPostDrag = useCallback((member: Member, e: ThreeEvent<PointerEvent>) => {
-    if (measureMode || placingPost) return;
+    if (measureMode || placingPost || (member.wallId && member.category !== 'post')) return;
     e.stopPropagation();
     const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const point = new THREE.Vector3();
@@ -222,7 +275,8 @@ export function Scene({ model }: { model: DerivedModel }) {
     const axisPosition = postKeyAxis(params.roofScheme, member.id) === 'x' ? canonicalPoint.x : canonicalPoint.z;
     movePost(member.id, snapDrag(axisPosition));
   }, [measureMode, placingPost, movePost, moveMidPurlin, project.params, applyPartitionDrag, updateFreePost]);
-  const onPostDragEnd = useCallback((_member: Member, e: ThreeEvent<PointerEvent>) => {
+  const onPostDragEnd = useCallback((member: Member, e: ThreeEvent<PointerEvent>) => {
+    if (member.wallId && member.category !== 'post') return;
     e.stopPropagation();
     (e.target as Element).releasePointerCapture(e.pointerId);
     endPartitionDrag();
@@ -232,7 +286,15 @@ export function Scene({ model }: { model: DerivedModel }) {
   }, [endPartitionDrag]);
   // Partition cladding drags its wall like the framing does: near an end it resizes, elsewhere it moves.
   const onPanelDragStart = useCallback((panel: Panel, e: ThreeEvent<PointerEvent>) => {
-    if (measureMode || placingPost || !panel.partitionId) return;
+    if (measureMode || placingPost) return;
+    if (panel.wallId) {
+      // Outer wall cladding resizes its closed stretch when grabbed near an end; elsewhere the view orbits
+      const frame = wallFrames[panel.wallId];
+      const mode = frame ? wallExtentDragModeAt(frame, { x: e.point.x / MM, z: e.point.z / MM }) : null;
+      if (mode) beginWallExtentDrag(panel.wallId, mode, e);
+      return;
+    }
+    if (!panel.partitionId) return;
     const partition = useProjectStore.getState().project.partitions.find((p) => p.id === panel.partitionId);
     if (!partition) return;
     e.stopPropagation();
@@ -241,7 +303,7 @@ export function Scene({ model }: { model: DerivedModel }) {
     selectMember(null);
     selectWall(panel.partitionId);
     useProjectStore.getState().setDragging(true);
-  }, [measureMode, placingPost, beginPartitionDrag, selectMember, selectWall]);
+  }, [measureMode, placingPost, beginPartitionDrag, selectMember, selectWall, wallFrames, beginWallExtentDrag]);
   const onPanelDrag = useCallback((_panel: Panel, e: ThreeEvent<PointerEvent>) => {
     if (!partitionDragRef.current) return;
     e.stopPropagation();
@@ -259,11 +321,20 @@ export function Scene({ model }: { model: DerivedModel }) {
   }, [endPartitionDrag]);
   const partitionsById = useMemo(() => new Map(project.partitions.map((p) => [p.id, p])), [project.partitions]);
   const memberDragCursor = useCallback((member: Member): string | undefined => {
+    if (member.wallId && member.category !== 'post') {
+      const frame = wallFrames[member.wallId];
+      return frame && wallExtentMemberMode(member, frame) ? wallExtentCursor(frame.u) : undefined;
+    }
     const partition = member.partitionId ? partitionsById.get(member.partitionId) : undefined;
     if (!partition) return undefined;
     const mode = partitionDragMode(member, partition);
     return mode ? partitionDragCursor(mode, partition.axis) : undefined;
-  }, [partitionsById]);
+  }, [partitionsById, wallFrames]);
+  /** Resize cursor while hovering outer wall cladding near an end of its closed stretch */
+  const panelDragCursorAt = useCallback((panel: Panel, point: THREE.Vector3): string | undefined => {
+    const frame = panel.wallId ? wallFrames[panel.wallId] : undefined;
+    return frame && wallExtentDragModeAt(frame, { x: point.x / MM, z: point.z / MM }) ? wallExtentCursor(frame.u) : undefined;
+  }, [wallFrames]);
   const onPanelClick = useCallback(
     (panel: Panel, e: ThreeEvent<MouseEvent>) => {
       if (placePostAt(e)) return;
@@ -404,10 +475,18 @@ export function Scene({ model }: { model: DerivedModel }) {
               wireframe={wireframe}
               onClick={onPanelClick}
               onDoubleClick={onPanelDoubleClick}
-              onDragStart={p.partitionId ? onPanelDragStart : undefined}
-              onDrag={p.partitionId ? onPanelDrag : undefined}
-              onDragEnd={p.partitionId ? onPanelDragEnd : undefined}
-              dragCursor={p.partitionId && !measureMode && !placingPost ? partitionDragCursor('move', partitionsById.get(p.partitionId)?.axis ?? 'x') : undefined}
+              onDragStart={p.partitionId || p.wallId ? onPanelDragStart : undefined}
+              onDrag={p.partitionId || p.wallId ? onPanelDrag : undefined}
+              onDragEnd={p.partitionId || p.wallId ? onPanelDragEnd : undefined}
+              dragCursor={
+                measureMode || placingPost
+                  ? undefined
+                  : p.partitionId
+                    ? partitionDragCursor('move', partitionsById.get(p.partitionId)?.axis ?? 'x')
+                    : p.wallId
+                      ? panelDragCursorAt
+                      : undefined
+              }
             />
           ) : null,
         )}
@@ -428,6 +507,7 @@ export function Scene({ model }: { model: DerivedModel }) {
         {layers.dimensions && <DimensionLines model={model} />}
         {draggingPartition && partitionDrag?.mode === 'move' && <PartitionDragDistances partition={draggingPartition} params={project.params} />}
         {draggingPartition && partitionDrag?.mode !== 'move' && <PartitionResizeRuler partition={draggingPartition} />}
+        {wallExtentDrag && wallFrames[wallExtentDrag.wallId] && <WallExtentRuler frame={wallFrames[wallExtentDrag.wallId]} />}
         {draggingPost && <PostDragDistances post={draggingPost} params={project.params} />}
         {draggingMidPurlin !== null && <MidPurlinDragDistances index={draggingMidPurlin} model={model} params={project.params} />}
         {layers.cladding && !wireframe && <OpeningFixtures />}

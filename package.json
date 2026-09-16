@@ -1,14 +1,15 @@
 {
   "name": "timber-structure-designer",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
-  "description": "Client-side 3D parametric timber structure designer (carports, garden sheds, \u00dcberdachungen)",
+  "description": "Client-side 3D parametric timber structure designer (carports, garden sheds, Überdachungen)",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
+    "prepare": "git config core.hooksPath scripts/git-hooks",
     "test": "node --import ./scripts/register-alias.mjs --test 'src/**/*.test.ts'"
   },
   "devDependencies": {

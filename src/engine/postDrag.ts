@@ -1,4 +1,5 @@
 import type { MemberCategory, PartitionAxis } from '@/types';
+import { END_STUD_GROUP } from './partitionDrag';
 
 /** Pointer-drag snap step (mm) shared by posts, purlins, partitions, outer walls, vehicles and paved floors. */
 export const DRAG_SNAP = 10;
@@ -8,9 +9,10 @@ export function canMovePost(isDragging: boolean): boolean {
   return isDragging;
 }
 
-export function canDragMember(member: Pick<{ category: MemberCategory; partitionId?: string; group: string; purlinRow?: string }, 'category' | 'partitionId' | 'group' | 'purlinRow'>): boolean {
+export function canDragMember(member: { category: MemberCategory; partitionId?: string; wallId?: string; group: string; purlinRow?: string }): boolean {
   // Every piece of a partition is draggable: the body moves the wall, the end studs resize it (see partitionDrag).
-  return member.category === 'post' || isMidPurlin(member) || Boolean(member.partitionId);
+  // End studs of a shortened outer wall pull its closed stretch (see wallExtentDrag).
+  return member.category === 'post' || isMidPurlin(member) || Boolean(member.partitionId) || (Boolean(member.wallId) && member.group === END_STUD_GROUP);
 }
 
 /** Intermediate purlins can be dragged across the slope; eave purlins sit on the walls. */

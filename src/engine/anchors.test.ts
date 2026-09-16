@@ -39,3 +39,24 @@ test('every post standing on the base gets a post base', () => {
   const posts = model.framing.members.filter((m) => m.category === 'post');
   assert.equal(postBases(model.framing.members).length, posts.length);
 });
+
+test('end studs of shortened walls and partitions stand on an anchored bottom plate', () => {
+  const project = createDefaultProject();
+  project.walls.front = { ...project.walls.front, closed: true, start: 1000, end: project.params.length - 700 };
+  project.walls.left = { ...project.walls.left, closed: true, end: project.params.width - 800 };
+  const members = buildModel(project).framing.members;
+  const plates = members.filter(isBottomPlate);
+  const anchors = plateAnchors(members);
+  const endStuds = members.filter((m) => m.nameDe === 'Eckständer');
+  assert.ok(endStuds.filter((s) => s.wallId).length >= 3);
+  for (const stud of endStuds) {
+    const carrier = plates.find((p) => {
+      if (p.wallId !== stud.wallId || p.partitionId !== stud.partitionId) return false;
+      const along = dot(sub(stud.start, p.start), normalize(p.direction));
+      return along - stud.section.height / 2 >= -1e-6 && along + stud.section.height / 2 <= p.length + 1e-6;
+    });
+    assert.ok(carrier, `${stud.name} has no bottom plate under it`);
+    const nearest = Math.min(...anchors.filter((a) => a.plateId === carrier.id).map((a) => Math.hypot(a.position.x - stud.start.x, a.position.z - stud.start.z)));
+    assert.ok(nearest < 250, `${stud.name}: nearest anchor ${Math.round(nearest)} mm away`);
+  }
+});

@@ -26,11 +26,13 @@ test('does not move a post until pointer down activates dragging', () => {
   assert.equal(canMovePost(true), true);
 });
 
-test('every partition member is a drag handle, outer wall studs are not', () => {
+test('every partition member is a drag handle, outer walls only by their end studs', () => {
   assert.equal(canDragMember({ category: 'stud', partitionId: 'partition-1', group: 'End stud (Eckständer)' }), true);
   assert.equal(canDragMember({ category: 'stud', partitionId: 'partition-1', group: 'Stud (Ständer)' }), true);
   assert.equal(canDragMember({ category: 'plate', partitionId: 'partition-1', group: 'Top plate (Rähm)' }), true);
   assert.equal(canDragMember({ category: 'stud', group: 'Stud (Ständer)' }), false);
+  assert.equal(canDragMember({ category: 'stud', wallId: 'front', group: 'Stud (Ständer)' }), false);
+  assert.equal(canDragMember({ category: 'stud', wallId: 'front', group: 'End stud (Eckständer)' }), true);
   assert.equal(canDragMember({ category: 'post', group: 'Post (Pfosten)' }), true);
 });
 
