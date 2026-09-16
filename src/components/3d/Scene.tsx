@@ -17,6 +17,7 @@ import { MM } from './materials';
 import { MeasureTool, useMeasureStore } from './MeasureTool';
 import { NeighbourDistances } from './NeighbourDistances';
 import { OpeningsEditor } from './OpeningsEditor';
+import { OpeningFixtures } from './OpeningFixtures';
 import { PanelMesh } from './PanelMesh';
 import { TimberMember } from './TimberMember';
 import { VehicleMesh } from './VehicleMesh';
@@ -332,6 +333,7 @@ export function Scene({ model }: { model: DerivedModel }) {
         {layers.dimensions && <DimensionLines model={model} />}
         {draggingPartition && <PartitionDragDistances partition={draggingPartition} params={project.params} />}
         {draggingMidPurlin !== null && <MidPurlinDragDistances index={draggingMidPurlin} model={model} params={project.params} />}
+        {layers.cladding && !wireframe && <OpeningFixtures />}
         <WallResizeHandles params={project.params} />
         <OpeningsEditor />
         <MeasureTool />

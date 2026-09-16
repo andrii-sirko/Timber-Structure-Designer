@@ -267,6 +267,48 @@ export function getOpeningHandleMaterial(selected: boolean): THREE.MeshBasicMate
   );
 }
 
+/** Painted door / window frame (Zarge, Blendrahmen). */
+export function getFrameMaterial(): THREE.MeshStandardMaterial {
+  return cached('fixture-frame', () => new THREE.MeshStandardMaterial({ color: '#e8e4d8', roughness: 0.6 }));
+}
+
+/** Stained door leaf boards – reuses the cladding grain, a little darker. */
+export function getDoorLeafMaterial(): THREE.MeshStandardMaterial {
+  return cached('door-leaf', () => new THREE.MeshStandardMaterial({ map: createBoardTexture(), color: '#e0bf8a', roughness: 0.85 }));
+}
+
+/** Door ledges, braces and window sash bars. */
+export function getSashMaterial(): THREE.MeshStandardMaterial {
+  return cached('sash', () => new THREE.MeshStandardMaterial({ color: '#8a6238', roughness: 0.8 }));
+}
+
+export function getGlassMaterial(): THREE.MeshPhysicalMaterial {
+  return cached(
+    'glass',
+    () =>
+      new THREE.MeshPhysicalMaterial({
+        color: '#bfe3f5',
+        transparent: true,
+        opacity: 0.35,
+        roughness: 0.05,
+        metalness: 0.1,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+  );
+}
+
+export function getHardwareMaterial(): THREE.MeshStandardMaterial {
+  return cached('hardware', () => new THREE.MeshStandardMaterial({ color: '#3f3f46', roughness: 0.4, metalness: 0.7 }));
+}
+
+/** Grip bars on the edges of the selected opening. */
+export function getOpeningEdgeMaterial(active: boolean): THREE.MeshBasicMaterial {
+  return cached(`opening-edge-${active}`, () =>
+    new THREE.MeshBasicMaterial({ color: active ? '#fbbf24' : '#e2e8f0', transparent: true, opacity: active ? 0.95 : 0.7, depthTest: false, depthWrite: false }),
+  );
+}
+
 export function getWallPlaneMaterial(): THREE.MeshBasicMaterial {
   return cached('wall-plane', () =>
     new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.08, depthWrite: false, side: THREE.DoubleSide }),

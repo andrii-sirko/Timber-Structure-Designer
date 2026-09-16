@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   BadgeEuro,
   Car,
+  DoorOpen,
   Download,
   FileText,
   Info,
@@ -157,6 +158,68 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                 value={`${framing.roof.rafterCount} @ ${framing.roof.rafterSpacing}`}
               />
             </div>
+            {bom.fixtures.length > 0 && (
+              <div className="border-t border-slate-800">
+                <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                  <DoorOpen className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
+                    Doors &amp; windows to buy (Türen &amp; Fenster)
+                  </span>
+                </div>
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className={th}>Product</th>
+                      <th className={th}>Wall</th>
+                      <th className={cx(th, "text-right")}>Frame</th>
+                      <th className={cx(th, "text-right")}>Rough opening</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bom.fixtures.map((f) => (
+                      <tr
+                        key={f.openingId}
+                        className="border-t border-slate-800/80 hover:bg-slate-900/60"
+                      >
+                        <td className={td}>
+                          <div>{f.product}</div>
+                          <div className="text-[10px] text-slate-500">
+                            {f.productDe}
+                            {f.label && f.label !== f.product ? ` · ${f.label}` : ""}
+                          </div>
+                        </td>
+                        <td className={td}>{f.wall}</td>
+                        <td className={cx(td, mono, "text-right")}>
+                          {f.frameWidth}×{f.frameHeight}
+                        </td>
+                        <td className={cx(td, mono, "text-right")}>
+                          {f.roughWidth}×{f.roughHeight}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <details className="px-3 pt-2 pb-3 text-[11px] text-slate-400">
+                  <summary className="cursor-pointer select-none text-slate-300">
+                    Materials &amp; hardware per opening
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {bom.fixtures.map((f) => (
+                      <div key={f.openingId}>
+                        <div className="font-medium text-slate-200">
+                          {f.label} – {f.product} ({f.wall})
+                        </div>
+                        <ul className="ml-4 list-disc space-y-0.5">
+                          {f.materials.map((m, i) => (
+                            <li key={i}>{m}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            )}
           </div>
         )}
 

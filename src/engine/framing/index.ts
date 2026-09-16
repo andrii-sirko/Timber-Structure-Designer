@@ -15,7 +15,11 @@ export { computePostGrid, gridPostCount, rowPoint, rowPostTop } from './structur
 export { computeWallFrame, computePartitionFrame, wallBays, PARTITION_TOP_GAP } from './wallFrame';
 export { clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH } from './partitions';
 export type { WallFrame, WallBay } from './wallFrame';
-export { clampOpening, openingLimits, headerHeight, OPENING_DEFAULTS, MIN_OPENING_SIZE } from './openings';
+export { clampOpening, openingLimits, headerHeight, OPENING_DEFAULTS, MIN_OPENING_SIZE, OPENING_SNAP } from './openings';
+export { OPENING_PRESETS, FRAME_GAP, findPreset, presetsOfType, presetMatches, presetFits, openingFromPreset, openingMaterials, frameSizeFor } from './openingCatalog';
+export type { OpeningPreset, DoorPreset, WindowPreset, DoorStyle, WindowStyle, PresetFit } from './openingCatalog';
+export { resizeOpening, resizableEdges, edgeHandleCentre, sizeChanged, OPENING_EDGES } from './openingResize';
+export type { OpeningEdge } from './openingResize';
 export { CLADDING_THICKNESS } from './walls';
 
 /** Guard against geometrically impossible input without mutating the store. */
@@ -64,7 +68,6 @@ export function computeAllWallFrames(project: ProjectState): WallFrames {
   const dir = params.roofDirection;
   const canonical = canonicalProject(project);
   const cFrames = computeCanonicalWallFrames(canonical);
-  if (dir === 'rear') return cFrames;
   const m = canonicalToWorldMap(dir, params.length, params.width);
   const frames: WallFrames = {};
   for (const id of WALL_IDS) {

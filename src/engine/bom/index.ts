@@ -1,4 +1,5 @@
-import type { BomLine, BomResult, CutListItem, FramingResult, Member, MemberCategory, ProjectState } from '@/types';
+import type { BomLine, BomResult, CutListItem, FixtureLine, FramingResult, Member, MemberCategory, Opening, ProjectState } from '@/types';
+import { findPreset, frameSizeFor, openingMaterials, presetMatches } from '../framing/openingCatalog';
 import { memberVolumeM3 } from '../geometry';
 import { MATERIALS, ROOF_COVERING_LOAD } from '../statics/materials';
 
@@ -83,12 +84,48 @@ export function computeBom(project: ProjectState, framing: FramingResult): { bom
 
   const bom: BomResult = {
     lines,
+    fixtures: collectFixtures(project),
     totalVolumeM3: lines.reduce((s, l) => s + l.volumeM3, 0),
     totalLengthM: lines.reduce((s, l) => s + l.totalLengthM, 0),
     totalMassKg: lines.reduce((s, l) => s + l.massKg, 0),
   };
 
   return { bom, cutList: buildCutList(framing.members) };
+}
+
+const WALL_NAME: Record<string, string> = { front: 'Front', rear: 'Rear', left: 'Left', right: 'Right' };
+
+function fixtureLine(wall: string, o: Opening): FixtureLine {
+  const preset = findPreset(o.preset);
+  const stock = preset && presetMatches(o, preset);
+  const frame = frameSizeFor(o);
+  const custom = o.type === 'door' ? 'Custom door' : o.type === 'window' ? 'Custom window' : 'Open passage';
+  const customDe = o.type === 'door' ? 'Tür Sondermaß' : o.type === 'window' ? 'Fenster Sondermaß' : 'Durchgang';
+  return {
+    openingId: o.id,
+    wall,
+    type: o.type,
+    label: o.label ?? o.type,
+    preset: stock ? preset.id : undefined,
+    product: stock ? preset.label : `${custom} ${frame.width}×${frame.height}`,
+    productDe: stock ? preset.labelDe : `${customDe} ${frame.width}×${frame.height}`,
+    roughWidth: o.width,
+    roughHeight: o.height,
+    frameWidth: frame.width,
+    frameHeight: frame.height,
+    materials: openingMaterials(o),
+  };
+}
+
+/** Doors and windows to buy: one line per opening on a closed wall or partition. */
+export function collectFixtures(project: ProjectState): FixtureLine[] {
+  const out: FixtureLine[] = [];
+  for (const wall of Object.values(project.walls)) {
+    if (!wall.closed) continue;
+    for (const o of wall.openings) if (o.type !== 'passage') out.push(fixtureLine(WALL_NAME[wall.id] ?? wall.id, o));
+  }
+  for (const p of project.partitions) for (const o of p.openings) if (o.type !== 'passage') out.push(fixtureLine(p.label || 'Partition', o));
+  return out;
 }
 
 export function buildCutList(members: Member[]): CutListItem[] {

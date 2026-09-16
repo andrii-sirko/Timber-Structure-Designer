@@ -27,7 +27,7 @@ import type {
   WallKey,
 } from '@/types';
 import { isOuterWall } from '@/types';
-import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, OPENING_DEFAULTS } from '@/engine';
+import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, openingFromPreset, OPENING_DEFAULTS, sizeChanged } from '@/engine';
 import { findVehicleSpot, getVehicleModel, VEHICLE_COLORS } from '@/engine/vehicles';
 import { defaultPavedArea, insertVertex, PAVING_COLORS, resizePolygon, translatePolygon } from '@/engine/paving';
 import { clampFreePost, freePostMemberId } from '@/engine/freePosts';
@@ -112,6 +112,10 @@ interface ProjectStoreBase {
 
   setWallClosed: (id: WallId, closed: boolean) => void;
   addOpening: (wallKey: WallKey, type: OpeningType) => string;
+  /** Add a door / window from the catalogue (OPENING_PRESETS) */
+  addOpeningPreset: (wallKey: WallKey, presetId: string) => string | null;
+  /** Re-size an existing opening to a catalogue preset ('' → custom, keeps the current size) */
+  applyOpeningPreset: (wallKey: WallKey, id: string, presetId: string) => void;
   updateOpening: (wallKey: WallKey, id: string, patch: Partial<Opening>) => void;
   removeOpening: (wallKey: WallKey, id: string) => void;
   selectWall: (key: WallKey | null) => void;
@@ -302,6 +306,40 @@ export const useProjectStore = create<ProjectStore>()(
         return id;
       },
 
+      addOpeningPreset: (wallKey, presetId) => {
+        const preset = findPreset(presetId);
+        if (!preset) return null;
+        const id = uuid();
+        set((s) => {
+          const existing = hostOpenings(s.project, wallKey);
+          const base = openingFromPreset(preset);
+          const count = existing.filter((o) => o.type === base.type).length + 1;
+          const last = existing.reduce((m, o) => Math.max(m, o.x + o.width), 0);
+          const x = last > 0 ? last + 400 : Math.max(300, hostLength(s.project, wallKey) / 3 - base.width / 2);
+          const opening: Opening = { ...base, id, x, label: `${base.label} ${count}` };
+          const project = mapOpenings(s.project, wallKey, (openings) => [...openings, opening], true);
+          return { project: clampAllOpenings(project), selectedWallId: wallKey, selectedOpeningId: id };
+        });
+        return id;
+      },
+
+      applyOpeningPreset: (wallKey, id, presetId) =>
+        set((s) => {
+          const frame = computeAllWallFrames(s.project)[wallKey];
+          if (!frame) return s;
+          const preset = findPreset(presetId);
+          const project = mapOpenings(s.project, wallKey, (openings) =>
+            openings.map((o) => {
+              if (o.id !== id) return o;
+              if (!preset) return { ...o, preset: undefined };
+              const { label: _label, ...fields } = openingFromPreset(preset);
+              const merged: Opening = { ...o, ...fields, hinge: o.hinge ?? fields.hinge, swing: o.swing ?? fields.swing };
+              return clampOpening(frame, merged, s.project.params);
+            }),
+          );
+          return { project };
+        }),
+
       updateOpening: (wallKey, id, patch) =>
         set((s) => {
           const frames = computeAllWallFrames(s.project);
@@ -315,8 +353,16 @@ export const useProjectStore = create<ProjectStore>()(
                 const d = OPENING_DEFAULTS[patch.type];
                 merged.y = d.y;
                 if (patch.type !== 'window' && o.type === 'window') merged.height = d.height;
+                merged.preset = undefined;
+                if (patch.type === 'door') {
+                  merged.hinge = merged.hinge ?? 'left';
+                  merged.swing = merged.swing ?? 'out';
+                }
               }
-              return clampOpening(frame, merged, s.project.params);
+              const clamped = clampOpening(frame, merged, s.project.params);
+              // a hand-resized opening is no longer the catalogue product
+              if (patch.preset === undefined && sizeChanged(o, clamped)) clamped.preset = undefined;
+              return clamped;
             }),
           );
           return { project };

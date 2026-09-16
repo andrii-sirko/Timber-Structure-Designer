@@ -102,6 +102,12 @@ export interface Opening {
   width: Millimeters;
   height: Millimeters;
   label?: string;
+  /** Catalogue preset (see OPENING_PRESETS) the opening was created from; cleared when it is resized by hand */
+  preset?: string;
+  /** Doors: hinge side as seen from outside the wall */
+  hinge?: 'left' | 'right';
+  /** Doors: opens into the building or outwards */
+  swing?: 'in' | 'out';
 }
 
 export interface Wall {
@@ -548,8 +554,31 @@ export interface BomLine {
   massKg: number;
 }
 
+/** A door or window product (Tür / Fenster) to be bought and fitted into a rough opening. */
+export interface FixtureLine {
+  openingId: string;
+  /** Wall label the opening sits in */
+  wall: string;
+  type: OpeningType;
+  label: string;
+  preset?: string;
+  /** Product name, e.g. "Boarded door 875×2000" or "Custom window" */
+  product: string;
+  productDe: string;
+  /** Rough opening in the framing (Rohbaumaß) */
+  roughWidth: Millimeters;
+  roughHeight: Millimeters;
+  /** Outer size of the door frame / window frame that fits the rough opening */
+  frameWidth: Millimeters;
+  frameHeight: Millimeters;
+  /** Materials and hardware needed to fit this opening */
+  materials: string[];
+}
+
 export interface BomResult {
   lines: BomLine[];
+  /** Doors and windows to buy (not part of the timber lines) */
+  fixtures: FixtureLine[];
   totalVolumeM3: number;
   totalLengthM: number;
   totalMassKg: number;

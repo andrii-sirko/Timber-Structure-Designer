@@ -122,8 +122,8 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Closed stud walls with door and window, bitumen shingle roof',
     build: () => {
       const walls = emptyWalls(true);
-      walls.front.openings.push({ id: uuid(), type: 'door', x: 600, y: 0, width: 900, height: 2000, label: 'Door' });
-      walls.right.openings.push({ id: uuid(), type: 'window', x: 900, y: 1000, width: 1000, height: 800, label: 'Window' });
+      walls.front.openings.push({ id: uuid(), type: 'door', x: 600, y: 0, width: 890, height: 2010, label: 'Boarded door 875×2000', preset: 'door-boarded-875', hinge: 'left', swing: 'out' });
+      walls.right.openings.push({ id: uuid(), type: 'window', x: 900, y: 1000, width: 820, height: 820, label: 'Turn-tilt window 800×800', preset: 'window-turntilt-800x800' });
       return {
         id: uuid(),
         name: 'Garden shed 4 × 3 m',
@@ -296,5 +296,8 @@ function normalizeOpenings(input: unknown): Opening[] {
       width: Number(o.width) || 900,
       height: Number(o.height) || 2000,
       label: typeof o.label === 'string' ? o.label : undefined,
+      preset: typeof o.preset === 'string' ? o.preset : undefined,
+      hinge: o.hinge === 'right' ? 'right' : o.hinge === 'left' ? 'left' : undefined,
+      swing: o.swing === 'in' ? 'in' : o.swing === 'out' ? 'out' : undefined,
     }));
 }

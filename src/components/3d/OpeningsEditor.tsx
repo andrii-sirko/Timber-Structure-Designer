@@ -4,19 +4,25 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import type { Opening } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
-import { CLADDING_THICKNESS, openingHost } from '@/engine/framing';
-import { getOpeningHandleMaterial, getWallPlaneMaterial, MM } from './materials';
+import { CLADDING_THICKNESS, edgeHandleCentre, openingHost, resizableEdges, resizeOpening, type OpeningEdge } from '@/engine/framing';
+import { getOpeningEdgeMaterial, getOpeningHandleMaterial, getWallPlaneMaterial, MM } from './materials';
 import { basisQuaternion } from './TimberMember';
 
 const HANDLE_OFFSET = CLADDING_THICKNESS + 5; // mm outside the outer face
 const SNAP = 10;
+/** Grip bar thickness across the edge (mm) */
+const EDGE_GRIP = 120;
 
 interface DragState {
   id: string;
   offsetU: number;
   offsetV: number;
   plane: THREE.Plane;
+  /** Set while an edge is being dragged (resize); undefined while moving the whole opening */
+  edge?: OpeningEdge;
 }
+
+const EDGE_CURSOR: Record<OpeningEdge, string> = { left: 'ew-resize', right: 'ew-resize', top: 'ns-resize', bottom: 'ns-resize' };
 
 /**
  * Shows the selected wall as a translucent plane and lets the user drag openings along it.
@@ -71,12 +77,30 @@ export function OpeningsEditor() {
     setDragging(true);
   };
 
+  const onEdgeDown = (o: Opening, edge: OpeningEdge, e: ThreeEvent<PointerEvent>): void => {
+    if (measureMode) return;
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    drag.current = { id: o.id, offsetU: 0, offsetV: 0, plane: planeInfo.mathPlane, edge };
+    selectOpening(selectedWallId, o.id);
+    setDragging(true);
+  };
+
   const onHandleMove = (e: ThreeEvent<PointerEvent>): void => {
     const d = drag.current;
     if (!d) return;
     e.stopPropagation();
     const local = toLocal(e.ray);
     if (!local) return;
+    if (d.edge) {
+      const current = openingHost(useProjectStore.getState().project, selectedWallId)?.openings.find((o) => o.id === d.id);
+      if (!current) return;
+      const next = resizeOpening(current, d.edge, local.u, local.v, SNAP);
+      if (next.x !== current.x || next.y !== current.y || next.width !== current.width || next.height !== current.height) {
+        updateOpening(selectedWallId, d.id, next);
+      }
+      return;
+    }
     const x = Math.round((local.u - d.offsetU) / SNAP) * SNAP;
     const y = Math.round((local.v - d.offsetV) / SNAP) * SNAP;
     updateOpening(selectedWallId, d.id, { x, y });
@@ -88,6 +112,7 @@ export function OpeningsEditor() {
     (e.target as Element).releasePointerCapture(e.pointerId);
     drag.current = null;
     setDragging(false);
+    document.body.style.cursor = '';
   };
 
   return (
@@ -129,6 +154,41 @@ export function OpeningsEditor() {
               >
                 <boxGeometry args={[o.width * MM, o.height * MM, (HANDLE_OFFSET + 30) * MM]} />
               </mesh>
+              {selected &&
+                resizableEdges(o).map((edge) => {
+                  const ec = edgeHandleCentre(o, edge);
+                  const p = frame.toWorld(ec.u, ec.v, HANDLE_OFFSET + 20);
+                  const horizontal = edge === 'top' || edge === 'bottom';
+                  const active = drag.current?.edge === edge && drag.current.id === o.id;
+                  return (
+                    <mesh
+                      key={edge}
+                      position={[p.x * MM, p.y * MM, p.z * MM]}
+                      quaternion={planeInfo.quaternion}
+                      material={getOpeningEdgeMaterial(active)}
+                      renderOrder={10}
+                      onPointerDown={(e) => onEdgeDown(o, edge, e)}
+                      onPointerMove={onHandleMove}
+                      onPointerUp={onHandleUp}
+                      onPointerCancel={onHandleUp}
+                      onPointerOver={(e) => {
+                        e.stopPropagation();
+                        if (!measureMode) document.body.style.cursor = EDGE_CURSOR[edge];
+                      }}
+                      onPointerOut={() => {
+                        if (!drag.current) document.body.style.cursor = '';
+                      }}
+                    >
+                      <boxGeometry
+                        args={
+                          horizontal
+                            ? [Math.max(o.width - EDGE_GRIP, 100) * MM, EDGE_GRIP * MM, 20 * MM]
+                            : [EDGE_GRIP * MM, Math.max(o.height - EDGE_GRIP, 100) * MM, 20 * MM]
+                        }
+                      />
+                    </mesh>
+                  );
+                })}
               <Html
                 position={[c.x * MM, (o.y + o.height) * MM + 0.12, c.z * MM]}
                 center

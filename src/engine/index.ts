@@ -1,6 +1,7 @@
 import type { DerivedModel, ProjectState } from '@/types';
 import { computeBom } from './bom';
 import { buildFramingCanonical, canonicalProject, sanitizeParams } from './framing';
+export type { OpeningPreset, OpeningEdge, PresetFit } from './framing';
 import { framingToWorld, relabelFraming, relabelSides } from './orientation';
 import { computeConnections } from './joinery';
 import { computeStatics } from './statics';
@@ -39,7 +40,7 @@ export function buildModel(project: ProjectState): DerivedModel {
   };
 }
 
-export { buildFraming, buildFramingCanonical, canonicalProject, computeAllWallFrames, openingHost, clampOpening, openingLimits, OPENING_DEFAULTS, sanitizeParams, MIN_PLAN_DIM, minWallHeight, clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH } from './framing';
+export { buildFraming, buildFramingCanonical, canonicalProject, computeAllWallFrames, openingHost, clampOpening, openingLimits, OPENING_DEFAULTS, OPENING_PRESETS, findPreset, presetsOfType, presetMatches, presetFits, openingFromPreset, openingMaterials, frameSizeFor, resizeOpening, resizableEdges, edgeHandleCentre, sizeChanged, sanitizeParams, MIN_PLAN_DIM, minWallHeight, clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH } from './framing';
 export type { WallFrames } from './framing';
 export { computeStatics } from './statics';
 export { autoFixStatics, costOptimizeStatics } from './statics/autofix';
