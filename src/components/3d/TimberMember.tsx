@@ -146,7 +146,7 @@ export const TimberMember = memo(function TimberMember({
       )}
       {isPost && selected && onRemovePost && (
         <Html
-          position={[0, member.length * MM + 0.16, 0]}
+          position={[member.length * MM + 0.16, 0, 0]}
           center
           zIndexRange={[9, 0]}
           style={{ pointerEvents: 'auto' }}
