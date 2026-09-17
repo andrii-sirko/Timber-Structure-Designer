@@ -5,7 +5,7 @@ import type { DerivedModel, Member, Partition, StructureParams } from '@/types';
 import { useProjectStore } from '@/store';
 import { computeRoofLines, sanitizeParams, type WallFrame } from '@/engine/framing';
 import { canonicalizeParams, canonicalToWorldMap, mapPoint, mapVec } from '@/engine/orientation';
-import { memberObb } from '@/engine/neighbours';
+import { memberObb, type StudSpacing } from '@/engine/neighbours';
 import { partitionEdgeDistances, postEdgeDistances } from '@/engine/postDrag';
 import { midPurlinRuler } from '@/engine/purlinDrag';
 import { MM } from './materials';
@@ -233,6 +233,25 @@ export function PostDragDistances({ post, params }: { post: Member; params: Stru
     <group>
       {dims.map((dim) => (
         <Dimension key={dim.label} {...dim} offset={[0, 0.18, 0]} color="#fbbf24" />
+      ))}
+    </group>
+  );
+}
+
+/** Clear gap and centre spacing from a selected stud to the nearest upright on either side along its wall. */
+export function StudSpacingDimensions({ spacing }: { spacing: StudSpacing[] }) {
+  return (
+    <group>
+      {spacing.map((s) => (
+        <Dimension
+          key={s.memberId}
+          a={[s.a.x * MM, s.a.y * MM, s.a.z * MM]}
+          b={[s.b.x * MM, s.b.y * MM, s.b.z * MM]}
+          // stagger the two sides so their labels don't collide in narrow bays
+          offset={[0, s.side * -0.12, 0]}
+          label={`${s.clear > 0 ? `${s.clear} mm` : 'contact'} · c/c ${s.centres}`}
+          color="#22d3ee"
+        />
       ))}
     </group>
   );

@@ -155,3 +155,68 @@ export function findNeighbours(members: Member[], memberId: string, options: Nei
   }
   return links.filter((l) => picked.has(l.memberId)).sort(byGap);
 }
+
+export interface StudSpacing {
+  memberId: string;
+  name: string;
+  /** -1 towards the wall start, +1 towards the wall end (the stud's `up` axis) */
+  side: -1 | 1;
+  /** Clear gap face to face along the wall (mm) */
+  clear: Millimeters;
+  /** Centre-to-centre spacing along the wall (mm) */
+  centres: Millimeters;
+  /** Face of the stud and face of the neighbour the gap is measured between (mm, world) */
+  a: Vec3;
+  b: Vec3;
+}
+
+/** Half size of a box projected onto `axis`. */
+const reachAlong = (box: Obb, axis: Vec3): number => box.axes.reduce((sum, a, i) => sum + Math.abs(dot(a, axis)) * box.half[i], 0);
+
+/**
+ * The nearest upright member on either side of a stud, measured along its wall: studs, king and
+ * jack studs, end studs and posts that stand in the same wall plane and share part of its height.
+ */
+export function studSpacing(members: Member[], studId: string): StudSpacing[] {
+  const stud = members.find((m) => m.id === studId);
+  if (!stud) return [];
+  const box = memberObb(stud);
+  const [vertical, along, across] = box.axes;
+  const bottom = box.centre.y - box.half[0];
+  const top = box.centre.y + box.half[0];
+  const best = new Map<-1 | 1, StudSpacing>();
+
+  for (const other of members) {
+    if (other.id === studId) continue;
+    const otherBox = memberObb(other);
+    if (Math.abs(dot(otherBox.axes[0], vertical)) < 0.999) continue;
+    const delta = sub(otherBox.centre, box.centre);
+    // same wall plane: the two boxes overlap across the wall
+    if (Math.abs(dot(delta, across)) > box.half[2] + reachAlong(otherBox, across)) continue;
+    // share part of the height
+    const oReach = reachAlong(otherBox, vertical);
+    const overlapBottom = Math.max(bottom, otherBox.centre.y - oReach);
+    const overlapTop = Math.min(top, otherBox.centre.y + oReach);
+    if (overlapTop - overlapBottom < 1) continue;
+
+    const offset = dot(delta, along);
+    const clear = Math.abs(offset) - box.half[1] - reachAlong(otherBox, along);
+    if (clear < -1) continue;
+    const side: -1 | 1 = offset < 0 ? -1 : 1;
+    const current = best.get(side);
+    if (current && current.clear <= clear) continue;
+
+    const y = Math.min(Math.max(box.centre.y, overlapBottom), overlapTop);
+    const face = (distance: number): Vec3 => ({ x: box.centre.x + along.x * distance, y, z: box.centre.z + along.z * distance });
+    best.set(side, {
+      memberId: other.id,
+      name: other.name,
+      side,
+      clear: Math.max(0, Math.round(clear)),
+      centres: Math.round(Math.abs(offset)),
+      a: face(side * box.half[1]),
+      b: face(side * (box.half[1] + Math.max(0, clear))),
+    });
+  }
+  return [best.get(-1), best.get(1)].filter((s): s is StudSpacing => Boolean(s));
+}

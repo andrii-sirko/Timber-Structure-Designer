@@ -22,6 +22,25 @@ interface OrbitLike {
   update: () => void;
 }
 
+/** Moves `to` onto `from`'s viewpoint, matching the apparent scale across perspective/orthographic. */
+function transferView(from: THREE.Camera, to: THREE.Camera, target: THREE.Vector3, viewHeight: number): void {
+  const offset = from.position.clone().sub(target);
+  const dir = offset.lengthSq() > 0 ? offset.clone().normalize() : new THREE.Vector3(0, 0, -1);
+  let distance = offset.length();
+  if (from instanceof THREE.PerspectiveCamera && to instanceof THREE.OrthographicCamera) {
+    const visibleH = 2 * distance * Math.tan((from.fov * Math.PI) / 360);
+    to.zoom = Math.max(viewHeight / Math.max(visibleH, 1e-6), 5);
+    distance = Math.max(distance, 50);
+  } else if (from instanceof THREE.OrthographicCamera && to instanceof THREE.PerspectiveCamera) {
+    const visibleH = viewHeight / from.zoom;
+    distance = visibleH / 2 / Math.tan((to.fov * Math.PI) / 360);
+  }
+  to.position.copy(target).addScaledVector(dir, distance);
+  to.up.copy(from.up);
+  to.lookAt(target);
+  if (to instanceof THREE.PerspectiveCamera || to instanceof THREE.OrthographicCamera) to.updateProjectionMatrix();
+}
+
 /** Applies camera presets (isometric, elevations, plan, wall elevation) and frames the model. */
 export function CameraRig({ bounds }: { bounds: Bounds }) {
   const preset = useProjectStore((s) => s.view.cameraPreset);
@@ -33,15 +52,28 @@ export function CameraRig({ bounds }: { bounds: Bounds }) {
   const controls = useThree((s) => s.controls) as unknown as OrbitLike | null;
   const size = useThree((s) => s.size);
 
-  const wallForPreset: string | null = preset === 'wall' ? selectedWallId : null;
-
-  // Bounds are read through a ref so that editing dimensions does not re-frame the camera;
-  // only an explicit preset change / nonce bump (or viewport resize) re-frames.
-  const boundsRef = useRef(bounds);
-  boundsRef.current = bounds;
+  // Everything except the nonce is read through a ref: the view is only re-framed when a view
+  // button bumps the nonce, never by editing, selecting, resizing the viewport or undo/redo.
+  const latest = useRef({ bounds, preset, orthographic, size, frames, wallForPreset: preset === 'wall' ? selectedWallId : null });
+  latest.current = { bounds, preset, orthographic, size, frames, wallForPreset: preset === 'wall' ? selectedWallId : null };
+  const applied = useRef<{ nonce: number; camera: THREE.Camera; target: THREE.Vector3; awaitingCamera: boolean } | null>(null);
 
   useEffect(() => {
-    const bounds = boundsRef.current;
+    const { bounds, preset, orthographic, size, frames, wallForPreset } = latest.current;
+    const prev = applied.current;
+    const isOrtho = camera instanceof THREE.OrthographicCamera;
+
+    // Camera swapped (perspective/orthographic toggle) without a view request: keep the current view.
+    if (prev && prev.nonce === nonce && !prev.awaitingCamera) {
+      if (prev.camera !== camera) transferView(prev.camera, camera, prev.target, size.height);
+      if (controls) {
+        controls.target.copy(prev.target);
+        controls.update();
+      }
+      applied.current = { ...prev, camera, target: controls ? controls.target : prev.target };
+      return;
+    }
+
     const centre = bounds.min.clone().add(bounds.max).multiplyScalar(0.5);
     const extent = bounds.max.clone().sub(bounds.min);
     const radius = extent.length() / 2;
@@ -129,8 +161,9 @@ export function CameraRig({ bounds }: { bounds: Bounds }) {
       controls.target.copy(target);
       controls.update();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preset, orthographic, nonce, camera, controls, size.width, size.height, wallForPreset]);
+    // a preset that switches projection frames once with the old camera, then again once the new camera is mounted
+    applied.current = { nonce, camera, target: controls ? controls.target : target, awaitingCamera: isOrtho !== orthographic };
+  }, [nonce, camera, controls]);
 
   return null;
 }

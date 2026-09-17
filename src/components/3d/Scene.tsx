@@ -5,9 +5,10 @@ import { Grid, Html, OrbitControls, OrthographicCamera, PerspectiveCamera } from
 import type { DerivedModel, Member, Panel, WallId } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
 import { useNeighbours } from '@/store/useNeighbours';
+import { studSpacing } from '@/engine/neighbours';
 import { canDeleteSelectedPartition } from '@/engine/wallKeyboard';
 import { CameraRig, modelBounds } from './CameraRig';
-import { DimensionLines, MidPurlinDragDistances, PartitionDragDistances, PartitionResizeRuler, PostDragDistances, WallExtentRuler } from './DimensionLines';
+import { DimensionLines, MidPurlinDragDistances, PartitionDragDistances, PartitionResizeRuler, PostDragDistances, StudSpacingDimensions, WallExtentRuler } from './DimensionLines';
 import { midPurlinIndex, snapDrag } from '@/engine/postDrag';
 import { partitionDragCursor, partitionDragMode, partitionDragModeAt, partitionDragPatch, partitionGrabOffset, type PartitionDrag } from '@/engine/partitionDrag';
 import { wallExtentCursor, wallExtentDragModeAt, wallExtentDragPatch, wallExtentGrabOffset, wallExtentMemberMode, type WallExtentDrag, type WallExtentDragMode } from '@/engine/wallExtentDrag';
@@ -95,6 +96,17 @@ export function Scene({ model }: { model: DerivedModel }) {
 
   const { subject, links } = useNeighbours(model.framing.members);
   const neighbourIds = useMemo(() => new Set(links.map((l) => l.memberId)), [links]);
+  // A clicked stud always shows its spacing along the wall, with or without neighbour mode.
+  const selectedStud = useMemo(
+    () => model.framing.members.find((m) => m.id === selectedMemberId && m.category === 'stud') ?? null,
+    [model.framing.members, selectedMemberId],
+  );
+  const spacing = useMemo(() => (selectedStud ? studSpacing(model.framing.members, selectedStud.id) : []), [model.framing.members, selectedStud]);
+  // The spacing dimensions already label those neighbours; don't tag them twice
+  const unspacedLinks = useMemo(() => {
+    const spaced = new Set(spacing.map((s) => s.memberId));
+    return links.filter((l) => !spaced.has(l.memberId));
+  }, [links, spacing]);
 
   const bounds = useMemo(() => modelBounds(model, project), [model, project]);
   const draggingPost = useMemo(
@@ -137,8 +149,7 @@ export function Scene({ model }: { model: DerivedModel }) {
         addPoint(e.point);
         return;
       }
-      if (neighbourMode) selectMember(member.id);
-      if (member.category === 'post') selectMember(member.id);
+      if (neighbourMode || member.category === 'post' || member.category === 'stud') selectMember(member.id);
       const key = member.wallId ?? member.partitionId;
       if (key) selectWall(key);
     },
@@ -451,7 +462,7 @@ export function Scene({ model }: { model: DerivedModel }) {
               member={m}
               highlight={highlight}
               hovered={m.id === hoveredId}
-              inspected={m.id === subject?.id}
+              inspected={m.id === (subject ?? selectedStud)?.id}
               neighbour={neighbourIds.has(m.id)}
               focused={m.id === focusedNeighbourId}
               selected={selectedMemberId === m.id || (selectedWallId !== null && (m.wallId ?? m.partitionId) === selectedWallId && (m.category === 'stud' || m.category === 'header' || m.category === 'sill' || m.category === 'plate'))}
@@ -513,7 +524,8 @@ export function Scene({ model }: { model: DerivedModel }) {
         {layers.cladding && !wireframe && <OpeningFixtures />}
         <OpeningsEditor />
         <MeasureTool />
-        <NeighbourDistances subject={subject} links={links} members={model.framing.members} />
+        <NeighbourDistances subject={subject} links={unspacedLinks} members={model.framing.members} />
+        <StudSpacingDimensions spacing={spacing} />
         {layers.frame && <HoverTooltip members={model.framing.members} />}
       </Suspense>
 
