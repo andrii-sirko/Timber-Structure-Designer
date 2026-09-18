@@ -12,6 +12,7 @@ import { FurnitureBody } from './FurnitureBody';
 import { useMeasureStore } from './MeasureTool';
 import { openObjectSettings } from './openObjectSettings';
 import { DRAG_SNAP } from '@/engine/postDrag';
+import { useT } from '@/i18n';
 
 const SNAP = DRAG_SNAP;
 const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -42,6 +43,7 @@ interface VehicleMeshProps {
 
 /** Simplified parametric object built from a side silhouette (or a board frame) – exact footprint, height and mirror width. */
 export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }: VehicleMeshProps) {
+  const { tx } = useT();
   const model = useMemo(() => resolveVehicleModel(vehicle), [vehicle.modelId, vehicle.size?.length, vehicle.size?.width, vehicle.size?.height]);
   const isFrame = FRAME_STYLES.has(model.style);
   const measureMode = useProjectStore((s) => s.view.measureMode);
@@ -149,7 +151,7 @@ export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }:
   };
 
   const status = fit?.status ?? 'ok';
-  const label = `${model.name} · ${model.length}×${model.width}×${model.height} mm`;
+  const label = `${tx(model.name)} · ${model.length}×${model.width}×${model.height} mm`;
 
   return (
     <>
@@ -189,7 +191,7 @@ export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }:
           <div className="rounded border bg-slate-900/90 px-2 py-1 text-[11px] whitespace-nowrap shadow" style={{ borderColor: STATUS_COLOR[status], color: '#e2e8f0' }}>
             <div className="font-semibold">{label}</div>
             <div className="font-mono text-slate-300">
-              x {vehicle.x} · z {vehicle.z} · {vehicle.rotationDeg}° · {fit?.messages[0] ?? ''}
+              x {vehicle.x} · z {vehicle.z} · {vehicle.rotationDeg}° · {fit?.messages[0] ? tx(fit.messages[0]) : ''}
             </div>
           </div>
         </Html>

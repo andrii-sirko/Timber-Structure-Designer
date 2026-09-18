@@ -1,0 +1,30 @@
+import type { Dict } from '../core';
+
+/** Terms shared across several areas of the app. */
+export default {
+  Language: { uk: 'Мова', de: 'Sprache' },
+  Length: { uk: 'Довжина', de: 'Länge' },
+  Width: { uk: 'Ширина', de: 'Breite' },
+  Height: { uk: 'Висота', de: 'Höhe' },
+  Section: { uk: 'Переріз', de: 'Querschnitt' },
+  Total: { uk: 'Разом', de: 'Gesamt' },
+  Qty: { uk: 'К-сть', de: 'Menge' },
+  Item: { uk: 'Позиція', de: 'Position' },
+  Spec: { uk: 'Специфікація', de: 'Spezifikation' },
+  Notes: { uk: 'Примітки', de: 'Anmerkungen' },
+  Name: { uk: "Назва", de: 'Name' },
+  'Reset all': { uk: 'Скинути все', de: 'Alles zurücksetzen' },
+  Sufficient: { uk: 'Достатньо', de: 'Ausreichend' },
+  'Near limit': { uk: 'Близько до межі', de: 'Nahe der Grenze' },
+  Overloaded: { uk: 'Перевантажено', de: 'Überlastet' },
+  front: { uk: 'спереду', de: 'vorne' },
+  rear: { uk: 'ззаду', de: 'hinten' },
+  left: { uk: 'зліва', de: 'links' },
+  right: { uk: 'справа', de: 'rechts' },
+  Add: { uk: 'Додати', de: 'Hinzufügen' },
+  Front: { uk: 'Передня', de: 'Vorne' },
+  Rear: { uk: 'Задня', de: 'Hinten' },
+  Left: { uk: 'Ліва', de: 'Links' },
+  Right: { uk: 'Права', de: 'Rechts' },
+  Reset: { uk: 'Скинути', de: 'Zurücksetzen' },
+} satisfies Dict;

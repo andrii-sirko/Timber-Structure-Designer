@@ -5,6 +5,7 @@ import { Trash2 } from 'lucide-react';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { HighlightMode, Member, Vec3 } from '@/types';
 import { canDragMember, canMovePost } from '@/engine/postDrag';
+import { useT } from '@/i18n';
 import {
   getHoverMaterial,
   getInspectedMaterial,
@@ -76,6 +77,7 @@ export const TimberMember = memo(function TimberMember({
   dragCursor,
 }: TimberMemberProps) {
   const postDragging = useRef(false);
+  const { t } = useT();
   const geometry = useMemberGeometry(member);
   const quaternion = useMemo(() => basisQuaternion(member.direction, member.up), [member.direction, member.up]);
   const position = useMemo<[number, number, number]>(
@@ -154,8 +156,8 @@ export const TimberMember = memo(function TimberMember({
           <button
             type="button"
             className="rounded border border-rose-400/60 bg-rose-950/95 p-1 text-rose-100 shadow-lg hover:bg-rose-900"
-            title="Remove post"
-            aria-label="Remove post"
+            title={t('Remove post')}
+            aria-label={t('Remove post')}
             onClick={(e) => {
               e.stopPropagation();
               onRemovePost(member.id);

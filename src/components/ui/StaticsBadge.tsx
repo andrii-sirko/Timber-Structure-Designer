@@ -10,8 +10,10 @@ import {
 } from "./primitives";
 import { useAutoFixStatics } from "./useAutoFixStatics";
 import { useCostOptimizationStatics } from "./useCostOptimizationStatics";
+import { useT } from "@/i18n";
 
 export function StaticsBadge({ statics }: { statics: StaticsResult }) {
+  const { t, tx } = useT();
   const openResults = useUiStore((s) => s.openResults);
   const runAutoFix = useAutoFixStatics();
   const { run: runCostOptimization, available: costOptimizationAvailable } = useCostOptimizationStatics();
@@ -35,7 +37,7 @@ export function StaticsBadge({ statics }: { statics: StaticsResult }) {
           "flex min-w-0 flex-1 items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors hover:brightness-110",
           STATUS_BG[statics.status],
         )}
-        title="Open statics details"
+        title={t("Open statics details")}
       >
         <Icon className={cx("h-5 w-5 shrink-0", STATUS_TEXT[statics.status])} />
         <span className="min-w-0 flex-1">
@@ -45,11 +47,11 @@ export function StaticsBadge({ statics }: { statics: StaticsResult }) {
               STATUS_TEXT[statics.status],
             )}
           >
-            Statics: {STATUS_LABEL[statics.status]}
+            {t("Statics: {status}", { status: t(STATUS_LABEL[statics.status]) })}
           </span>
           {worst && (
             <span className="block truncate text-[11px] text-slate-300">
-              {worst.element} {Math.round(worst.utilisation * 100)} % ·{" "}
+              {tx(worst.element)} {Math.round(worst.utilisation * 100)} % ·{" "}
               {worst.section.width}×{worst.section.height} mm
             </span>
           )}
@@ -58,7 +60,7 @@ export function StaticsBadge({ statics }: { statics: StaticsResult }) {
       {statics.status !== "ok" && (
         <IconButton
           icon={Wand2}
-          title="Auto-fix all statics issues"
+          title={t("Auto-fix all statics issues")}
           onClick={runAutoFix}
           className="h-auto w-9 shrink-0 border-sky-500/60 text-sky-200 hover:bg-sky-500/20"
         />
@@ -66,7 +68,7 @@ export function StaticsBadge({ statics }: { statics: StaticsResult }) {
       {statics.status === "ok" && (
         <IconButton
           icon={BadgeEuro}
-          title={costOptimizationAvailable ? "Cost optimization" : "No smaller standard section passes statics"}
+          title={costOptimizationAvailable ? t("Cost optimization") : t("No smaller standard section passes statics")}
           onClick={runCostOptimization}
           disabled={!costOptimizationAvailable}
           className="h-auto w-9 shrink-0 border-emerald-500/60 text-emerald-200 hover:bg-emerald-500/20"

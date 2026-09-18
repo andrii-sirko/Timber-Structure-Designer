@@ -10,6 +10,7 @@ import { Dimension } from './DimensionLines';
 import { useMeasureStore } from './MeasureTool';
 import { openObjectSettings } from './openObjectSettings';
 import { DRAG_SNAP } from '@/engine/postDrag';
+import { useT } from '@/i18n';
 
 const SNAP = DRAG_SNAP;
 const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -112,6 +113,7 @@ const toWorld = (p: GroundPoint): [number, number, number] => [p.x * MM, TOP_Y, 
 
 /** A paved floor polygon: textured slab, and – when selected – draggable corner handles and edge "add corner" handles. */
 export const PavedAreaMesh = memo(function PavedAreaMesh({ area, summary, selected, selectedPointIndex }: PavedAreaMeshProps) {
+  const { t, tx } = useT();
   const measureMode = useProjectStore((s) => s.view.measureMode);
   const selectPavedArea = useProjectStore((s) => s.selectPavedArea);
   const movePavedPoint = useProjectStore((s) => s.movePavedPoint);
@@ -313,9 +315,9 @@ export const PavedAreaMesh = memo(function PavedAreaMesh({ area, summary, select
       {selected && summary && (
         <Html position={labelPos} center zIndexRange={[7, 0]} style={{ pointerEvents: 'none' }}>
           <div className="rounded border border-sky-400/60 bg-slate-900/90 px-2 py-1 text-[11px] whitespace-nowrap text-slate-200 shadow">
-            <div className="font-semibold">{area.label}</div>
+            <div className="font-semibold">{tx(area.label)}</div>
             <div className="font-mono text-slate-300">
-              {summary.areaM2.toFixed(2)} m² · {area.points.length} corners · ≈ {summary.stoneCount} stones
+              {summary.areaM2.toFixed(2)} m² · {t('{n} corners', { n: area.points.length })} · ≈ {t('{n} stones', { n: summary.stoneCount })}
             </div>
           </div>
         </Html>

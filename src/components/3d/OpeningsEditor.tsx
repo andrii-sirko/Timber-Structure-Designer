@@ -7,6 +7,7 @@ import { useProjectStore, useWallFrames } from '@/store';
 import { CLADDING_THICKNESS, edgeHandleCentre, openingHost, resizableEdges, resizeOpening, type OpeningEdge } from '@/engine/framing';
 import { getOpeningEdgeMaterial, getOpeningHandleMaterial, getWallPlaneMaterial, MM } from './materials';
 import { basisQuaternion } from './TimberMember';
+import { useT } from '@/i18n';
 
 const HANDLE_OFFSET = CLADDING_THICKNESS + 5; // mm outside the outer face
 const SNAP = 10;
@@ -30,6 +31,7 @@ const EDGE_CURSOR: Record<OpeningEdge, string> = { left: 'ew-resize', right: 'ew
  * has to stay over the handle mesh.
  */
 export function OpeningsEditor() {
+  const { tx } = useT();
   const project = useProjectStore((s) => s.project);
   const selectedWallId = useProjectStore((s) => s.selectedWallId);
   const selectedOpeningId = useProjectStore((s) => s.selectedOpeningId);
@@ -200,7 +202,7 @@ export function OpeningsEditor() {
                     selected ? 'border border-sky-400/60 bg-sky-950/90 text-sky-100' : 'border border-orange-400/50 bg-slate-900/85 text-orange-100'
                   }`}
                 >
-                  {o.label ?? o.type} · x {o.x} · y {o.y} · {o.width}×{o.height}
+                  {tx(o.label ?? o.type)} · x {o.x} · y {o.y} · {o.width}×{o.height}
                 </div>
               </Html>
             </group>

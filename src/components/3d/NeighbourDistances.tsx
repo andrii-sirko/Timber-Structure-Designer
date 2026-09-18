@@ -3,6 +3,7 @@ import { Html, Line } from '@react-three/drei';
 import type { Member, NeighbourLink, Vec3 } from '@/types';
 import { useProjectStore } from '@/store';
 import { memberObb } from '@/engine/neighbours';
+import { useT } from '@/i18n';
 import { MM } from './materials';
 
 type V = [number, number, number];
@@ -28,6 +29,7 @@ export function NeighbourDistances({ subject, links, members }: { subject: Membe
   const focusedId = useProjectStore((s) => s.focusedNeighbourId);
   const setFocused = useProjectStore((s) => s.setFocusedNeighbour);
   const byId = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
+  const { t } = useT();
 
   if (!subject) return null;
   const origin = memberObb(subject).centre;
@@ -64,7 +66,7 @@ export function NeighbourDistances({ subject, links, members }: { subject: Membe
                       : 'border-cyan-400/50 bg-slate-900/90 text-cyan-100',
                 ].join(' ')}
               >
-                {touching ? 'contact' : `${link.gap} mm`}
+                {touching ? t('contact') : `${link.gap} mm`}
                 {link.parallel && <span className="ml-1 opacity-70">c/c {link.axisDistance}</span>}
               </button>
             </Html>

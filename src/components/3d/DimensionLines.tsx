@@ -7,6 +7,7 @@ import { computeRoofLines, sanitizeParams, type WallFrame } from '@/engine/frami
 import { canonicalizeParams, canonicalToWorldMap, mapPoint, mapVec } from '@/engine/orientation';
 import { memberObb, type StudSpacing } from '@/engine/neighbours';
 import { partitionEdgeDistances, postEdgeDistances } from '@/engine/postDrag';
+import { useT } from '@/i18n';
 import { midPurlinRuler } from '@/engine/purlinDrag';
 import { MM } from './materials';
 
@@ -50,6 +51,7 @@ export function Dimension({ a, b, offset, label, color = '#7dd3fc' }: DimensionP
 
 export function DimensionLines({ model }: { model: DerivedModel }) {
   const project = useProjectStore((s) => s.project);
+  const { t } = useT();
   const dims = useMemo(() => {
     const p = sanitizeParams(project.params);
     const { length: L, width: W, overhangs: o, roofDirection: dir } = p;
@@ -107,13 +109,13 @@ export function DimensionLines({ model }: { model: DerivedModel }) {
       a: toW(-oc.left, ridge, -oc.front),
       b: toW(Lc + oc.right, ridge, -oc.front),
       offset: [0, 0.35, 0],
-      label: `Roof ${Lc + oc.left + oc.right} mm`,
+      label: t('Roof {n} mm', { n: Lc + oc.left + oc.right }),
       color: '#fcd34d',
     });
     const zMid = (Wc + oc.rear - oc.front) / 2;
     const pitchPos = toW(Lc + oc.right + 0.3 / MM, roof.topAt(zMid) + 0.15 / MM, zMid);
     return { list, pitchPos, roofDepth: Wc + oc.front + oc.rear, pitch: roof.pitchDeg };
-  }, [project, model]);
+  }, [project, model, t]);
 
   return (
     <group>
@@ -181,6 +183,7 @@ export function WallExtentRuler({ frame }: { frame: WallFrame }) {
 }
 
 export function PartitionDragDistances({ partition, params }: { partition: Partition; params: StructureParams }) {
+  const { t } = useT();
   const dims = useMemo(() => {
     const thickness = params.timber.stud.height;
     const distances = partitionEdgeDistances(partition, params, thickness);
@@ -190,15 +193,15 @@ export function PartitionDragDistances({ partition, params }: { partition: Parti
     const y = 0.03;
     if (partition.axis === 'x') {
       return [
-        { a: [uMid, y, 0] as V, b: [uMid, y, firstEdge] as V, label: `front ${Math.round(distances.first)} mm` },
-        { a: [uMid, y, secondEdge] as V, b: [uMid, y, params.width * MM] as V, label: `rear ${Math.round(distances.second)} mm` },
+        { a: [uMid, y, 0] as V, b: [uMid, y, firstEdge] as V, label: t('front {n} mm', { n: Math.round(distances.first) }) },
+        { a: [uMid, y, secondEdge] as V, b: [uMid, y, params.width * MM] as V, label: t('rear {n} mm', { n: Math.round(distances.second) }) },
       ];
     }
     return [
-      { a: [0, y, uMid] as V, b: [firstEdge, y, uMid] as V, label: `left ${Math.round(distances.first)} mm` },
-      { a: [secondEdge, y, uMid] as V, b: [params.length * MM, y, uMid] as V, label: `right ${Math.round(distances.second)} mm` },
+      { a: [0, y, uMid] as V, b: [firstEdge, y, uMid] as V, label: t('left {n} mm', { n: Math.round(distances.first) }) },
+      { a: [secondEdge, y, uMid] as V, b: [params.length * MM, y, uMid] as V, label: t('right {n} mm', { n: Math.round(distances.second) }) },
     ];
-  }, [params, partition]);
+  }, [params, partition, t]);
 
   return (
     <group>
@@ -211,6 +214,7 @@ export function PartitionDragDistances({ partition, params }: { partition: Parti
 
 /** Clear distances from a dragged post's faces to the four footprint edges, drawn at ground level. */
 export function PostDragDistances({ post, params }: { post: Member; params: StructureParams }) {
+  const { t } = useT();
   const dims = useMemo(() => {
     const box = memberObb(post);
     // Project the box half sizes onto world X / Z to get the plan footprint.
@@ -222,12 +226,12 @@ export function PostDragDistances({ post, params }: { post: Member; params: Stru
     const d = postEdgeDistances(extent, params);
     const y = 0.03;
     return [
-      { a: [0, y, z * MM] as V, b: [extent.minX * MM, y, z * MM] as V, label: `left ${Math.round(d.left)} mm` },
-      { a: [extent.maxX * MM, y, z * MM] as V, b: [params.length * MM, y, z * MM] as V, label: `right ${Math.round(d.right)} mm` },
-      { a: [x * MM, y, 0] as V, b: [x * MM, y, extent.minZ * MM] as V, label: `front ${Math.round(d.front)} mm` },
-      { a: [x * MM, y, extent.maxZ * MM] as V, b: [x * MM, y, params.width * MM] as V, label: `rear ${Math.round(d.rear)} mm` },
+      { a: [0, y, z * MM] as V, b: [extent.minX * MM, y, z * MM] as V, label: t('left {n} mm', { n: Math.round(d.left) }) },
+      { a: [extent.maxX * MM, y, z * MM] as V, b: [params.length * MM, y, z * MM] as V, label: t('right {n} mm', { n: Math.round(d.right) }) },
+      { a: [x * MM, y, 0] as V, b: [x * MM, y, extent.minZ * MM] as V, label: t('front {n} mm', { n: Math.round(d.front) }) },
+      { a: [x * MM, y, extent.maxZ * MM] as V, b: [x * MM, y, params.width * MM] as V, label: t('rear {n} mm', { n: Math.round(d.rear) }) },
     ];
-  }, [params, post]);
+  }, [params, post, t]);
 
   return (
     <group>
@@ -240,6 +244,7 @@ export function PostDragDistances({ post, params }: { post: Member; params: Stru
 
 /** Clear gap and centre spacing from a selected stud to the nearest upright on either side along its wall. */
 export function StudSpacingDimensions({ spacing }: { spacing: StudSpacing[] }) {
+  const { t } = useT();
   return (
     <group>
       {spacing.map((s) => (
@@ -249,7 +254,7 @@ export function StudSpacingDimensions({ spacing }: { spacing: StudSpacing[] }) {
           b={[s.b.x * MM, s.b.y * MM, s.b.z * MM]}
           // stagger the two sides so their labels don't collide in narrow bays
           offset={[0, s.side * -0.12, 0]}
-          label={`${s.clear > 0 ? `${s.clear} mm` : 'contact'} · c/c ${s.centres}`}
+          label={`${s.clear > 0 ? `${s.clear} mm` : t('contact')} · c/c ${s.centres}`}
           color="#22d3ee"
         />
       ))}

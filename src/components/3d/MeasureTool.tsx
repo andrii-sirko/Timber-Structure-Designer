@@ -6,6 +6,7 @@ import type { Measurement, Vec3 } from '@/types';
 import { useProjectStore } from '@/store';
 import { uuid } from '@/engine/geometry';
 import { MM } from './materials';
+import { useT } from '@/i18n';
 
 interface MeasureState {
   pending: Vec3 | null;
@@ -111,6 +112,7 @@ export function MeasureTool() {
   const measurements = useProjectStore((s) => s.measurements);
   const updateMeasurement = useProjectStore((s) => s.updateMeasurement);
   const measureMode = useProjectStore((s) => s.view.measureMode);
+  const { t } = useT();
   const pending = useMeasureStore((s) => s.pending);
 
   return (
@@ -142,12 +144,12 @@ export function MeasureTool() {
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
               >
-                <EditableMm value={Math.round(d)} title="Click to set the length (mm); the second point moves along the line" onCommit={setLength} />
+                <EditableMm value={Math.round(d)} title={t('Click to set the length (mm); the second point moves along the line')} onCommit={setLength} />
                 {' mm'}
                 <span className="ml-1 text-pink-300/70">
-                  (Δx <EditableMm value={dx} title="Set Δx (mm)" onCommit={setAxis('x')} /> · Δy{' '}
-                  <EditableMm value={dy} title="Set Δy (mm)" onCommit={setAxis('y')} /> · Δz{' '}
-                  <EditableMm value={dz} title="Set Δz (mm)" onCommit={setAxis('z')} />)
+                  (Δx <EditableMm value={dx} title={t('Set {axis} (mm)', { axis: 'Δx' })} onCommit={setAxis('x')} /> · Δy{' '}
+                  <EditableMm value={dy} title={t('Set {axis} (mm)', { axis: 'Δy' })} onCommit={setAxis('y')} /> · Δz{' '}
+                  <EditableMm value={dz} title={t('Set {axis} (mm)', { axis: 'Δz' })} onCommit={setAxis('z')} />)
                 </span>
               </div>
             </Html>

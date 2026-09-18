@@ -1,5 +1,6 @@
 import type { StoreApi } from 'zustand';
 import type { Measurement, ProjectState, WallKey } from '@/types';
+import { t } from '@/i18n';
 
 /** Slice of the store that undo/redo captures and restores. */
 export interface HistoryTracked {
@@ -43,48 +44,75 @@ const LIMIT = 100;
 
 const humanize = (s: string): string => s.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
 
-/** Label shown as "Undo <label>" — receives the action's own arguments. */
+/** Friendly English names for parameter/timber/load keys, translated via `t()` before interpolation. */
+const FIELD_NAMES: Record<string, string> = {
+  length: 'Length',
+  width: 'Width',
+  frontHeight: 'Front height',
+  rearHeight: 'Rear height',
+  maxPostSpacing: 'Max post spacing',
+  postsPerRow: 'Posts per row',
+  maxRafterSpacing: 'Max rafter spacing',
+  maxRafterLength: 'Max rafter length',
+  maxStudSpacing: 'Max stud spacing',
+  maxStockLength: 'Max stock length',
+  braces: 'Knee braces',
+  braceLeg: 'Brace leg',
+  braceDirection: 'Brace direction',
+  connectionMode: 'Connection mode',
+};
+const TIMBER_NAMES: Record<string, string> = { post: 'Post', beam: 'Purlin', rafter: 'Rafter', stud: 'Stud', brace: 'Knee brace' };
+const LOAD_NAMES: Record<string, string> = { snowLoad: 'Snow load', roofCovering: 'Roof covering', serviceClass: 'Service class', windLoad: 'Wind load' };
+const SIDE_NAMES: Record<string, string> = { front: 'Front', rear: 'Rear', left: 'Left', right: 'Right' };
+const OPENING_NAMES: Record<string, string> = { door: 'Door', window: 'Window', passage: 'Passage' };
+
+/** Translate a field/side/type name, falling back to a humanized English version when it isn't in the map. */
+const fieldName = (map: Record<string, string>, key: string): string => t(map[key] ?? humanize(key));
+
+/** Label shown as "Undo <label>" — receives the action's own arguments. Already localized via `t()`. */
 const LABELS: Record<string, (...args: never[]) => string> = {
-  setProjectName: () => 'Rename project',
-  setParam: (key: string) => (key === 'roofDirection' ? 'Change roof direction' : key === 'roofScheme' ? 'Change roof framing scheme' : `Change ${humanize(key)}`),
-  setParams: () => 'Apply statics auto-fix',
-  setOverhang: (side: string) => `Change ${side} overhang`,
-  setTimber: (key: string) => `Change ${humanize(key)} section`,
-  setStrengthClass: () => 'Change strength class',
-  setLoad: (key: string) => `Change ${humanize(key)}`,
-  setWallClosed: (id: string, closed: boolean) => `${closed ? 'Close' : 'Open'} ${id} wall`,
-  addOpening: (_wall: string, type: string) => `Add ${type}`,
-  updateOpening: () => 'Edit opening',
-  removeOpening: () => 'Delete opening',
-  addPartition: () => 'Add partition',
-  updatePartition: () => 'Edit partition',
-  removePartition: () => 'Delete partition',
-  addVehicle: () => 'Add object',
-  updateVehicle: () => 'Move vehicle',
-  removeVehicle: () => 'Remove vehicle',
-  nudgeVehicle: () => 'Move vehicle',
-  rotateVehicle: () => 'Rotate vehicle',
-  movePost: () => 'Move post',
-  moveMidPurlin: (_index: number, position: number | null) => (position === null ? 'Reset mid purlin position' : 'Move mid purlin'),
-  removePost: () => 'Remove post',
-  addFreePost: () => 'Add post',
-  updateFreePost: () => 'Move post',
-  removeFreePost: () => 'Remove post',
-  addPavedArea: () => 'Add paved floor',
-  updatePavedArea: () => 'Edit paved floor',
-  removePavedArea: () => 'Remove paved floor',
-  movePavedPoint: () => 'Move floor corner',
-  insertPavedPoint: () => 'Add floor corner',
-  removePavedPoint: () => 'Remove floor corner',
-  translatePavedArea: () => 'Move paved floor',
-  resizePavedArea: () => 'Resize paved floor',
-  addMeasurement: () => 'Add measurement',
-  clearMeasurements: () => 'Clear measurements',
-  saveProjectAs: () => 'Save project',
-  loadSavedProject: () => 'Load saved project',
-  loadTemplate: () => 'Load template',
-  importProject: () => 'Import project',
-  resetProject: () => 'Reset project',
+  setProjectName: () => t('Rename project'),
+  setParam: (key: string) =>
+    key === 'roofDirection' ? t('Change roof direction') : key === 'roofScheme' ? t('Change roof framing scheme') : t('Change {field}', { field: fieldName(FIELD_NAMES, key) }),
+  setParams: () => t('Apply statics auto-fix'),
+  setOverhang: (side: string) => t('Change {field} overhang', { field: fieldName(SIDE_NAMES, side) }),
+  setTimber: (key: string) => t('Change {field} section', { field: fieldName(TIMBER_NAMES, key) }),
+  setStrengthClass: () => t('Change strength class'),
+  setLoad: (key: string) => t('Change {field}', { field: fieldName(LOAD_NAMES, key) }),
+  setWallClosed: (id: string, closed: boolean) => (closed ? t('Close {field} wall', { field: fieldName(SIDE_NAMES, id) }) : t('Open {field} wall', { field: fieldName(SIDE_NAMES, id) })),
+  addOpening: (_wall: string, type: string) => t('Add {field}', { field: fieldName(OPENING_NAMES, type) }),
+  updateOpening: () => t('Edit opening'),
+  removeOpening: () => t('Delete opening'),
+  addPartition: () => t('Add partition'),
+  updatePartition: () => t('Edit partition'),
+  removePartition: () => t('Delete partition'),
+  addVehicle: () => t('Add object'),
+  updateVehicle: () => t('Move vehicle'),
+  removeVehicle: () => t('Remove vehicle'),
+  nudgeVehicle: () => t('Move vehicle'),
+  rotateVehicle: () => t('Rotate vehicle'),
+  movePost: () => t('Move post'),
+  moveMidPurlin: (_index: number, position: number | null) => (position === null ? t('Reset mid purlin position') : t('Move mid purlin')),
+  removePost: () => t('Remove post'),
+  addFreePost: () => t('Add post'),
+  updateFreePost: () => t('Move post'),
+  removeFreePost: () => t('Remove post'),
+  addPavedArea: () => t('Add paved floor'),
+  updatePavedArea: () => t('Edit paved floor'),
+  removePavedArea: () => t('Remove paved floor'),
+  movePavedPoint: () => t('Move floor corner'),
+  insertPavedPoint: () => t('Add floor corner'),
+  removePavedPoint: () => t('Remove floor corner'),
+  translatePavedArea: () => t('Move paved floor'),
+  resizePavedArea: () => t('Resize paved floor'),
+  addMeasurement: () => t('Add measurement'),
+  removeMeasurement: () => t('Remove measurement'),
+  clearMeasurements: () => t('Clear measurements'),
+  saveProjectAs: () => t('Save project'),
+  loadSavedProject: () => t('Load saved project'),
+  loadTemplate: () => t('Load template'),
+  importProject: () => t('Import project'),
+  resetProject: () => t('Reset project'),
 };
 
 /** Actions whose rapid repeats (drag, typing, arrow-key nudge) belong in a single undo step. */
@@ -121,7 +149,7 @@ function snapshotOf(s: HistoryTracked): Snapshot {
 
 function describe(name: string | undefined, args: unknown[]): string {
   const fn = name ? LABELS[name] : undefined;
-  if (!fn) return name ? humanize(name) : 'Edit';
+  if (!fn) return name ? humanize(name) : t('Edit');
   return (fn as (...a: unknown[]) => string)(...args);
 }
 

@@ -1,3 +1,5 @@
+import { getLang, t, tx } from '@/i18n';
+import { embedUnicodeFont, UNICODE_FONT } from '@/utils/pdfFont';
 import type { BomResult, ConnectionsResult, CutListItem, ProjectState, StaticsResult } from '@/types';
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -35,11 +37,24 @@ const csvCell = (v: string | number): string => {
 };
 
 export function exportCutListCsv(project: ProjectState, cutList: CutListItem[]): void {
-  const header = ['Pos', 'Group', 'Name', 'Name (DE)', 'Width mm', 'Height mm', 'Length mm', 'Cut start °', 'Cut end °', 'Qty', 'Notes'];
+  const lang = getLang();
+  const header = [
+    t('Pos'),
+    t('Group'),
+    t('Name'),
+    t('Name (DE)'),
+    t('Width mm'),
+    t('Height mm'),
+    t('Length mm'),
+    t('Cut start °'),
+    t('Cut end °'),
+    t('Qty'),
+    t('Notes'),
+  ];
   const rows = cutList.map((c) => [
     c.pos,
-    c.group,
-    c.name,
+    tx(c.group),
+    lang === 'de' ? c.nameDe : tx(c.name),
     c.nameDe,
     c.section.width,
     c.section.height,
@@ -47,7 +62,7 @@ export function exportCutListCsv(project: ProjectState, cutList: CutListItem[]):
     c.cuts.start,
     c.cuts.end,
     c.quantity,
-    c.notes ?? '',
+    c.notes ? tx(c.notes) : '',
   ]);
   const csv = [header, ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n');
   downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), `${safeName(project.name)}_cutlist.csv`);
@@ -63,44 +78,58 @@ export async function exportCutListPdf(
   const [{ jsPDF }, autoTableModule] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   const autoTable = autoTableModule.default;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  // Helvetica only covers Latin-1; Ukrainian needs an embedded Cyrillic font
+  const font = getLang() === 'uk' ? UNICODE_FONT : 'helvetica';
+  if (font === UNICODE_FONT) await embedUnicodeFont(doc);
   const p = project.params;
+  const lang = getLang();
+  // `name (nameDe)` cell: the German term stays a secondary parenthetical unless the UI itself is German.
+  const nameCell = (name: string, nameDe: string): string =>
+    lang === 'de' ? nameDe : `${tx(name)} (${nameDe})`;
 
   doc.setFontSize(16);
-  doc.text(`${project.name} – Cutting list & BOM`, 14, 14);
+  doc.text(t('{name} – Cutting list & BOM', { name: project.name }), 14, 14);
   doc.setFontSize(9);
   doc.text(
-    `Structure ${p.length} × ${p.width} mm, H1 ${p.frontHeight} / H2 ${p.rearHeight} mm · ${p.timber.strengthClass} · generated ${new Date().toLocaleDateString()}`,
+    t('Structure {length} × {width} mm, H1 {frontHeight} / H2 {rearHeight} mm · {strengthClass} · generated {date}', {
+      length: p.length,
+      width: p.width,
+      frontHeight: p.frontHeight,
+      rearHeight: p.rearHeight,
+      strengthClass: p.timber.strengthClass,
+      date: new Date().toLocaleDateString(),
+    }),
     14,
     20,
   );
 
   autoTable(doc, {
     startY: 25,
-    head: [['Pos', 'Group', 'Name', 'Section', 'Length', 'Cut start', 'Cut end', 'Qty', 'Notes']],
+    head: [[t('Pos'), t('Group'), t('Name'), t('Section'), t('Length'), t('Cut start °'), t('Cut end °'), t('Qty'), t('Notes')]],
     body: cutList.map((c) => [
       c.pos,
-      c.group,
-      `${c.name} (${c.nameDe})`,
+      tx(c.group),
+      nameCell(c.name, c.nameDe),
       `${c.section.width}×${c.section.height}`,
       `${c.length} mm`,
       `${c.cuts.start}°`,
       `${c.cuts.end}°`,
       c.quantity,
-      c.notes ?? '',
+      c.notes ? tx(c.notes) : '',
     ]),
-    styles: { fontSize: 8 },
+    styles: { fontSize: 8, font },
     headStyles: { fillColor: [92, 61, 28] },
   });
 
   const afterCut = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   doc.setFontSize(12);
-  doc.text('Bill of materials', 14, afterCut + 10);
+  doc.text(t('Bill of materials'), 14, afterCut + 10);
   autoTable(doc, {
     startY: afterCut + 13,
-    head: [['Category', 'Section', 'Pieces', 'Length', 'Area', 'Volume', 'Mass']],
+    head: [[t('Category'), t('Section'), t('Pieces'), t('Length'), t('Area'), t('Volume'), t('Mass')]],
     body: [
       ...bom.lines.map((l) => [
-        `${l.label} (${l.labelDe})`,
+        nameCell(l.label, l.labelDe),
         l.section ? `${l.section.width}×${l.section.height}` : '–',
         l.count,
         l.totalLengthM ? `${l.totalLengthM.toFixed(2)} m` : '–',
@@ -108,32 +137,37 @@ export async function exportCutListPdf(
         `${l.volumeM3.toFixed(3)} m³`,
         `${Math.round(l.massKg)} kg`,
       ]),
-      ['Total', '', '', `${bom.totalLengthM.toFixed(1)} m`, '', `${bom.totalVolumeM3.toFixed(3)} m³`, `${Math.round(bom.totalMassKg)} kg`],
+      [t('Total'), '', '', `${bom.totalLengthM.toFixed(1)} m`, '', `${bom.totalVolumeM3.toFixed(3)} m³`, `${Math.round(bom.totalMassKg)} kg`],
     ],
-    styles: { fontSize: 8 },
+    styles: { fontSize: 8, font },
     headStyles: { fillColor: [92, 61, 28] },
   });
 
   if (bom.materials.length > 0) {
     const afterBom = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-    doc.text('Other materials', 14, afterBom + 10);
+    doc.text(t('Other materials'), 14, afterBom + 10);
     autoTable(doc, {
       startY: afterBom + 13,
-      head: [['Item', 'Spec', 'Qty', 'Note']],
-      body: bom.materials.map((m) => [`${m.name} (${m.nameDe})`, m.spec, `${m.quantity.toFixed(m.unit === 'pcs' ? 0 : 2)} ${m.unit}`, m.note ?? '']),
-      styles: { fontSize: 8 },
+      head: [[t('Item'), t('Spec'), t('Qty'), t('Note')]],
+      body: bom.materials.map((m) => [
+        nameCell(m.name, m.nameDe),
+        tx(m.spec),
+        `${m.quantity.toFixed(m.unit === 'pcs' ? 0 : 2)} ${t(m.unit)}`,
+        m.note ? tx(m.note) : '',
+      ]),
+      styles: { fontSize: 8, font },
       headStyles: { fillColor: [92, 61, 28] },
     });
   }
 
   doc.addPage();
   doc.setFontSize(12);
-  doc.text(`Statics check (simplified EC5) – overall: ${statics.status.toUpperCase()}`, 14, 14);
+  doc.text(t('Statics check (simplified EC5) – overall: {status}', { status: statics.status.toUpperCase() }), 14, 14);
   autoTable(doc, {
     startY: 18,
-    head: [['Element', 'Section', 'Span', 'q_d', 'Stress', 'Deflection', 'Util.', 'Status']],
+    head: [[t('Element'), t('Section'), t('Span'), 'q_d', t('Stress'), t('Deflection'), t('Util.'), t('Status')]],
     body: statics.checks.map((c) => [
-      `${c.element} (${c.elementDe})`,
+      nameCell(c.element, c.elementDe),
       `${c.section.width}×${c.section.height}`,
       `${c.span} mm`,
       `${c.loadUls.toFixed(2)} kN/m`,
@@ -142,19 +176,23 @@ export async function exportCutListPdf(
       `${Math.round(c.utilisation * 100)} %`,
       c.status,
     ]),
-    styles: { fontSize: 8 },
+    styles: { fontSize: 8, font },
     headStyles: { fillColor: [92, 61, 28] },
   });
   const afterStatics = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-  doc.text(`Connections (${connections.mode})`, 14, afterStatics + 10);
+  doc.text(
+    t('Connections ({mode})', { mode: connections.mode === 'hardware' ? t('mechanical connectors') : t('traditional joinery') }),
+    14,
+    afterStatics + 10,
+  );
   autoTable(doc, {
     startY: afterStatics + 13,
-    head: [['Item', 'Spec', 'Qty', 'Note']],
+    head: [[t('Item'), t('Spec'), t('Qty'), t('Note')]],
     body: [
-      ...connections.hardware.map((h) => [`${h.name} (${h.nameDe})`, h.spec, h.quantity, h.note ?? '']),
-      ...connections.joinery.map((j) => [`${j.name} (${j.nameDe})`, 'joint', j.quantity, j.note ?? '']),
+      ...connections.hardware.map((h) => [nameCell(h.name, h.nameDe), tx(h.spec), h.quantity, h.note ? tx(h.note) : '']),
+      ...connections.joinery.map((j) => [nameCell(j.name, j.nameDe), t('joint'), j.quantity, j.note ? tx(j.note) : '']),
     ],
-    styles: { fontSize: 8 },
+    styles: { fontSize: 8, font },
     headStyles: { fillColor: [92, 61, 28] },
   });
 

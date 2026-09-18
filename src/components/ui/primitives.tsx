@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, type LucideIcon } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
 import { focusContains } from './sidebarNavigation';
+import { t } from '@/i18n';
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
@@ -123,7 +124,7 @@ export function NumberField({ label, value, onChange, min, max, step = 10, unit 
       </label>
       <input
         type="range"
-        aria-label={`${label} slider`}
+        aria-label={t('{label} slider', { label })}
         disabled={disabled}
         className="slider"
         style={{ '--fill': `${fill}%` } as React.CSSProperties}

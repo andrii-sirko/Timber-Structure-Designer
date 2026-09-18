@@ -26,6 +26,7 @@ import {
 import type { CameraPreset, HighlightMode, LayerVisibility } from '@/types';
 import { useProjectStore } from '@/store';
 import { useMeasureStore } from '@/components/3d/MeasureTool';
+import { useT } from '@/i18n';
 import { IconButton, cx } from './primitives';
 
 const PRESETS: { id: CameraPreset; label: string; icon: typeof Home }[] = [
@@ -55,6 +56,7 @@ const HIGHLIGHTS: { id: HighlightMode; label: string; icon: typeof Home }[] = [
 ];
 
 export function ViewportControls({ canvasContainer }: { canvasContainer: React.RefObject<HTMLDivElement | null> }) {
+  const { t } = useT();
   const view = useProjectStore((s) => s.view);
   const selectedWallId = useProjectStore((s) => s.selectedWallId);
   const measurements = useProjectStore((s) => s.measurements);
@@ -81,56 +83,56 @@ export function ViewportControls({ canvasContainer }: { canvasContainer: React.R
   return (
     <div className="pointer-events-none absolute inset-0 flex justify-between p-3" style={{ paddingLeft: 'calc(var(--panel-l, 0px) + 0.75rem)', paddingBottom: 'calc(var(--sheet-h, 0px) + 0.75rem)' }}>
       <div className="pointer-events-auto flex max-h-full flex-col gap-2 self-start overflow-y-auto scroll-thin">
-        <div className={group} title="Camera presets">
+        <div className={group} title={t('Camera presets')}>
           {PRESETS.map((p) => (
-            <IconButton key={p.id} icon={p.icon} title={p.label} active={view.cameraPreset === p.id} onClick={() => setCameraPreset(p.id)} />
+            <IconButton key={p.id} icon={p.icon} title={t(p.label)} active={view.cameraPreset === p.id} onClick={() => setCameraPreset(p.id)} />
           ))}
           <IconButton
             icon={Scan}
-            title={selectedWallId ? `Elevation of ${selectedWallId} wall (2D positioning)` : 'Select a wall to view its elevation'}
+            title={selectedWallId ? t('Elevation of {wall} wall (2D positioning)', { wall: selectedWallId }) : t('Select a wall to view its elevation')}
             active={view.cameraPreset === 'wall'}
             disabled={!selectedWallId}
             onClick={() => setCameraPreset('wall')}
           />
         </div>
         <div className={group}>
-          <IconButton icon={Eye} title={view.orthographic ? 'Orthographic (click for perspective)' : 'Perspective (click for orthographic)'} active={view.orthographic} onClick={() => setOrthographic(!view.orthographic)} />
-          <IconButton icon={Home} title="Fit / reset view" onClick={() => setCameraPreset('iso')} />
-          <IconButton icon={Camera} title="Save screenshot (PNG)" onClick={screenshot} />
+          <IconButton icon={Eye} title={view.orthographic ? t('Orthographic (click for perspective)') : t('Perspective (click for orthographic)')} active={view.orthographic} onClick={() => setOrthographic(!view.orthographic)} />
+          <IconButton icon={Home} title={t('Fit / reset view')} onClick={() => setCameraPreset('iso')} />
+          <IconButton icon={Camera} title={t('Save screenshot (PNG)')} onClick={screenshot} />
         </div>
       </div>
 
       <div className="pointer-events-auto flex max-h-full max-w-[60%] flex-col items-end gap-2 self-start overflow-y-auto scroll-thin">
-        <div className={cx(group, 'flex-row')} title="Render mode">
+        <div className={cx(group, 'flex-row')} title={t('Render mode')}>
           {HIGHLIGHTS.map((h) => (
-            <IconButton key={h.id} icon={h.icon} title={h.label} active={view.highlight === h.id} onClick={() => setHighlight(h.id)} />
+            <IconButton key={h.id} icon={h.icon} title={t(h.label)} active={view.highlight === h.id} onClick={() => setHighlight(h.id)} />
           ))}
         </div>
-        <div className={cx(group, 'flex-row')} title="Layers">
+        <div className={cx(group, 'flex-row')} title={t('Layers')}>
           <span className="flex items-center px-1 text-slate-500">
             <Layers className="h-4 w-4" />
           </span>
           {LAYERS.map((l) => (
-            <IconButton key={l.id} icon={l.icon} title={l.label} active={view.layers[l.id]} onClick={() => setLayer(l.id, !view.layers[l.id])} />
+            <IconButton key={l.id} icon={l.icon} title={t(l.label)} active={view.layers[l.id]} onClick={() => setLayer(l.id, !view.layers[l.id])} />
           ))}
         </div>
-        <div className={cx(group, 'flex-row')} title="Measure">
+        <div className={cx(group, 'flex-row')} title={t('Measure')}>
           <IconButton
             icon={Ruler}
-            title={view.measureMode ? 'Measuring: click two points (click to exit)' : 'Measure distance between two points'}
+            title={view.measureMode ? t('Measuring: click two points (click to exit)') : t('Measure distance between two points')}
             active={view.measureMode}
             onClick={() => {
               resetPending();
               setMeasureMode(!view.measureMode);
             }}
           />
-          <IconButton icon={Eraser} title="Clear measurements" disabled={measurements.length === 0} onClick={clearMeasurements} />
+          <IconButton icon={Eraser} title={t('Clear measurements')} disabled={measurements.length === 0} onClick={clearMeasurements} />
           <IconButton
             icon={Waypoints}
             title={
               view.neighbourMode
-                ? 'Neighbour distances on: click a timber to measure its gaps (click to turn off)'
-                : 'Show distances to neighbouring members when a timber is clicked'
+                ? t('Neighbour distances on: click a timber to measure its gaps (click to turn off)')
+                : t('Show distances to neighbouring members when a timber is clicked')
             }
             active={view.neighbourMode}
             onClick={() => setNeighbourMode(!view.neighbourMode)}
@@ -138,12 +140,12 @@ export function ViewportControls({ canvasContainer }: { canvasContainer: React.R
         </div>
         {view.neighbourMode && !view.measureMode && (
           <div className="rounded-md border border-cyan-500/40 bg-slate-950/85 px-2 py-1 text-[11px] text-cyan-100">
-            Click a timber to measure its distance to every neighbour.
+            {t('Click a timber to measure its distance to every neighbour.')}
           </div>
         )}
         {view.measureMode && (
           <div className="rounded-md border border-pink-500/40 bg-slate-950/85 px-2 py-1 text-[11px] text-pink-100">
-            Click two points on the model (or the ground) to measure.
+            {t('Click two points on the model (or the ground) to measure.')}
           </div>
         )}
       </div>

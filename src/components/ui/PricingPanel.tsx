@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { computePricing, createDefaultPrices, timberM3RateFromPerMeter, timberPricePerMeter } from "@/engine/pricing";
+import { useT } from "@/i18n";
 import { usePriceStore, useProjectStore } from "@/store";
 import type { DerivedModel, PriceFieldRef, PricingLine } from "@/types";
 import { Button, cx } from "./primitives";
@@ -24,6 +25,7 @@ function PriceInput({
   onReset: () => void;
   isDefault: boolean;
 }) {
+  const { t } = useT();
   const id = useId();
   const [text, setText] = useState(value.toFixed(2));
   const [focused, setFocused] = useState(false);
@@ -71,8 +73,8 @@ function PriceInput({
       </span>
       <button
         type="button"
-        title={isDefault ? "Matches default price" : "Reset to default price"}
-        aria-label="Reset to default price"
+        title={isDefault ? t("Matches default price") : t("Reset to default price")}
+        aria-label={t("Reset to default price")}
         disabled={isDefault}
         onClick={onReset}
         className="text-slate-500 hover:text-slate-200 disabled:opacity-25"
@@ -100,6 +102,7 @@ function PriceTable({
   onChange: (ref: PriceFieldRef, value: number) => void;
   defaultFor: (ref: PriceFieldRef) => number;
 }) {
+  const { t, tx, lang } = useT();
   if (lines.length === 0 && !empty) return null;
   return (
     <>
@@ -112,10 +115,10 @@ function PriceTable({
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-slate-950">
             <tr>
-              <th className={th}>Item</th>
-              <th className={cx(th, "text-right")}>Qty</th>
-              <th className={cx(th, "text-right")}>Unit price</th>
-              <th className={cx(th, "text-right")}>Total</th>
+              <th className={th}>{t("Item")}</th>
+              <th className={cx(th, "text-right")}>{t("Qty")}</th>
+              <th className={cx(th, "text-right")}>{t("Unit price")}</th>
+              <th className={cx(th, "text-right")}>{t("Total")}</th>
             </tr>
           </thead>
           <tbody>
@@ -125,15 +128,15 @@ function PriceTable({
                 className="border-t border-slate-800/80 hover:bg-slate-900/60"
               >
                 <td className={td}>
-                  <div>{l.label}</div>
-                  {l.labelDe && (
+                  <div>{lang === "de" && l.labelDe ? l.labelDe : tx(l.label)}</div>
+                  {l.labelDe && lang !== "de" && (
                     <div className="text-[10px] text-slate-500">
                       {l.labelDe}
                     </div>
                   )}
                 </td>
                 <td className={cx(td, mono, "text-right whitespace-nowrap")}>
-                  {l.quantity.toFixed(l.unit === "pcs" ? 0 : 2)} {l.unit}
+                  {l.quantity.toFixed(l.unit === "pcs" ? 0 : 2)} {t(l.unit)}
                 </td>
                 <td className={cx(td, "text-right")}>
                   <PriceInput
@@ -166,6 +169,7 @@ function PriceTable({
 }
 
 export function PricingPanel({ model }: { model: DerivedModel }) {
+  const { t } = useT();
   const roofCovering = useProjectStore((s) => s.project.params.loads.roofCovering);
   const prices = usePriceStore((s) => s.prices);
   const setTimberPrice = usePriceStore((s) => s.setTimberPrice);
@@ -211,64 +215,64 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
     <div>
       <div className="flex items-center gap-2 border-b border-slate-800 p-2">
         <p className="flex-1 text-[11px] text-slate-500">
-          Default unit prices are EUR, Berlin/Potsdam-area estimates — timber
-          is priced per running metre (lfm), boards, roofing and floor decks
-          per m², doors and windows per piece. Edit any price to match your
-          own.
+          {t(
+            "Default unit prices are EUR, Berlin/Potsdam-area estimates — timber is priced per running metre (lfm), boards, roofing and floor decks per m², doors and windows per piece. Edit any price to match your own.",
+          )}
         </p>
         <Button size="sm" icon={RotateCcw} onClick={() => resetPrices()}>
-          Reset all
+          {t("Reset all")}
         </Button>
       </div>
 
       <PriceTable
-        title="Timber, boards & roofing"
+        title={t("Timber, boards & roofing")}
         lines={pricing.timberLines}
-        subtotalLabel="Timber subtotal"
+        subtotalLabel={t("Timber subtotal")}
         subtotal={timberSubtotal}
-        empty="No timber yet."
+        empty={t("No timber yet.")}
         onChange={applyChange}
         defaultFor={defaultFor}
       />
       <PriceTable
-        title="Other materials"
+        title={t("Other materials")}
         lines={pricing.otherLines}
-        subtotalLabel="Other materials subtotal"
+        subtotalLabel={t("Other materials subtotal")}
         subtotal={otherSubtotal}
         onChange={applyChange}
         defaultFor={defaultFor}
       />
       <PriceTable
-        title="Doors & windows"
+        title={t("Doors & windows")}
         lines={pricing.fixtureLines}
-        subtotalLabel="Doors & windows subtotal"
+        subtotalLabel={t("Doors & windows subtotal")}
         subtotal={pricing.fixtureTotal}
         onChange={applyChange}
         defaultFor={defaultFor}
       />
       <PriceTable
-        title="Hardware & fixings"
+        title={t("Hardware & fixings")}
         lines={pricing.hardwareLines}
-        subtotalLabel="Hardware subtotal"
+        subtotalLabel={t("Hardware subtotal")}
         subtotal={pricing.hardwareTotal}
-        empty="No hardware quantities yet — add posts, rafters or braces to see connector costs here."
+        empty={t(
+          "No hardware quantities yet — add posts, rafters or braces to see connector costs here.",
+        )}
         onChange={applyChange}
         defaultFor={defaultFor}
       />
 
       <div className="m-2 flex items-center justify-between rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2">
         <span className="text-sm font-medium text-slate-100">
-          Grand total
+          {t("Grand total")}
         </span>
         <span className="font-mono text-lg font-semibold text-sky-200">
           €{pricing.grandTotal.toFixed(2)}
         </span>
       </div>
       <p className="px-2 pb-3 text-[11px] leading-snug text-slate-500">
-        Materials, doors & windows and hardware only — excludes delivery,
-        cutting waste beyond what the BOM already allows for, concrete for the
-        post foundations, and labour. Traditional joints themselves are
-        technique, not purchased material; only their oak pegs are priced.
+        {t(
+          "Materials, doors & windows and hardware only — excludes delivery, cutting waste beyond what the BOM already allows for, concrete for the post foundations, and labour. Traditional joints themselves are technique, not purchased material; only their oak pegs are priced.",
+        )}
       </p>
     </div>
   );

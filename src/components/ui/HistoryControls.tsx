@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { History, Redo2, Undo2 } from 'lucide-react';
 import { useProjectStore } from '@/store';
+import { useT } from '@/i18n';
 import { cx, IconButton } from './primitives';
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent);
@@ -8,15 +9,16 @@ const MOD = IS_MAC ? '⌘' : 'Ctrl+';
 const UNDO_KEYS = `${MOD}Z`;
 const REDO_KEYS = IS_MAC ? '⇧⌘Z' : 'Ctrl+Y';
 
-function timeAgo(at: number): string {
+function timeAgo(at: number, t: (key: string, params?: Record<string, string | number>) => string): string {
   const s = Math.max(0, Math.round((Date.now() - at) / 1000));
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.round(s / 60)}m ago`;
-  return `${Math.round(s / 3600)}h ago`;
+  if (s < 60) return t('{n}s ago', { n: s });
+  if (s < 3600) return t('{n}m ago', { n: Math.round(s / 60) });
+  return t('{n}h ago', { n: Math.round(s / 3600) });
 }
 
 /** Undo / redo ("rewire") buttons plus a timeline of the last actions to jump back or forward in one click. */
 export function HistoryControls() {
+  const { t } = useT();
   const past = useProjectStore((s) => s.past);
   const future = useProjectStore((s) => s.future);
   const undo = useProjectStore((s) => s.undo);
@@ -43,19 +45,19 @@ export function HistoryControls() {
     <div ref={wrapper} className="relative flex items-center gap-1">
       <IconButton
         icon={Undo2}
-        title={nextUndo ? `Undo ${nextUndo.label} (${UNDO_KEYS})` : `Nothing to undo (${UNDO_KEYS})`}
+        title={nextUndo ? t('Undo {label} ({keys})', { label: nextUndo.label, keys: UNDO_KEYS }) : t('Nothing to undo ({keys})', { keys: UNDO_KEYS })}
         disabled={!nextUndo}
         onClick={undo}
       />
       <IconButton
         icon={Redo2}
-        title={nextRedo ? `Redo ${nextRedo.label} (${REDO_KEYS})` : `Nothing to redo (${REDO_KEYS})`}
+        title={nextRedo ? t('Redo {label} ({keys})', { label: nextRedo.label, keys: REDO_KEYS }) : t('Nothing to redo ({keys})', { keys: REDO_KEYS })}
         disabled={!nextRedo}
         onClick={redo}
       />
       <IconButton
         icon={History}
-        title="History — jump to any recent state"
+        title={t('History — jump to any recent state')}
         active={open}
         disabled={past.length === 0 && future.length === 0}
         onClick={() => setOpen((o) => !o)}
@@ -63,7 +65,7 @@ export function HistoryControls() {
 
       {open && (
         <div className="absolute top-full left-0 z-30 mt-1 max-h-96 w-72 overflow-y-auto rounded-lg border border-slate-700 bg-slate-950 p-1.5 shadow-2xl">
-          <p className="px-2 py-1 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">History</p>
+          <p className="px-2 py-1 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">{t('History')}</p>
 
           {/* Undone actions, newest first — click to replay forward */}
           {future
@@ -81,13 +83,13 @@ export function HistoryControls() {
               >
                 <Redo2 className="h-3 w-3 shrink-0 translate-y-0.5" />
                 <span className="flex-1 truncate">{entry.label}</span>
-                <span className="shrink-0 text-[10px] text-slate-600">undone</span>
+                <span className="shrink-0 text-[10px] text-slate-600">{t('undone')}</span>
               </button>
             ))}
 
           <div className={cx(row, 'bg-sky-500/10 text-sky-200')}>
             <span className="h-1.5 w-1.5 shrink-0 translate-y-1 rounded-full bg-sky-400" />
-            <span className="flex-1 truncate font-medium">Current state</span>
+            <span className="flex-1 truncate font-medium">{t('Current state')}</span>
           </div>
 
           {/* Applied actions, newest first — click to rewind to just before that action */}
@@ -102,16 +104,16 @@ export function HistoryControls() {
                   undoTimes(steps);
                   setOpen(false);
                 }}
-                title={`Undo back to before "${entry.label}" (${steps} step${steps === 1 ? '' : 's'})`}
+                title={t('Undo back to before "{label}" ({n} {unit})', { label: entry.label, n: steps, unit: steps === 1 ? t('step') : t('steps') })}
                 className={cx(row, 'text-slate-300 hover:bg-slate-900 hover:text-white')}
               >
                 <Undo2 className="h-3 w-3 shrink-0 translate-y-0.5 text-slate-600" />
                 <span className="flex-1 truncate">{entry.label}</span>
-                <span className="shrink-0 text-[10px] text-slate-600">{timeAgo(entry.at)}</span>
+                <span className="shrink-0 text-[10px] text-slate-600">{timeAgo(entry.at, t)}</span>
               </button>
             ))}
 
-          {past.length === 0 && <p className="px-2 py-1 text-xs text-slate-600">No earlier steps.</p>}
+          {past.length === 0 && <p className="px-2 py-1 text-xs text-slate-600">{t('No earlier steps.')}</p>}
         </div>
       )}
     </div>
