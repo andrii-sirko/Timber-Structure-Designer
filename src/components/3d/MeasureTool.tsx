@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { create } from 'zustand';
 import * as THREE from 'three';
 import { Html, Line } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import { X } from 'lucide-react';
 import type { Measurement, Vec3 } from '@/types';
 import { useProjectStore } from '@/store';
 import { uuid } from '@/engine/geometry';
-import { MM } from './materials';
 import { useT } from '@/i18n';
+import { MM } from './materials';
 
 interface MeasureState {
   pending: Vec3 | null;
@@ -108,12 +110,61 @@ function EditableMm({ value, title, className, onCommit }: EditableProps) {
   );
 }
 
+const LABEL_GAP_PX = 8;
+const _pa = new THREE.Vector3();
+const _pb = new THREE.Vector3();
+
+interface LabelProps {
+  a: [number, number, number];
+  b: [number, number, number];
+  children: ReactNode;
+}
+
+/** Label at the line's midpoint, pushed off the line perpendicular to it in screen space so it never covers it. */
+function MeasurementLabel({ a, b, children }: LabelProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const mid: [number, number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+
+  useFrame(({ camera, size }) => {
+    const el = ref.current;
+    if (!el) return;
+    _pa.set(...a).project(camera);
+    _pb.set(...b).project(camera);
+    const sx = ((_pb.x - _pa.x) * size.width) / 2;
+    const sy = (-(_pb.y - _pa.y) * size.height) / 2;
+    const len = Math.hypot(sx, sy);
+    // Screen-space normal of the line, flipped to point up; straight up when the line is seen end-on.
+    let nx = len < 1 ? 0 : -sy / len;
+    let ny = len < 1 ? -1 : sx / len;
+    if (ny > 0 || (ny === 0 && nx < 0)) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const off = (Math.abs(nx) * el.offsetWidth + Math.abs(ny) * el.offsetHeight) / 2 + LABEL_GAP_PX;
+    el.style.transform = `translate(${(nx * off).toFixed(1)}px, ${(ny * off).toFixed(1)}px)`;
+  });
+
+  return (
+    <Html position={mid} center zIndexRange={[7, 0]}>
+      <div
+        ref={ref}
+        className="rounded border border-pink-400/50 bg-slate-900/90 px-1.5 py-0.5 font-mono text-[11px] whitespace-nowrap text-pink-100 shadow"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </Html>
+  );
+}
+
 export function MeasureTool() {
   const measurements = useProjectStore((s) => s.measurements);
   const updateMeasurement = useProjectStore((s) => s.updateMeasurement);
+  const removeMeasurement = useProjectStore((s) => s.removeMeasurement);
   const measureMode = useProjectStore((s) => s.view.measureMode);
-  const { t } = useT();
   const pending = useMeasureStore((s) => s.pending);
+  const { t } = useT();
 
   return (
     <group>
@@ -124,7 +175,6 @@ export function MeasureTool() {
         const dx = Math.abs(m.b.x - m.a.x);
         const dy = Math.abs(m.b.y - m.a.y);
         const dz = Math.abs(m.b.z - m.a.z);
-        const mid: [number, number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
         const setLength = (v: number) => updateMeasurement(m.id, { b: resizeMeasurement(m, v) });
         const setAxis = (axis: keyof Vec3) => (v: number) => updateMeasurement(m.id, { b: resizeMeasurementAxis(m, axis, v) });
         return (
@@ -138,21 +188,26 @@ export function MeasureTool() {
               <sphereGeometry args={[0.02, 12, 12]} />
               <meshBasicMaterial color="#f472b6" />
             </mesh>
-            <Html position={mid} center zIndexRange={[7, 0]}>
-              <div
-                className="rounded border border-pink-400/50 bg-slate-900/90 px-1.5 py-0.5 font-mono text-[11px] whitespace-nowrap text-pink-100 shadow"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
+            <MeasurementLabel a={a} b={b}>
+              <EditableMm value={Math.round(d)} title={t('Click to set the length (mm); the second point moves along the line')} onCommit={setLength} />
+              {' mm'}
+              <span className="ml-1 text-pink-300/70">
+                (Δx <EditableMm value={dx} title={t('Set {axis} (mm)', { axis: 'Δx' })} onCommit={setAxis('x')} /> · Δy{' '}
+                <EditableMm value={dy} title={t('Set {axis} (mm)', { axis: 'Δy' })} onCommit={setAxis('y')} /> · Δz{' '}
+                <EditableMm value={dz} title={t('Set {axis} (mm)', { axis: 'Δz' })} onCommit={setAxis('z')} />)
+              </span>
+              <button
+                type="button"
+                title={t('Remove this measurement')}
+                className="ml-1 inline-flex rounded p-0.5 align-middle text-pink-300/70 hover:bg-pink-400/20 hover:text-pink-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeMeasurement(m.id);
+                }}
               >
-                <EditableMm value={Math.round(d)} title={t('Click to set the length (mm); the second point moves along the line')} onCommit={setLength} />
-                {' mm'}
-                <span className="ml-1 text-pink-300/70">
-                  (Δx <EditableMm value={dx} title={t('Set {axis} (mm)', { axis: 'Δx' })} onCommit={setAxis('x')} /> · Δy{' '}
-                  <EditableMm value={dy} title={t('Set {axis} (mm)', { axis: 'Δy' })} onCommit={setAxis('y')} /> · Δz{' '}
-                  <EditableMm value={dz} title={t('Set {axis} (mm)', { axis: 'Δz' })} onCommit={setAxis('z')} />)
-                </span>
-              </div>
-            </Html>
+                <X size={11} />
+              </button>
+            </MeasurementLabel>
           </group>
         );
       })}

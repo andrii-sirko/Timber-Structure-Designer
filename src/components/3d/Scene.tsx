@@ -10,7 +10,7 @@ import { canDeleteSelectedPartition } from '@/engine/wallKeyboard';
 import { CameraRig, modelBounds } from './CameraRig';
 import { DimensionLines, MidPurlinDragDistances, PartitionDragDistances, PartitionResizeRuler, PostDragDistances, StudSpacingDimensions, WallExtentRuler } from './DimensionLines';
 import { midPurlinIndex, snapDrag } from '@/engine/postDrag';
-import { partitionDragCursor, partitionDragMode, partitionDragModeAt, partitionDragPatch, partitionGrabOffset, type PartitionDrag } from '@/engine/partitionDrag';
+import { END_STUD_GROUP, partitionDragCursor, partitionDragMode, partitionDragModeAt, partitionDragPatch, partitionGrabOffset, type PartitionDrag } from '@/engine/partitionDrag';
 import { wallExtentCursor, wallExtentDragModeAt, wallExtentDragPatch, wallExtentGrabOffset, wallExtentMemberMode, type WallExtentDrag, type WallExtentDragMode } from '@/engine/wallExtentDrag';
 import { worldPointToCanonical } from '@/engine/orientation';
 import { postKeyAxis } from '@/engine/postOverrides';
@@ -112,6 +112,11 @@ export function Scene({ model }: { model: DerivedModel }) {
   const draggingPost = useMemo(
     () => (draggingPostId ? model.framing.members.find((m) => m.id === draggingPostId) ?? null : null),
     [draggingPostId, model.framing.members],
+  );
+  // Uprights a dragged post measures to: other posts and the end studs of walls.
+  const postUprights = useMemo(
+    () => model.framing.members.filter((m) => m.category === 'post' || m.group === END_STUD_GROUP),
+    [model.framing.members],
   );
   const draggingPartition = useMemo(
     () => (draggingPartitionId ? project.partitions.find((p) => p.id === draggingPartitionId) ?? null : null),
@@ -519,7 +524,7 @@ export function Scene({ model }: { model: DerivedModel }) {
         {draggingPartition && partitionDrag?.mode === 'move' && <PartitionDragDistances partition={draggingPartition} params={project.params} />}
         {draggingPartition && partitionDrag?.mode !== 'move' && <PartitionResizeRuler partition={draggingPartition} />}
         {wallExtentDrag && wallFrames[wallExtentDrag.wallId] && <WallExtentRuler frame={wallFrames[wallExtentDrag.wallId]} />}
-        {draggingPost && <PostDragDistances post={draggingPost} params={project.params} />}
+        {draggingPost && <PostDragDistances post={draggingPost} uprights={postUprights} params={project.params} />}
         {draggingMidPurlin !== null && <MidPurlinDragDistances index={draggingMidPurlin} model={model} params={project.params} />}
         {layers.cladding && !wireframe && <OpeningFixtures />}
         <OpeningsEditor />

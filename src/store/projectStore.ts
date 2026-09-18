@@ -170,6 +170,7 @@ interface ProjectStoreBase {
   setNeighbourLimit: (count: number) => void;
   addMeasurement: (m: Measurement) => void;
   updateMeasurement: (id: string, patch: Partial<Pick<Measurement, 'a' | 'b'>>) => void;
+  removeMeasurement: (id: string) => void;
   clearMeasurements: () => void;
 
   saveProjectAs: (name: string) => void;
@@ -616,6 +617,7 @@ export const useProjectStore = create<ProjectStore>()(
       addMeasurement: (m) => set((s) => ({ measurements: [...s.measurements, m] })),
       updateMeasurement: (id, patch) =>
         set((s) => ({ measurements: s.measurements.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
+      removeMeasurement: (id) => set((s) => ({ measurements: s.measurements.filter((m) => m.id !== id) })),
       clearMeasurements: () => set({ measurements: [] }),
 
       saveProjectAs: (name) =>

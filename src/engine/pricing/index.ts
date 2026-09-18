@@ -92,6 +92,7 @@ export const DEFAULT_HARDWARE_PRICE_PER_UNIT: Record<string, number> = {
   'stud-screws': 0.15,
   'header-screws': 0.65,
   'plate-anchor': 0.6,
+  'end-stud-bracket': 2.5,
   'splice-bolt': 2.2,
   'splice-plate': 4.5,
   'cladding-screws': 0.12,

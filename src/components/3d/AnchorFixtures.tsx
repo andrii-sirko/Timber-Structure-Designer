@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { Member } from '@/types';
-import { plateAnchors, postBases } from '@/engine/joinery/anchors';
+import { endStudBrackets, plateAnchors, postBases } from '@/engine/joinery/anchors';
 import { getGalvanisedMaterial, MM } from './materials';
 
 /** Frame anchor washer and head on the plate top (mm). */
@@ -18,6 +18,13 @@ const FLANGE_WIDTH = 80;
 const BOLT_HEIGHTS = [50, 120];
 const BOLT_HEAD_DIAMETER = 19;
 const BOLT_HEAD_HEIGHT = 8;
+
+/** End stud angle bracket 70×70×55 × 2 mm with two concrete screws in the foot (mm). */
+const BRACKET_LEG = 70;
+const BRACKET_WIDTH = 55;
+const BRACKET_THICKNESS = 2;
+const SCREW_HEAD_DIAMETER = 13;
+const SCREW_HEAD_HEIGHT = 4;
 
 type Part = 'box' | 'washer' | 'hex';
 
@@ -56,7 +63,7 @@ function place(centre: THREE.Vector3, x: THREE.Vector3, z: THREE.Vector3, size: 
   return basis.scale(new THREE.Vector3(size[0] * MM, size[1] * MM, size[2] * MM)).setPosition(centre.clone().multiplyScalar(MM));
 }
 
-/** Frame anchors on the bottom plates and post bases under the posts. */
+/** Frame anchors on the bottom plates, angle brackets at free wall ends and post bases under the posts. */
 export function AnchorFixtures({ members }: { members: Member[] }) {
   const geometries = useGeometries();
   const parts = useMemo(() => {
@@ -68,6 +75,19 @@ export function AnchorFixtures({ members }: { members: Member[] }) {
       const p = new THREE.Vector3(a.position.x, a.position.y, a.position.z);
       out.washer.push(place(p.clone().addScaledVector(Y, WASHER_THICKNESS / 2), X, Z, [WASHER_DIAMETER, WASHER_THICKNESS, WASHER_DIAMETER]));
       out.hex.push(place(p.clone().addScaledVector(Y, WASHER_THICKNESS + HEAD_HEIGHT / 2), X, Z, [HEAD_DIAMETER, HEAD_HEIGHT, HEAD_DIAMETER]));
+    }
+
+    for (const b of endStudBrackets(members)) {
+      const o = new THREE.Vector3(b.outward.x, b.outward.y, b.outward.z);
+      const c = new THREE.Vector3(b.across.x, b.across.y, b.across.z);
+      const corner = new THREE.Vector3(b.position.x, b.position.y, b.position.z);
+      const w = Math.min(BRACKET_WIDTH, b.faceWidth);
+      out.box.push(place(corner.clone().addScaledVector(o, BRACKET_THICKNESS / 2).addScaledVector(Y, BRACKET_LEG / 2), o, c, [BRACKET_THICKNESS, BRACKET_LEG, w]));
+      out.box.push(place(corner.clone().addScaledVector(o, BRACKET_LEG / 2).addScaledVector(Y, BRACKET_THICKNESS / 2), o, c, [BRACKET_LEG, BRACKET_THICKNESS, w]));
+      for (const side of [-1, 1]) {
+        const head = corner.clone().addScaledVector(o, BRACKET_LEG * 0.6).addScaledVector(c, (side * w) / 4).addScaledVector(Y, BRACKET_THICKNESS + SCREW_HEAD_HEIGHT / 2);
+        out.hex.push(place(head, o, c, [SCREW_HEAD_DIAMETER, SCREW_HEAD_HEIGHT, SCREW_HEAD_DIAMETER]));
+      }
     }
 
     for (const b of postBases(members)) {

@@ -1,5 +1,5 @@
 import type { ConnectionsResult, FramingResult, HardwareItem, JoineryItem, ProjectState } from '@/types';
-import { plateAnchors } from './anchors';
+import { endStudBrackets, plateAnchors } from './anchors';
 
 /**
  * Derives connector quantities (hardware mode) or traditional carpentry joints
@@ -21,6 +21,7 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   const nBraces = count((m) => m.category === 'brace');
   const nStuds = count((m) => m.category === 'stud');
   const nPlateAnchors = plateAnchors(members).length;
+  const nEndStudBrackets = endStudBrackets(members).length;
   const nHeaders = count((m) => m.category === 'header');
   const nSills = count((m) => m.category === 'sill');
   const nPurlinPieces = count((m) => m.group.startsWith('Purlin'));
@@ -69,6 +70,9 @@ export function computeConnections(project: ProjectState, framing: FramingResult
     hw('splice-bolt', 'Scarf joint bolts', 'Stoßverschraubung', 'M12 × 200 mm', nSplices * 2);
     hw('plate-anchor', 'Frame anchors (bottom plate → slab)', 'Rahmendübel', '10 × 135 mm', nPlateAnchors, 'Max. 800 mm apart, 150 mm from plate ends');
   }
+
+  // Free wall ends (both modes)
+  hw('end-stud-bracket', 'Angle brackets with concrete screws (end stud → slab)', 'Winkelverbinder mit Betonschrauben', '70×70×55 mm', nEndStudBrackets, '1 per free wall end, on the open stud face');
 
   // Cladding & roofing fixings (both modes)
   if (claddingArea > 0) {

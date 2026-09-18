@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildModel } from './index.ts';
-import { isBottomPlate, plateAnchorOffsets, plateAnchors, PLATE_ANCHOR_SPACING, postBases } from './joinery/anchors.ts';
+import { endStudBrackets, isBottomPlate, plateAnchorOffsets, plateAnchors, PLATE_ANCHOR_SPACING, postBases } from './joinery/anchors.ts';
 import { dot, normalize, sub } from './geometry.ts';
 import { PROJECT_TEMPLATES, createDefaultProject } from '../store/defaults.ts';
 
@@ -59,4 +59,26 @@ test('end studs of shortened walls and partitions stand on an anchored bottom pl
     const nearest = Math.min(...anchors.filter((a) => a.plateId === carrier.id).map((a) => Math.hypot(a.position.x - stud.start.x, a.position.z - stud.start.z)));
     assert.ok(nearest < 250, `${stud.name}: nearest anchor ${Math.round(nearest)} mm away`);
   }
+});
+
+test('free end studs of shortened outer walls get an angle bracket on their open face, counted in the BOM', () => {
+  const project = createDefaultProject();
+  project.walls.front = { ...project.walls.front, closed: true, start: 1000, end: project.params.length - 700 };
+  project.walls.left = { ...project.walls.left, closed: true, end: project.params.width - 800 };
+  const model = buildModel(project);
+  const members = model.framing.members;
+  const endStuds = members.filter((m) => m.nameDe === 'Eckständer' && m.wallId && !m.partitionId);
+  const brackets = endStudBrackets(members);
+  assert.equal(brackets.length, endStuds.length);
+  assert.ok(brackets.length >= 3);
+  for (const b of brackets) {
+    const stud = members.find((m) => m.id === b.studId)!;
+    const plate = members.find((p) => isBottomPlate(p) && p.wallId === stud.wallId && !p.partitionId)!;
+    // on the stud face, on the slab under the plate, pointing away from the stud centre
+    assert.ok(Math.abs(Math.hypot(b.position.x - stud.start.x, b.position.z - stud.start.z) - stud.section.height / 2) < 1e-6);
+    assert.ok(Math.abs(b.position.y - (plate.start.y - plate.section.height / 2)) < 1e-6);
+    assert.ok((b.position.x - stud.start.x) * b.outward.x + (b.position.z - stud.start.z) * b.outward.z > 0);
+  }
+  assert.equal(model.connections.hardware.find((h) => h.id === 'end-stud-bracket')?.quantity, brackets.length);
+  assert.equal(endStudBrackets(buildModel(createDefaultProject()).framing.members).length, 0);
 });

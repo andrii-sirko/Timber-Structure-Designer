@@ -26,6 +26,18 @@ export interface PostBase {
   depth: number;
 }
 
+export interface StudBracket {
+  studId: string;
+  /** Inner corner of the angle on the slab, at the free end face of the stud, centred across the wall (mm) */
+  position: Vec3;
+  /** Horizontal unit vector pointing away from the wall, out of the free stud face */
+  outward: Vec3;
+  /** Horizontal unit vector across the wall */
+  across: Vec3;
+  /** Width of the stud end face (wall depth, mm) */
+  faceWidth: number;
+}
+
 export const isBottomPlate = (m: Member): boolean => m.category === 'plate' && m.nameDe === 'Schwelle';
 
 /** Evenly spaced anchor offsets along a plate: ends inset, at most PLATE_ANCHOR_SPACING apart, at least two. */
@@ -63,6 +75,33 @@ export function plateAnchors(members: Member[]): PlateAnchor[] {
       .filter(([a, b]) => b > 0 && a < plate.length);
     for (const offset of plateAnchorOffsets(plate.length)) {
       out.push({ plateId: plate.id, position: add(top, scale(dir, clearOfStuds(offset, blocked, plate.length))) });
+    }
+  }
+  return out;
+}
+
+/** Angle brackets (Winkelverbinder) tying the free end stud of a shortened outer wall down to the slab, on its open end face. */
+export function endStudBrackets(members: Member[]): StudBracket[] {
+  const plates = members.filter(isBottomPlate);
+  const out: StudBracket[] = [];
+  for (const stud of members.filter((m) => m.category === 'stud' && m.nameDe === 'Eckständer' && m.wallId && !m.partitionId)) {
+    const half = stud.section.height / 2;
+    for (const plate of plates.filter((p) => p.wallId === stud.wallId && !p.partitionId)) {
+      const dir = normalize(plate.direction);
+      const along = dot(sub(stud.start, plate.start), dir);
+      const atStart = Math.abs(along - half) < 1;
+      const atEnd = Math.abs(along - (plate.length - half)) < 1;
+      if (!atStart && !atEnd) continue;
+      const outward = atStart ? scale(dir, -1) : dir;
+      const base = { ...stud.start, y: plate.start.y - plate.section.height / 2 };
+      out.push({
+        studId: stud.id,
+        position: add(base, scale(outward, half)),
+        outward,
+        across: normalize(cross(dir, { x: 0, y: 1, z: 0 })),
+        faceWidth: stud.section.width,
+      });
+      break;
     }
   }
   return out;

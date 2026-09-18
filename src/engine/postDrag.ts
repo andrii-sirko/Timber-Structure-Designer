@@ -62,3 +62,48 @@ export function postEdgeDistances(
     rear: bounds.width - extent.maxZ,
   };
 }
+
+export type PostSide = 'left' | 'right' | 'front' | 'rear';
+
+/** What a post's clear distance runs to: another post, a wall's end stud, or the footprint edge. */
+export type PostDistanceTarget = 'post' | 'stud' | 'edge';
+
+/** Clear distance on one side of a post: to the nearest upright on the same axis, or to the footprint edge when none. */
+export interface PostSideDistance {
+  distance: number;
+  to: PostDistanceTarget;
+}
+
+/** Plan footprint of an upright (post or end stud) a post's distances can run to. */
+export interface PostObstacle extends PlanExtent {
+  kind: Exclude<PostDistanceTarget, 'edge'>;
+}
+
+/**
+ * Clear distances from a post's faces to the nearest other upright standing on the same axis
+ * (its footprint overlaps across the measuring direction); sides with no such upright fall back
+ * to the footprint edge.
+ */
+export function postNeighbourDistances(
+  extent: PlanExtent,
+  others: PostObstacle[],
+  bounds: { length: number; width: number },
+): Record<PostSide, PostSideDistance> {
+  const edges = postEdgeDistances(extent, bounds);
+  const onRowX = others.filter((o) => o.minZ < extent.maxZ && o.maxZ > extent.minZ);
+  const onRowZ = others.filter((o) => o.minX < extent.maxX && o.maxX > extent.minX);
+  const nearest = (row: PostObstacle[], gap: (o: PostObstacle) => number, edge: number): PostSideDistance => {
+    let best: PostSideDistance = { distance: edge, to: 'edge' };
+    for (const o of row) {
+      const g = gap(o);
+      if (g >= 0 && (best.to === 'edge' || g < best.distance)) best = { distance: g, to: o.kind };
+    }
+    return best;
+  };
+  return {
+    left: nearest(onRowX, (o) => extent.minX - o.maxX, edges.left),
+    right: nearest(onRowX, (o) => o.minX - extent.maxX, edges.right),
+    front: nearest(onRowZ, (o) => extent.minZ - o.maxZ, edges.front),
+    rear: nearest(onRowZ, (o) => o.minZ - extent.maxZ, edges.rear),
+  };
+}

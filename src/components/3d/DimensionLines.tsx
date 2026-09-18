@@ -6,9 +6,9 @@ import { useProjectStore } from '@/store';
 import { computeRoofLines, sanitizeParams, type WallFrame } from '@/engine/framing';
 import { canonicalizeParams, canonicalToWorldMap, mapPoint, mapVec } from '@/engine/orientation';
 import { memberObb, type StudSpacing } from '@/engine/neighbours';
-import { partitionEdgeDistances, postEdgeDistances } from '@/engine/postDrag';
-import { useT } from '@/i18n';
+import { partitionEdgeDistances, postNeighbourDistances, type PostSide } from '@/engine/postDrag';
 import { midPurlinRuler } from '@/engine/purlinDrag';
+import { useT } from '@/i18n';
 import { MM } from './materials';
 
 type V = [number, number, number];
@@ -212,26 +212,40 @@ export function PartitionDragDistances({ partition, params }: { partition: Parti
   );
 }
 
-/** Clear distances from a dragged post's faces to the four footprint edges, drawn at ground level. */
-export function PostDragDistances({ post, params }: { post: Member; params: StructureParams }) {
+/** Plan footprint of a post: its box half sizes projected onto world X / Z. */
+function postPlanExtent(post: Member) {
+  const box = memberObb(post);
+  const reach = (axis: 'x' | 'z') => box.axes.reduce((sum, a, i) => sum + Math.abs(a[axis]) * box.half[i], 0);
+  const rx = reach('x');
+  const rz = reach('z');
+  const { x, z } = box.centre;
+  return { x, z, extent: { minX: x - rx, maxX: x + rx, minZ: z - rz, maxZ: z + rz } };
+}
+
+/**
+ * Clear distances from a dragged post's faces to the nearest post or wall end stud on the same axis,
+ * or to the footprint edge on sides with no such upright, drawn at ground level.
+ */
+export function PostDragDistances({ post, uprights, params }: { post: Member; uprights: Member[]; params: StructureParams }) {
   const { t } = useT();
   const dims = useMemo(() => {
-    const box = memberObb(post);
-    // Project the box half sizes onto world X / Z to get the plan footprint.
-    const reach = (axis: 'x' | 'z') => box.axes.reduce((sum, a, i) => sum + Math.abs(a[axis]) * box.half[i], 0);
-    const rx = reach('x');
-    const rz = reach('z');
-    const { x, z } = box.centre;
-    const extent = { minX: x - rx, maxX: x + rx, minZ: z - rz, maxZ: z + rz };
-    const d = postEdgeDistances(extent, params);
+    const { x, z, extent } = postPlanExtent(post);
+    const others = uprights
+      .filter((m) => m.id !== post.id)
+      .map((m) => ({ ...postPlanExtent(m).extent, kind: m.category === 'post' ? ('post' as const) : ('stud' as const) }));
+    const d = postNeighbourDistances(extent, others, params);
     const y = 0.03;
+    const sideLabel: Record<PostSide, string> = { left: t('left'), right: t('right'), front: t('front'), rear: t('rear') };
+    const toLabel: Record<'post' | 'stud', string> = { post: t('post'), stud: t('stud') };
+    const label = (side: PostSide) =>
+      `${sideLabel[side]}${d[side].to === 'edge' ? '' : ` ${toLabel[d[side].to as 'post' | 'stud']}`} ${Math.round(d[side].distance)} mm`;
     return [
-      { a: [0, y, z * MM] as V, b: [extent.minX * MM, y, z * MM] as V, label: t('left {n} mm', { n: Math.round(d.left) }) },
-      { a: [extent.maxX * MM, y, z * MM] as V, b: [params.length * MM, y, z * MM] as V, label: t('right {n} mm', { n: Math.round(d.right) }) },
-      { a: [x * MM, y, 0] as V, b: [x * MM, y, extent.minZ * MM] as V, label: t('front {n} mm', { n: Math.round(d.front) }) },
-      { a: [x * MM, y, extent.maxZ * MM] as V, b: [x * MM, y, params.width * MM] as V, label: t('rear {n} mm', { n: Math.round(d.rear) }) },
+      { a: [(extent.minX - d.left.distance) * MM, y, z * MM] as V, b: [extent.minX * MM, y, z * MM] as V, label: label('left') },
+      { a: [extent.maxX * MM, y, z * MM] as V, b: [(extent.maxX + d.right.distance) * MM, y, z * MM] as V, label: label('right') },
+      { a: [x * MM, y, (extent.minZ - d.front.distance) * MM] as V, b: [x * MM, y, extent.minZ * MM] as V, label: label('front') },
+      { a: [x * MM, y, extent.maxZ * MM] as V, b: [x * MM, y, (extent.maxZ + d.rear.distance) * MM] as V, label: label('rear') },
     ];
-  }, [params, post, t]);
+  }, [params, post, uprights, t]);
 
   return (
     <group>
