@@ -21,6 +21,17 @@ interface UiState {
   autoFixReport: StaticsActionResult | null;
   /** The next click in the 3D view places a free post there */
   placingPost: boolean;
+  /** Assembly guide: the 3D view shows the structure built up to `assemblyIndex` */
+  assemblyActive: boolean;
+  /** Current stop of the assembly player (a step, or a piece in piece-by-piece mode) */
+  assemblyIndex: number;
+  assemblyPieceMode: boolean;
+  /** Draw the parts still to come as a faint outline */
+  assemblyGhost: boolean;
+  setAssemblyActive: (active: boolean) => void;
+  setAssemblyIndex: (index: number) => void;
+  setAssemblyPieceMode: (pieceMode: boolean, index: number) => void;
+  setAssemblyGhost: (ghost: boolean) => void;
   setPlacingPost: (placing: boolean) => void;
   setAutoFixReport: (report: StaticsActionResult | null) => void;
   setResultsTab: (tab: ResultsTab) => void;
@@ -44,6 +55,14 @@ export const useUiStore = create<UiState>((set) => ({
   sheetSize: 'half',
   autoFixReport: null,
   placingPost: false,
+  assemblyActive: false,
+  assemblyIndex: 0,
+  assemblyPieceMode: false,
+  assemblyGhost: true,
+  setAssemblyActive: (assemblyActive) => set({ assemblyActive, assemblyIndex: 0, placingPost: false }),
+  setAssemblyIndex: (assemblyIndex) => set({ assemblyIndex: Math.max(0, assemblyIndex) }),
+  setAssemblyPieceMode: (assemblyPieceMode, assemblyIndex) => set({ assemblyPieceMode, assemblyIndex }),
+  setAssemblyGhost: (assemblyGhost) => set({ assemblyGhost }),
   setPlacingPost: (placingPost) => set({ placingPost }),
   setAutoFixReport: (autoFixReport) => set({ autoFixReport }),
   setResultsTab: (resultsTab) => set({ resultsTab }),

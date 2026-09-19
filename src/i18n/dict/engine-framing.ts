@@ -96,6 +96,15 @@ export default {
   'Purlin mid': { uk: 'Проміжний прогон', de: 'Mittelpfette' },
   'Purlin mid {n}': { uk: 'Проміжний прогон {n}', de: 'Mittelpfette {n}' },
 
+  // ── Single member names (hover tooltip in the 3D view) ─────────────────────────────────────
+  'Rafter {n}': { uk: 'Кроква {n}', de: 'Sparren {n}' },
+  'Knee brace {side} {n}R': { uk: 'Підкіс {side} {n}П', de: 'Kopfband {side} {n}R' },
+  'Knee brace {side} {n}L': { uk: 'Підкіс {side} {n}Л', de: 'Kopfband {side} {n}L' },
+  'Knee brace mid {n}R': { uk: 'Підкіс середній {n}П', de: 'Kopfband mitte {n}R' },
+  'Knee brace mid {n}L': { uk: 'Підкіс середній {n}Л', de: 'Kopfband mitte {n}L' },
+  'Knee brace mid {k} {n}R': { uk: 'Підкіс середній {k}-{n}П', de: 'Kopfband mitte {k}-{n}R' },
+  'Knee brace mid {k} {n}L': { uk: 'Підкіс середній {k}-{n}Л', de: 'Kopfband mitte {k}-{n}L' },
+
   // ── BOM category labels (bom/index.ts CATEGORY_META) ───────────────────────────────────────
   Posts: { uk: 'Стовпи', de: 'Pfosten' },
   'Purlins & rails': { uk: "Прогони та обв'язки", de: 'Pfetten & Rähme' },

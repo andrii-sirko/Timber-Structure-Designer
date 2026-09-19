@@ -300,6 +300,7 @@ export function normalizeProject(input: unknown): ProjectState {
     pavedAreas,
     postOverrides,
     freePosts,
+    ...(Array.isArray(src.assemblyOrder) ? { assemblyOrder: src.assemblyOrder.filter((k) => typeof k === 'string') } : {}),
   };
 }
 

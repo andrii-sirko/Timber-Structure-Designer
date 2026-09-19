@@ -149,6 +149,8 @@ interface ProjectStoreBase {
   addFreePost: (x: number, z: number) => string;
   updateFreePost: (id: string, patch: Partial<Omit<FreePost, 'id'>>) => void;
   removeFreePost: (id: string) => void;
+  /** Custom step order of the assembly guide; null restores the recommended order */
+  setAssemblyOrder: (order: string[] | null) => void;
 
   addPavedArea: () => string;
   updatePavedArea: (id: string, patch: Partial<Omit<PavedArea, 'id'>>) => void;
@@ -533,6 +535,11 @@ export const useProjectStore = create<ProjectStore>()(
           project: { ...s.project, freePosts: s.project.freePosts.filter((p) => p.id !== id) },
           selectedMemberId: s.selectedMemberId === freePostMemberId(id) ? null : s.selectedMemberId,
         })),
+      setAssemblyOrder: (order) =>
+        set((s) => {
+          const { assemblyOrder: _previous, ...project } = s.project;
+          return { project: order ? { ...project, assemblyOrder: order } : project };
+        }),
       addPavedArea: () => {
         const id = uuid();
         set((s) => {

@@ -165,7 +165,7 @@ export default {
 
   // --- ProjectMenu ---
   'Templates': { uk: 'Шаблони', de: 'Vorlagen' },
-  'Save preset': { uk: 'Зберегти шаблон', de: 'Vorlage speichern' },
+  'Save preset': { uk: 'Зберегти', de: 'Vorlage speichern' },
   'Save the current configuration as a named preset (stored in this browser)': {
     uk: 'Зберегти поточну конфігурацію як іменований шаблон (зберігається в цьому браузері)',
     de: 'Aktuelle Konfiguration als benannte Vorlage speichern (in diesem Browser gespeichert)',
@@ -186,7 +186,7 @@ export default {
   'invalid file': { uk: 'недійсний файл', de: 'ungültige Datei' },
   'Start from a template': { uk: 'Почати з шаблону', de: 'Von einer Vorlage starten' },
   'Saved presets (this browser)': { uk: 'Збережені шаблони (цей браузер)', de: 'Gespeicherte Vorlagen (dieser Browser)' },
-  'Nothing saved yet. Use “Save preset”.': { uk: 'Ще нічого не збережено. Скористайтеся «Зберегти шаблон».', de: 'Noch nichts gespeichert. „Vorlage speichern“ verwenden.' },
+  'Nothing saved yet. Use “Save preset”.': { uk: 'Ще нічого не збережено. Скористайтеся «Зберегти».', de: 'Noch nichts gespeichert. „Vorlage speichern“ verwenden.' },
   'Delete preset': { uk: 'Видалити шаблон', de: 'Vorlage löschen' },
   'Single carport 6 × 3 m': { uk: 'Одинарний карпорт 6 × 3 м', de: 'Einzel-Carport 6 × 3 m' },
   'Open post-and-purlin carport, trapezoidal sheet roof': { uk: 'Відкритий карпорт стовпово-прогонової конструкції, дах із профнастилу', de: 'Offener Carport in Pfosten-Pfetten-Bauweise, Trapezblechdach' },

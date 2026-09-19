@@ -2,7 +2,7 @@ import { Ruler, X } from 'lucide-react';
 import type { DerivedModel } from '@/types';
 import { useProjectStore } from '@/store';
 import { useNeighbours } from '@/store/useNeighbours';
-import { sectionLabel } from '@/engine/geometry';
+import { roundMm, sectionLabel } from '@/engine/geometry';
 import { useT } from '@/i18n';
 import { cx, NumberField } from './primitives';
 
@@ -31,7 +31,7 @@ export function NeighbourPanel({ model }: { model: DerivedModel }) {
             {lang !== 'de' && <span className="text-cyan-200/60"> · {subject.nameDe}</span>}
           </div>
           <div className="font-mono text-[11px] text-slate-400">
-            {sectionLabel(subject.section)} · {subject.length} mm
+            {sectionLabel(subject.section)} · {roundMm(subject.length)} mm
           </div>
         </div>
         <button type="button" onClick={() => selectMember(null)} className="rounded p-0.5 text-slate-400 hover:text-white" title={t('Clear selection (Esc)')}>

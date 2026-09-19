@@ -238,6 +238,25 @@ export function getNeighbourMaterial(): THREE.MeshStandardMaterial {
   );
 }
 
+/** Assembly guide: the pieces fitted in the current step */
+export function getAssemblyCurrentMaterial(): THREE.MeshStandardMaterial {
+  return cached(
+    'assembly-current',
+    () => new THREE.MeshStandardMaterial({ color: '#bef264', emissive: '#65a30d', emissiveIntensity: 0.55, roughness: 0.55, side: THREE.DoubleSide }),
+  );
+}
+
+/** Assembly guide: pieces of later steps, shown as a faint volume */
+export function getAssemblyGhostMaterial(): THREE.MeshBasicMaterial {
+  return cached(
+    'assembly-ghost',
+    () => new THREE.MeshBasicMaterial({ color: '#94a3b8', transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide }),
+  );
+}
+
+/** Ghost pieces must not catch the pointer */
+export const noRaycast = (): void => {};
+
 export function getCladdingMaterial(): THREE.MeshStandardMaterial {
   return cached('cladding', () => new THREE.MeshStandardMaterial({ map: createBoardTexture(), roughness: 0.9, side: THREE.DoubleSide }));
 }

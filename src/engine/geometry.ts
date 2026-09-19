@@ -118,6 +118,9 @@ export function formatM(valueMm: number, digits = 2): string {
   return `${(valueMm / 1000).toFixed(digits)} m`;
 }
 
+/** Millimetre value rounded to hundredths, without trailing zeros (2432.2737… → 2432.27, 2400 → 2400). */
+export const roundMm = (value: number): number => Math.round(value * 100) / 100;
+
 export function sectionLabel(section: TimberSection): string {
-  return `${section.width}×${section.height}`;
+  return `${roundMm(section.width)}×${roundMm(section.height)}`;
 }

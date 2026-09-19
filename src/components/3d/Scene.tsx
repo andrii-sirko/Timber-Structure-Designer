@@ -5,6 +5,7 @@ import { Grid, Html, OrbitControls, OrthographicCamera, PerspectiveCamera } from
 import type { DerivedModel, Member, Panel, WallId } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
 import { useNeighbours } from '@/store/useNeighbours';
+import { useAssembly } from '@/store/useAssembly';
 import { studSpacing } from '@/engine/neighbours';
 import { canDeleteSelectedPartition } from '@/engine/wallKeyboard';
 import { CameraRig, modelBounds } from './CameraRig';
@@ -13,10 +14,12 @@ import { midPurlinIndex, snapDrag } from '@/engine/postDrag';
 import { END_STUD_GROUP, partitionDragCursor, partitionDragMode, partitionDragModeAt, partitionDragPatch, partitionGrabOffset, type PartitionDrag } from '@/engine/partitionDrag';
 import { wallExtentCursor, wallExtentDragModeAt, wallExtentDragPatch, wallExtentGrabOffset, wallExtentMemberMode, type WallExtentDrag, type WallExtentDragMode } from '@/engine/wallExtentDrag';
 import { worldPointToCanonical } from '@/engine/orientation';
+import { roundMm, sectionLabel } from '@/engine/geometry';
 import { postKeyAxis } from '@/engine/postOverrides';
 import { freePostIdOf } from '@/engine/freePosts';
 import { openObjectSettings } from './openObjectSettings';
 import { useUiStore } from '@/store/uiStore';
+import { useT } from '@/i18n';
 import { MM } from './materials';
 import { MeasureTool, useMeasureStore } from './MeasureTool';
 import { NeighbourDistances } from './NeighbourDistances';
@@ -31,6 +34,7 @@ import { PavedAreaMesh } from './PavedAreaMesh';
 function HoverTooltip({ members }: { members: Member[] }) {
   const hoveredId = useProjectStore((s) => s.hoveredMemberId);
   const isDragging = useProjectStore((s) => s.isDragging);
+  const { t, tx, lang } = useT();
   const member = hoveredId ? members.find((m) => m.id === hoveredId) : undefined;
   if (!member || isDragging) return null;
   const mid = {
@@ -42,11 +46,12 @@ function HoverTooltip({ members }: { members: Member[] }) {
     <Html position={[mid.x, mid.y, mid.z]} center zIndexRange={[8, 0]} style={{ pointerEvents: 'none' }}>
       <div className="rounded-md border border-amber-400/40 bg-slate-900/95 px-2 py-1 text-[11px] whitespace-nowrap text-amber-50 shadow-lg">
         <div className="font-semibold">
-          {member.name} <span className="text-amber-200/70">· {member.nameDe}</span>
+          {lang === 'de' ? member.nameDe : tx(member.name)}
+          {lang !== 'de' && <span className="text-amber-200/70"> · {member.nameDe}</span>}
         </div>
         <div className="font-mono text-amber-100/80">
-          {member.section.width}×{member.section.height} mm · {member.length} mm
-          {member.cuts.start || member.cuts.end ? ` · cuts ${member.cuts.start}° / ${member.cuts.end}°` : ''}
+          {sectionLabel(member.section)} mm · {roundMm(member.length)} mm
+          {member.cuts.start || member.cuts.end ? ` · ${t('cuts {a}° / {b}°', { a: member.cuts.start, b: member.cuts.end })}` : ''}
         </div>
       </div>
     </Html>
@@ -123,6 +128,23 @@ export function Scene({ model }: { model: DerivedModel }) {
     [draggingPartitionId, project.partitions],
   );
   const wireframe = highlight === 'wireframe';
+  const assembly = useAssembly(model);
+  const assemblyGhost = useUiStore((s) => s.assemblyGhost);
+  /** Assembly guide: how a piece shows at the current stop; 'hidden' pieces are not drawn at all */
+  const assemblyState = useCallback(
+    (id: string): 'current' | 'ghost' | 'hidden' | undefined => {
+      if (!assembly) return undefined;
+      if (assembly.progress.current.has(id)) return 'current';
+      if (assembly.progress.installed.has(id)) return undefined;
+      return assemblyGhost ? 'ghost' : 'hidden';
+    },
+    [assembly, assemblyGhost],
+  );
+  // Fixtures follow what is built: anchors of fitted plates, doors and windows once their step is reached
+  const builtMembers = useMemo(
+    () => (assembly ? model.framing.members.filter((m) => assembly.progress.installed.has(m.id) || assembly.progress.current.has(m.id)) : model.framing.members),
+    [assembly, model.framing.members],
+  );
 
   /** Place a free post where the pointer ray meets the ground (placement mode). */
   const placePostAt = useCallback(
@@ -460,10 +482,14 @@ export function Scene({ model }: { model: DerivedModel }) {
       </mesh>
 
       <Suspense fallback={null}>
-        {layers.frame &&
-          model.framing.members.map((m) => (
+        {(layers.frame || assembly) &&
+          model.framing.members.map((m) => {
+            const state = assemblyState(m.id);
+            if (state === 'hidden' || (state !== 'current' && !layers.frame)) return null;
+            return (
             <TimberMember
-              key={m.id}
+              key={state === 'ghost' ? `${m.id}:ghost` : m.id}
+              assembly={state}
               member={m}
               highlight={highlight}
               hovered={m.id === hoveredId}
@@ -480,12 +506,17 @@ export function Scene({ model }: { model: DerivedModel }) {
               onRemovePost={onRemovePost}
               dragCursor={measureMode || placingPost ? undefined : memberDragCursor(m)}
             />
-          ))}
-        {layers.frame && !wireframe && <AnchorFixtures members={model.framing.members} />}
-        {model.framing.panels.map((p) =>
-          (p.kind === 'roof' && layers.roof) || (p.kind === 'cladding' && layers.cladding) || (p.kind === 'floor' && layers.floor) ? (
+            );
+          })}
+        {layers.frame && !wireframe && <AnchorFixtures members={builtMembers} />}
+        {model.framing.panels.map((p) => {
+          const state = assemblyState(p.id);
+          const layerOn = (p.kind === 'roof' && layers.roof) || (p.kind === 'cladding' && layers.cladding) || (p.kind === 'floor' && layers.floor);
+          // The panel being fitted always shows, even with its layer switched off to see the framing below
+          return state !== 'hidden' && (layerOn || state === 'current') ? (
             <PanelMesh
-              key={p.id}
+              key={state === 'ghost' ? `${p.id}:ghost` : p.id}
+              assembly={state}
               panel={p}
               covering={project.params.loads.roofCovering}
               wireframe={wireframe}
@@ -504,8 +535,8 @@ export function Scene({ model }: { model: DerivedModel }) {
                       : undefined
               }
             />
-          ) : null,
-        )}
+          ) : null;
+        })}
         {layers.paving &&
           project.pavedAreas.map((a) => (
             <PavedAreaMesh
@@ -526,7 +557,7 @@ export function Scene({ model }: { model: DerivedModel }) {
         {wallExtentDrag && wallFrames[wallExtentDrag.wallId] && <WallExtentRuler frame={wallFrames[wallExtentDrag.wallId]} />}
         {draggingPost && <PostDragDistances post={draggingPost} uprights={postUprights} params={project.params} />}
         {draggingMidPurlin !== null && <MidPurlinDragDistances index={draggingMidPurlin} model={model} params={project.params} />}
-        {layers.cladding && !wireframe && <OpeningFixtures />}
+        {layers.cladding && !wireframe && (!assembly || assembly.progress.fixtures) && <OpeningFixtures />}
         <OpeningsEditor />
         <MeasureTool />
         <NeighbourDistances subject={subject} links={unspacedLinks} members={model.framing.members} />

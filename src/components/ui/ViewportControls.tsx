@@ -22,9 +22,11 @@ import {
   Car,
   BrickWall,
   Rows3,
+  Hammer,
 } from 'lucide-react';
 import type { CameraPreset, HighlightMode, LayerVisibility } from '@/types';
 import { useProjectStore } from '@/store';
+import { useUiStore } from '@/store/uiStore';
 import { useMeasureStore } from '@/components/3d/MeasureTool';
 import { useT } from '@/i18n';
 import { IconButton, cx } from './primitives';
@@ -68,6 +70,8 @@ export function ViewportControls({ canvasContainer }: { canvasContainer: React.R
   const setNeighbourMode = useProjectStore((s) => s.setNeighbourMode);
   const clearMeasurements = useProjectStore((s) => s.clearMeasurements);
   const resetPending = useMeasureStore((s) => s.reset);
+  const assemblyActive = useUiStore((s) => s.assemblyActive);
+  const setAssemblyActive = useUiStore((s) => s.setAssemblyActive);
 
   const screenshot = (): void => {
     const canvas = canvasContainer.current?.querySelector('canvas');
@@ -137,6 +141,9 @@ export function ViewportControls({ canvasContainer }: { canvasContainer: React.R
             active={view.neighbourMode}
             onClick={() => setNeighbourMode(!view.neighbourMode)}
           />
+        </div>
+        <div className={cx(group, 'flex-row')}>
+          <IconButton icon={Hammer} title={assemblyActive ? t('Close assembly guide') : t('Assembly guide: build the structure step by step')} active={assemblyActive} onClick={() => setAssemblyActive(!assemblyActive)} />
         </div>
         {view.neighbourMode && !view.measureMode && (
           <div className="rounded-md border border-cyan-500/40 bg-slate-950/85 px-2 py-1 text-[11px] text-cyan-100">

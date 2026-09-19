@@ -364,6 +364,8 @@ export interface ProjectState {
   postOverrides: Record<string, PostOverride>;
   /** Extra posts placed freely in plan, independent of the purlin rows */
   freePosts: FreePost[];
+  /** Custom order of the assembly guide's step keys; absent = the recommended order */
+  assemblyOrder?: string[];
 }
 
 /** A single post placed anywhere under the roof (footprint + overhangs); it carries no purlin of its own. */

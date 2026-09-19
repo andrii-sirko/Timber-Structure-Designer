@@ -13,7 +13,7 @@ connector counts – is computed live in the browser and auto-saved to IndexedDB
 | 3D | three.js via `@react-three/fiber` + `@react-three/drei` |
 | State | Zustand 5 with `persist` → IndexedDB (`idb-keyval`), localStorage fallback |
 | Calculations | pure TypeScript modules under `src/engine` (no React dependencies) |
-| Export | JSON (project), CSV (cut list), PDF (`jspdf` + `jspdf-autotable`, lazy-loaded) |
+| Export | JSON (project), CSV (cut list), PDF cut list and illustrated assembly guide (`jspdf` + `jspdf-autotable`, lazy-loaded) |
 
 ```bash
 npm install
@@ -39,6 +39,8 @@ src/
                     OpeningsEditor (drag & drop on the wall plane), MeasureTool, CameraRig
   components/ui/    parameter sidebar, wall/opening editor, results panel, viewport controls
   utils/export.ts   JSON / CSV / PDF export
+  utils/assemblyPdf.ts, assemblyRender.ts
+                    printable assembly guide; step drawings rendered off screen (three.js line art)
 ```
 
 ## Coordinate system & conventions
@@ -104,6 +106,17 @@ A simplified pre-design check following Eurocode 5 principles – **not** a subs
 * Headers: infill-wall self-weight plus a nominal 0.5 kN/m.
 * Status: green < 85 %, yellow 85–100 %, red > 100 %, with a section recommendation on failure.
   Wind, uplift, lateral stability, connections and fire are outside the scope.
+
+## Assembly guide (`engine/assembly.ts`)
+
+`buildAssemblySteps` groups the generated members and panels into build steps — one post-and-purlin
+row at a time (posts → purlin → knee braces), rafters, roof, infill walls (bottom plate → studs →
+top rail → opening framing, per wall and partition), floor, cladding, doors and windows. Step keys
+come from wall ids, purlin row keys and partition ids, never from member ids (those renumber on
+every parameter change), so a custom order saved in `project.assemblyOrder` survives edits:
+`applyStepOrder` keeps the saved sequence and slots new steps after their default predecessor.
+The viewport player (`AssemblyPanel`) walks the steps or single pieces (bottom-up, then along the
+step), showing later parts as ghosts; the same steps feed the printable PDF guide.
 
 ## Persistence
 

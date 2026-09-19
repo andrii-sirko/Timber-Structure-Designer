@@ -1,14 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, Save, Upload, Download, FileText, LayoutTemplate, Trash2, RotateCcw } from 'lucide-react';
+import { FolderOpen, Save, Upload, Download, FileText, LayoutTemplate, Trash2, RotateCcw, Hammer } from 'lucide-react';
 import type { DerivedModel } from '@/types';
 import { PROJECT_TEMPLATES, useProjectStore } from '@/store';
 import { exportCutListCsv, exportCutListPdf, exportProjectJson, readProjectFile } from '@/utils/export';
+import { exportAssemblyPdf } from '@/utils/assemblyPdf';
 import { useT } from '@/i18n';
 import { Button, cx } from './primitives';
 
 export function ProjectMenu({ model }: { model: DerivedModel }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const project = useProjectStore((s) => s.project);
   const savedProjects = useProjectStore((s) => s.savedProjects);
   const saveProjectAs = useProjectStore((s) => s.saveProjectAs);
@@ -19,10 +20,37 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
   const resetProject = useProjectStore((s) => s.resetProject);
   const [open, setOpen] = useState<null | 'templates' | 'saved'>(null);
   const [error, setError] = useState<string | null>(null);
+  const [guideBusy, setGuideBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+  // Button labels collapse to icons when they would make the header scroll (longer UK / DE texts)
+  const [compact, setCompact] = useState(false);
+  const fullWidth = useRef(0);
+
+  useLayoutEffect(() => setCompact(false), [lang, savedProjects.length]);
+
+  useLayoutEffect(() => {
+    const header = wrapper.current?.closest('header');
+    if (!header || compact || header.scrollWidth <= header.clientWidth + 1) return;
+    fullWidth.current = header.scrollWidth;
+    setCompact(true);
+  });
+
+  useEffect(() => {
+    const header = wrapper.current?.closest('header');
+    if (!header) return;
+    const ro = new ResizeObserver(() => {
+      if (!compact) {
+        if (header.scrollWidth <= header.clientWidth + 1) return;
+        fullWidth.current = header.scrollWidth;
+        setCompact(true);
+      } else if (header.clientWidth >= fullWidth.current) setCompact(false);
+    });
+    ro.observe(header);
+    return () => ro.disconnect();
+  }, [compact]);
 
   useEffect(() => {
     if (!open) return;
@@ -65,26 +93,28 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
     if (name && name.trim()) saveProjectAs(name.trim());
   };
 
+  const label = (text: string) => (compact ? <span className="sr-only">{text}</span> : text);
+
   const popover = 'fixed z-50 w-80 max-w-[calc(100vw-1rem)] rounded-lg border border-slate-700 bg-slate-950 p-2 shadow-2xl';
   const popoverStyle = anchor ? { top: anchor.top, right: anchor.right } : undefined;
 
   return (
     <div ref={wrapper} className="relative flex items-center gap-1.5">
-      <Button size="sm" icon={LayoutTemplate} onClick={() => setOpen(open === 'templates' ? null : 'templates')} aria-expanded={open === 'templates'}>
-        {t('Templates')}
+      <Button size="sm" icon={LayoutTemplate} onClick={() => setOpen(open === 'templates' ? null : 'templates')} aria-expanded={open === 'templates'} title={compact ? t('Templates') : undefined}>
+        {label(t('Templates'))}
       </Button>
       <Button size="sm" icon={Save} onClick={savePreset} title={t('Save the current configuration as a named preset (stored in this browser)')}>
-        {t('Save preset')}
+        {label(t('Save preset'))}
       </Button>
-      <Button size="sm" icon={FolderOpen} onClick={() => setOpen(open === 'saved' ? null : 'saved')} aria-expanded={open === 'saved'}>
-        {t('Saved ({n})', { n: savedProjects.length })}
+      <Button size="sm" icon={FolderOpen} onClick={() => setOpen(open === 'saved' ? null : 'saved')} aria-expanded={open === 'saved'} title={compact ? t('Saved ({n})', { n: savedProjects.length }) : undefined}>
+        {compact ? savedProjects.length : t('Saved ({n})', { n: savedProjects.length })}
       </Button>
       <span className="mx-1 h-5 w-px bg-slate-800" />
       <Button size="sm" icon={Download} onClick={() => exportProjectJson(project)} title={t('Export configuration as JSON')}>
         JSON
       </Button>
       <Button size="sm" icon={Upload} onClick={() => fileInput.current?.click()} title={t('Import a JSON configuration')}>
-        {t('Import')}
+        {label(t('Import'))}
       </Button>
       <input
         ref={fileInput}
@@ -103,8 +133,20 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
       <Button size="sm" icon={FileText} onClick={() => void exportCutListPdf(project, model.cutList, model.bom, model.statics, model.connections)} title={t('Export cutting list, BOM & statics as PDF')}>
         PDF
       </Button>
+      <Button
+        size="sm"
+        icon={Hammer}
+        disabled={guideBusy}
+        onClick={() => {
+          setGuideBusy(true);
+          void exportAssemblyPdf(project, model).finally(() => setGuideBusy(false));
+        }}
+        title={guideBusy ? t('Preparing the assembly guide…') : t('Export the illustrated assembly guide as PDF (parts list and step-by-step drawings)')}
+      >
+        {label(t('Guide'))}
+      </Button>
       <Button size="sm" variant="ghost" icon={RotateCcw} onClick={() => window.confirm(t('Reset to the default carport? Unsaved changes are lost.')) && resetProject()} title={t('Reset project')}>
-        {t('Reset')}
+        {label(t('Reset'))}
       </Button>
       {error && <span className="text-[11px] text-rose-300">{error}</span>}
 

@@ -6,6 +6,7 @@ export default {
   'rear {n} mm': { uk: 'ззаду {n} мм', de: 'hinten {n} mm' },
   'left {n} mm': { uk: 'зліва {n} мм', de: 'links {n} mm' },
   'right {n} mm': { uk: 'справа {n} мм', de: 'rechts {n} mm' },
+  'cuts {a}° / {b}°': { uk: 'зрізи {a}° / {b}°', de: 'Schnitte {a}° / {b}°' },
   post: { uk: 'стовп', de: 'Pfosten' },
   stud: { uk: 'стійка', de: 'Ständer' },
   'Click to set the length (mm); the second point moves along the line': {

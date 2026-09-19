@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { Panel, RoofCovering } from '@/types';
-import { getCladdingMaterial, getFloorMaterial, getRoofMaterial, getWireframeMaterial, MM } from './materials';
+import { getAssemblyCurrentMaterial, getAssemblyGhostMaterial, getCladdingMaterial, getFloorMaterial, getRoofMaterial, getWireframeMaterial, MM, noRaycast } from './materials';
 import { basisQuaternion } from './TimberMember';
 
 interface PanelMeshProps {
@@ -17,9 +17,11 @@ interface PanelMeshProps {
   onDragEnd?: (panel: Panel, e: ThreeEvent<PointerEvent>) => void;
   /** CSS cursor shown while hovering a draggable panel, or picked from the hovered point */
   dragCursor?: string | ((panel: Panel, point: THREE.Vector3) => string | undefined);
+  /** Assembly guide: fitted in the current step, or still to come (faint, not clickable) */
+  assembly?: 'current' | 'ghost';
 }
 
-export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, onClick, onDoubleClick, onDragStart, onDrag, onDragEnd, dragCursor }: PanelMeshProps) {
+export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, onClick, onDoubleClick, onDragStart, onDrag, onDragEnd, dragCursor, assembly }: PanelMeshProps) {
   const dragging = useRef(false);
   const draggable = Boolean(onDragStart && onDrag && onDragEnd);
   const geometry = useMemo(() => {
@@ -40,13 +42,18 @@ export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, o
     () => [panel.anchor.x * MM, panel.anchor.y * MM, panel.anchor.z * MM],
     [panel.anchor],
   );
-  const material = wireframe
-    ? getWireframeMaterial()
-    : panel.kind === 'roof'
-      ? getRoofMaterial(covering)
-      : panel.kind === 'floor'
-        ? getFloorMaterial(panel.floorFinish)
-        : getCladdingMaterial();
+  const ghost = assembly === 'ghost';
+  const material = ghost
+    ? getAssemblyGhostMaterial()
+    : assembly === 'current'
+      ? getAssemblyCurrentMaterial()
+      : wireframe
+        ? getWireframeMaterial()
+        : panel.kind === 'roof'
+          ? getRoofMaterial(covering)
+          : panel.kind === 'floor'
+            ? getFloorMaterial(panel.floorFinish)
+            : getCladdingMaterial();
 
   return (
     <mesh
@@ -54,8 +61,9 @@ export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, o
       material={material}
       position={position}
       quaternion={quaternion}
-      castShadow
-      receiveShadow
+      castShadow={!ghost}
+      receiveShadow={!ghost}
+      {...(ghost ? { raycast: noRaycast } : {})}
       userData={{ panelId: panel.id, wallId: panel.wallId }}
       onClick={(e) => {
         if (onClick) {

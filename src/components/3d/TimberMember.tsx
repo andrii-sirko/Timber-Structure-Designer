@@ -7,6 +7,8 @@ import type { HighlightMode, Member, Vec3 } from '@/types';
 import { canDragMember, canMovePost } from '@/engine/postDrag';
 import { useT } from '@/i18n';
 import {
+  getAssemblyCurrentMaterial,
+  getAssemblyGhostMaterial,
   getHoverMaterial,
   getInspectedMaterial,
   getNeighbourMaterial,
@@ -14,6 +16,7 @@ import {
   getWireframeMaterial,
   getWoodMaterial,
   MM,
+  noRaycast,
 } from './materials';
 
 /** Quaternion that maps local X→direction, Y→up, Z→direction×up. */
@@ -57,6 +60,8 @@ interface TimberMemberProps {
   onRemovePost?: (id: string) => void;
   /** CSS cursor shown while hovering a draggable member (partition move / resize) */
   dragCursor?: string;
+  /** Assembly guide: fitted in the current step, or still to come (faint, not clickable) */
+  assembly?: 'current' | 'ghost';
 }
 
 export const TimberMember = memo(function TimberMember({
@@ -75,6 +80,7 @@ export const TimberMember = memo(function TimberMember({
   onPostDragEnd,
   onRemovePost,
   dragCursor,
+  assembly,
 }: TimberMemberProps) {
   const postDragging = useRef(false);
   const { t } = useT();
@@ -85,17 +91,21 @@ export const TimberMember = memo(function TimberMember({
     [member.start],
   );
 
-  const material = inspected
-    ? getInspectedMaterial()
-    : hovered
-      ? getHoverMaterial()
-      : neighbour
-        ? getNeighbourMaterial()
-        : selected
-          ? getSelectedMaterial()
-          : highlight === 'wireframe'
-            ? getWireframeMaterial()
-            : getWoodMaterial(member.category);
+  const ghost = assembly === 'ghost';
+  const stateMaterial = ghost
+    ? getAssemblyGhostMaterial()
+    : inspected
+      ? getInspectedMaterial()
+      : hovered
+        ? getHoverMaterial()
+        : neighbour
+          ? getNeighbourMaterial()
+          : selected
+            ? getSelectedMaterial()
+            : assembly === 'current'
+              ? getAssemblyCurrentMaterial()
+              : null;
+  const material = stateMaterial ?? (highlight === 'wireframe' ? getWireframeMaterial() : getWoodMaterial(member.category));
   const isPost = member.category === 'post';
   const canDrag = canDragMember(member);
 
@@ -105,8 +115,9 @@ export const TimberMember = memo(function TimberMember({
       material={material}
       position={position}
       quaternion={quaternion}
-      castShadow
-      receiveShadow
+      castShadow={!ghost}
+      receiveShadow={!ghost}
+      {...(ghost ? { raycast: noRaycast } : {})}
       userData={{ memberId: member.id }}
       onPointerOver={(e) => {
         e.stopPropagation();
@@ -140,10 +151,12 @@ export const TimberMember = memo(function TimberMember({
         onPostDragEnd(member, e);
       } : undefined}
     >
-      {highlight === 'edges' && !inspected && !focused && <Edges color="#3b2a17" threshold={20} lineWidth={1} />}
+      {ghost && <Edges color="#64748b" threshold={20} lineWidth={1} />}
+      {assembly === 'current' && !inspected && !focused && !hovered && !selected && <Edges color="#1a2e05" threshold={20} lineWidth={1.5} />}
+      {highlight === 'edges' && !assembly && !inspected && !focused && <Edges color="#3b2a17" threshold={20} lineWidth={1} />}
       {inspected && <Edges color="#cffafe" threshold={20} lineWidth={2} />}
       {focused && !inspected && <Edges color="#fde68a" threshold={20} lineWidth={2} />}
-      {(hovered || selected) && !inspected && !focused && highlight !== 'edges' && (
+      {(hovered || selected) && !ghost && !inspected && !focused && (highlight !== 'edges' || assembly === 'current') && (
         <Edges color={selected ? '#e0f2fe' : '#fff7ed'} threshold={20} />
       )}
       {isPost && selected && onRemovePost && (

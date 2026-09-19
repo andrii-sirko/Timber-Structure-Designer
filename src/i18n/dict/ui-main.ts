@@ -2,7 +2,7 @@ import type { Dict } from '../core';
 
 export default {
   'Restoring your project…': { uk: 'Відновлення проєкту…', de: 'Projekt wird wiederhergestellt…' },
-  'Timber Structure Designer': { uk: 'Конструктор дерев’яних конструкцій', de: 'Holzkonstruktions-Designer' },
+  'Timber Structure Designer': { uk: 'Дерев’яні конструкції', de: 'Holzkonstruktions-Designer' },
   'Project name': { uk: 'Назва проєкту', de: 'Projektname' },
   'Floating panels on – click to dock panels beside the view': {
     uk: 'Плаваючі панелі увімкнено – натисніть, щоб закріпити панелі біля перегляду',

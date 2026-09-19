@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, PictureInPicture2, SlidersHorizontal, Table2, TreePine, X } from 'lucide-react';
 import { Scene } from '@/components/3d/Scene';
 import { AreaInfo } from '@/components/ui/AreaInfo';
+import { AssemblyPanel } from '@/components/ui/AssemblyPanel';
 import { NeighbourPanel } from '@/components/ui/NeighbourPanel';
 import { ParameterSidebar } from '@/components/ui/ParameterSidebar';
 import { HistoryControls, useHistoryKeyboard } from '@/components/ui/HistoryControls';
@@ -52,6 +53,7 @@ function Designer() {
   const sheetSize = useUiStore((s) => s.sheetSize);
   const toggleSheetSize = useUiStore((s) => s.toggleSheetSize);
   const floating = useFloatingLayout();
+  const assemblyActive = useUiStore((s) => s.assemblyActive);
   const canvasRef = useRef<HTMLDivElement>(null);
   useVehicleKeyboard();
   usePavingKeyboard();
@@ -108,7 +110,9 @@ function Designer() {
           <Scene model={model} />
           <ViewportControls canvasContainer={canvasRef} />
           <NeighbourPanel model={model} />
-          <AreaInfo model={model} />
+          {/* The assembly guide takes the area readout's corner while it is open */}
+          {!assemblyActive && <AreaInfo model={model} />}
+          <AssemblyPanel model={model} />
 
           {floating && (
             <>

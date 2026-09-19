@@ -1,4 +1,5 @@
 import { getLang, t, tx } from '@/i18n';
+import { roundMm } from '@/engine/geometry';
 import { embedUnicodeFont, UNICODE_FONT } from '@/utils/pdfFont';
 import type { BomResult, ConnectionsResult, CutListItem, ProjectState, StaticsResult } from '@/types';
 
@@ -56,9 +57,9 @@ export function exportCutListCsv(project: ProjectState, cutList: CutListItem[]):
     tx(c.group),
     lang === 'de' ? c.nameDe : tx(c.name),
     c.nameDe,
-    c.section.width,
-    c.section.height,
-    c.length,
+    roundMm(c.section.width),
+    roundMm(c.section.height),
+    roundMm(c.length),
     c.cuts.start,
     c.cuts.end,
     c.quantity,
@@ -110,8 +111,8 @@ export async function exportCutListPdf(
       c.pos,
       tx(c.group),
       nameCell(c.name, c.nameDe),
-      `${c.section.width}×${c.section.height}`,
-      `${c.length} mm`,
+      `${roundMm(c.section.width)}×${roundMm(c.section.height)}`,
+      `${roundMm(c.length)} mm`,
       `${c.cuts.start}°`,
       `${c.cuts.end}°`,
       c.quantity,
