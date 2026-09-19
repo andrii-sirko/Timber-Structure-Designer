@@ -77,6 +77,7 @@ const LABELS: Record<string, (...args: never[]) => string> = {
   setParams: () => t('Apply statics auto-fix'),
   setOverhang: (side: string) => t('Change {field} overhang', { field: fieldName(SIDE_NAMES, side) }),
   setTimber: (key: string) => t('Change {field} section', { field: fieldName(TIMBER_NAMES, key) }),
+  setSectionLocked: (key: string, locked: boolean) => t(locked ? 'Lock {field} section' : 'Unlock {field} section', { field: fieldName(TIMBER_NAMES, key) }),
   setStrengthClass: () => t('Change strength class'),
   setLoad: (key: string) => t('Change {field}', { field: fieldName(LOAD_NAMES, key) }),
   setWallClosed: (id: string, closed: boolean) => (closed ? t('Close {field} wall', { field: fieldName(SIDE_NAMES, id) }) : t('Open {field} wall', { field: fieldName(SIDE_NAMES, id) })),

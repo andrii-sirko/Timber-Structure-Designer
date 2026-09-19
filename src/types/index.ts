@@ -67,6 +67,9 @@ export interface TimberSpecs {
   strengthClass: StrengthClass;
 }
 
+export type TimberKey = keyof Omit<TimberSpecs, 'strengthClass'>;
+export const TIMBER_KEYS: readonly TimberKey[] = ['post', 'beam', 'rafter', 'stud', 'brace'] as const;
+
 export interface Overhangs {
   front: Millimeters;
   rear: Millimeters;
@@ -344,6 +347,8 @@ export interface StructureParams {
   braceDirection: BraceDirection;
   connectionMode: ConnectionMode;
   timber: TimberSpecs;
+  /** Sections the user pinned – statics auto-fix and cost optimization leave them untouched */
+  lockedSections: TimberKey[];
   loads: LoadSettings;
   floor: FloorSettings;
 }

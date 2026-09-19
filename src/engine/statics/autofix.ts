@@ -1,4 +1,4 @@
-import type { ProjectState, StaticsCheck, StaticsResult, StaticsStatus, StructureParams, TimberSection } from '@/types';
+import type { ProjectState, StaticsCheck, StaticsResult, StaticsStatus, StructureParams, TimberKey, TimberSection } from '@/types';
 import { buildFramingCanonical, canonicalProject } from '../framing';
 import { BRACE_SECTIONS, computeStatics, STANDARD_DEPTHS } from './index';
 import { findSmallestValidSection, findSmallestValidSquareSize } from './costOptimizationHelpers';
@@ -16,6 +16,9 @@ import { findSmallestValidSection, findSmallestValidSquareSize } from './costOpt
  *  - Bracing: enable knee braces → bigger brace section → braces on both sides → more posts
  *             (a direction without purlin rows can only be helped by bigger posts / more posts)
  *  - Uplift:  no lever – anchors are a hardware choice, reported as unresolved
+ *
+ * Sections listed in `params.lockedSections` are pinned by the user: their lever is skipped
+ * and the next one in line is used instead.
  */
 
 const POST_SIZES = [100, 120, 140, 160, 180, 200, 220, 240];
@@ -84,8 +87,9 @@ function addPosts(params: StructureParams): StructureParams | undefined {
 
 function applyFix(params: StructureParams, check: StaticsCheck): StructureParams | undefined {
   const { timber } = params;
+  const locked = (key: TimberKey): boolean => params.lockedSections.includes(key);
   if (check.id === 'rafter') {
-    const deeper = nextUp(STANDARD_DEPTHS, timber.rafter.height);
+    const deeper = locked('rafter') ? undefined : nextUp(STANDARD_DEPTHS, timber.rafter.height);
     if (deeper) return { ...params, timber: { ...timber, rafter: { ...timber.rafter, height: deeper } } };
     const closer = nextDown(RAFTER_SPACINGS, params.maxRafterSpacing);
     if (closer) return { ...params, maxRafterSpacing: closer };
@@ -94,12 +98,12 @@ function applyFix(params: StructureParams, check: StaticsCheck): StructureParams
     return shorter ? { ...params, maxRafterLength: shorter } : undefined;
   }
   if (check.id.startsWith('purlin')) {
-    const deeper = nextUp(STANDARD_DEPTHS, timber.beam.height);
+    const deeper = locked('beam') ? undefined : nextUp(STANDARD_DEPTHS, timber.beam.height);
     if (deeper) return { ...params, timber: { ...timber, beam: { ...timber.beam, height: deeper } } };
     return addPosts(params);
   }
   if (check.id.startsWith('post')) {
-    const bigger = nextUp(POST_SIZES, Math.min(timber.post.width, timber.post.height));
+    const bigger = locked('post') ? undefined : nextUp(POST_SIZES, Math.min(timber.post.width, timber.post.height));
     if (bigger) return { ...params, timber: { ...timber, post: { width: bigger, height: bigger } } };
     return addPosts(params);
   }
@@ -116,20 +120,20 @@ function applyFix(params: StructureParams, check: StaticsCheck): StructureParams
     return closer ? { ...params, floor: { ...floor, maxSupportSpacing: closer } } : undefined;
   }
   if (check.id.startsWith('header')) {
-    const deeper = nextUp(STUD_DEPTHS, timber.stud.height);
+    const deeper = locked('stud') ? undefined : nextUp(STUD_DEPTHS, timber.stud.height);
     return deeper ? { ...params, timber: { ...timber, stud: { ...timber.stud, height: deeper } } } : undefined;
   }
   if (check.id.startsWith('bracing')) {
     if (check.element.startsWith('Knee braces')) {
       const area = timber.brace.width * timber.brace.height;
-      const bigger = BRACE_SECTIONS.find((s) => s.width * s.height > area);
+      const bigger = locked('brace') ? undefined : BRACE_SECTIONS.find((s) => s.width * s.height > area);
       if (bigger) return { ...params, timber: { ...timber, brace: bigger } };
       if (params.braceDirection !== 'both') return { ...params, braceDirection: 'both' };
       return addPosts(params);
     }
     // sway posts: knee braces act only in the purlin-row direction
     if (!params.braces && check.element.includes(params.roofScheme === 'sloped-purlins' ? '(Z)' : '(X)')) return { ...params, braces: true };
-    const bigger = nextUp(POST_SIZES, Math.min(timber.post.width, timber.post.height));
+    const bigger = locked('post') ? undefined : nextUp(POST_SIZES, Math.min(timber.post.width, timber.post.height));
     if (bigger) return { ...params, timber: { ...timber, post: { width: bigger, height: bigger } } };
     return addPosts(params);
   }
@@ -203,6 +207,7 @@ export function costOptimizeStatics(project: ProjectState): CostOptimizationResu
     let changed = false;
 
     for (const key of ['rafter', 'beam', 'stud'] as const) {
+      if (params.lockedSections.includes(key)) continue;
       const current = params.timber[key];
       const smaller = findSmallestValidSection(current, STANDARD_DEPTHS, (section) => isStaticsOk(project, replaceSection(params, key, section)));
       if (smaller.height !== current.height) {
@@ -223,11 +228,13 @@ export function costOptimizeStatics(project: ProjectState): CostOptimizationResu
       }
     }
 
-    const currentPost = params.timber.post;
-    const smallerPost = findSmallestValidSquareSize(currentPost, POST_SIZES, (section) => isStaticsOk(project, replacePost(params, section)));
-    if (smallerPost.width < currentPost.width && smallerPost.height < currentPost.height) {
-      params = replacePost(params, smallerPost);
-      changed = true;
+    if (!params.lockedSections.includes('post')) {
+      const currentPost = params.timber.post;
+      const smallerPost = findSmallestValidSquareSize(currentPost, POST_SIZES, (section) => isStaticsOk(project, replacePost(params, section)));
+      if (smallerPost.width < currentPost.width && smallerPost.height < currentPost.height) {
+        params = replacePost(params, smallerPost);
+        changed = true;
+      }
     }
 
     if (!changed) break;

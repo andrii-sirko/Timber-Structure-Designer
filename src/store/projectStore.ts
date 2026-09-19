@@ -21,7 +21,7 @@ import type {
   StrengthClass,
   StructureParams,
   TimberSection,
-  TimberSpecs,
+  TimberKey,
   Vehicle,
   ViewSettings,
   WallId,
@@ -78,7 +78,6 @@ const idbStorage: StateStorage = {
   },
 };
 
-type TimberKey = keyof Omit<TimberSpecs, 'strengthClass'>;
 
 interface ProjectStoreBase {
   project: ProjectState;
@@ -108,6 +107,8 @@ interface ProjectStoreBase {
   setParams: (params: StructureParams) => void;
   setOverhang: (side: keyof Overhangs, value: number) => void;
   setTimber: (key: TimberKey, section: TimberSection) => void;
+  /** Pin a section so statics auto-fix and cost optimization leave it untouched */
+  setSectionLocked: (key: TimberKey, locked: boolean) => void;
   setStrengthClass: (cls: StrengthClass) => void;
   setLoad: <K extends keyof LoadSettings>(key: K, value: LoadSettings[K]) => void;
   /** Patch the timber floor settings */
@@ -276,6 +277,12 @@ export const useProjectStore = create<ProjectStore>()(
             params: { ...s.project.params, timber: { ...s.project.params.timber, [key]: section } },
           }),
         })),
+
+      setSectionLocked: (key, locked) =>
+        set((s) => {
+          const rest = s.project.params.lockedSections.filter((k) => k !== key);
+          return { project: { ...s.project, params: { ...s.project.params, lockedSections: locked ? [...rest, key] : rest } } };
+        }),
 
       setStrengthClass: (strengthClass) =>
         set((s) => ({ project: { ...s.project, params: { ...s.project.params, timber: { ...s.project.params.timber, strengthClass } } } })),

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { Cable, CloudSnow, MapPin, MapPinned, Plus, Rows3, Ruler, Settings2, Trash2, TreePine, Triangle } from 'lucide-react';
-import type { BraceDirection, DerivedModel, FloorDecking, FloorSupport, RoofCovering, RoofDirection, RoofScheme, StructureParams, TimberSection, WallId } from '@/types';
+import { Cable, CloudSnow, Lock, LockOpen, MapPin, MapPinned, Plus, Rows3, Ruler, Settings2, Trash2, TreePine, Triangle } from 'lucide-react';
+import type { BraceDirection, DerivedModel, FloorDecking, FloorSupport, RoofCovering, RoofDirection, RoofScheme, StructureParams, TimberKey, TimberSection, WallId } from '@/types';
 import { DECKING, FLOOR_LOAD_PRESETS, gridPostCount, MIN_PLAN_DIM, minWallHeight } from '@/engine/framing';
 import { midPurlinBounds } from '@/engine/framing/roofLines';
 import { freePostBounds, freePostMemberId } from '@/engine/freePosts';
@@ -28,13 +28,20 @@ const ROOF_SCHEME_OPTIONS: { value: RoofScheme; label: string }[] = [
   { value: 'sloped-purlins', label: 'Sloped purlins – post rows & braces down the slope, level rafters across (gable entry)' },
 ];
 
-function SectionPair({ label, value, onChange, hint }: { label: string; value: TimberSection; onChange: (s: TimberSection) => void; hint?: string }) {
+function SectionPair({ label, value, onChange, hint, locked, onLockedChange }: { label: string; value: TimberSection; onChange: (s: TimberSection) => void; hint?: string; locked?: boolean; onLockedChange?: (locked: boolean) => void }) {
   const { t } = useT();
+  const LockIcon = locked ? Lock : LockOpen;
+  const lockTitle = locked ? t('Section locked – auto-fix and cost optimization keep it') : t('Lock section against auto-fix and cost optimization');
   return (
     <div className="space-y-1">
-      <div className="flex items-baseline justify-between text-[11px] font-medium tracking-wide text-slate-400 uppercase">
+      <div className="flex items-baseline justify-between gap-2 text-[11px] font-medium tracking-wide text-slate-400 uppercase">
         <span>{label}</span>
-        {hint && <span className="text-[10px] font-normal normal-case text-slate-500">{hint}</span>}
+        {hint && <span className="ml-auto text-[10px] font-normal normal-case text-slate-500">{hint}</span>}
+        {onLockedChange && (
+          <button type="button" title={lockTitle} aria-label={lockTitle} aria-pressed={locked} onClick={() => onLockedChange(!locked)} className={locked ? 'self-center text-amber-300 hover:text-amber-200' : 'self-center text-slate-600 hover:text-slate-300'}>
+            <LockIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <NumberField label={t('b (width)')} value={value.width} min={40} max={400} step={20} compact onChange={(width) => onChange({ ...value, width })} />
@@ -207,6 +214,8 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
   const moveMidPurlin = useProjectStore((s) => s.moveMidPurlin);
   const setOverhang = useProjectStore((s) => s.setOverhang);
   const setTimber = useProjectStore((s) => s.setTimber);
+  const setSectionLocked = useProjectStore((s) => s.setSectionLocked);
+  const lockProps = (key: TimberKey) => ({ locked: params.lockedSections.includes(key), onLockedChange: (locked: boolean) => setSectionLocked(key, locked) });
   const setStrengthClass = useProjectStore((s) => s.setStrengthClass);
   const setLoad = useProjectStore((s) => s.setLoad);
   const roof = model.framing.roof;
@@ -378,11 +387,11 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
             onChange={setStrengthClass}
             options={STRENGTH_CLASSES.map((c) => ({ value: c, label: c }))}
           />
-          <SectionPair label={t('Posts (Pfosten)')} value={params.timber.post} onChange={(s) => setTimber('post', s)} />
-          <SectionPair label={t('Purlins / rails (Pfetten)')} value={params.timber.beam} onChange={(s) => setTimber('beam', s)} />
-          <SectionPair label={t('Rafters (Sparren)')} value={params.timber.rafter} onChange={(s) => setTimber('rafter', s)} />
-          <SectionPair label={t('Wall studs (Ständer)')} value={params.timber.stud} hint={t('b along wall · h = wall depth')} onChange={(s) => setTimber('stud', s)} />
-          <SectionPair label={t('Knee braces (Kopfbänder)')} value={params.timber.brace} onChange={(s) => setTimber('brace', s)} />
+          <SectionPair label={t('Posts (Pfosten)')} value={params.timber.post} onChange={(s) => setTimber('post', s)} {...lockProps('post')} />
+          <SectionPair label={t('Purlins / rails (Pfetten)')} value={params.timber.beam} onChange={(s) => setTimber('beam', s)} {...lockProps('beam')} />
+          <SectionPair label={t('Rafters (Sparren)')} value={params.timber.rafter} onChange={(s) => setTimber('rafter', s)} {...lockProps('rafter')} />
+          <SectionPair label={t('Wall studs (Ständer)')} value={params.timber.stud} hint={t('b along wall · h = wall depth')} onChange={(s) => setTimber('stud', s)} {...lockProps('stud')} />
+          <SectionPair label={t('Knee braces (Kopfbänder)')} value={params.timber.brace} onChange={(s) => setTimber('brace', s)} {...lockProps('brace')} />
         </Section>
 
         <FloorEditor model={model} params={params} />

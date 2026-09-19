@@ -1,5 +1,5 @@
 import type { BraceDirection, FreePost, LayerVisibility, ObjectSize, Opening, Partition, PavedArea, ProjectState, RoofDirection, RoofScheme, StructureParams, Vehicle, ViewSettings, Wall, WallId } from '@/types';
-import { BRACE_DIRECTIONS, ROOF_SCHEMES, WALL_IDS } from '@/types';
+import { BRACE_DIRECTIONS, ROOF_SCHEMES, TIMBER_KEYS, WALL_IDS } from '@/types';
 import { uuid } from '@/engine/geometry';
 import { VEHICLE_CATALOG, VEHICLE_COLORS } from '@/engine/vehicles';
 import { NEIGHBOUR_DEFAULTS } from '@/engine/neighbours';
@@ -33,6 +33,7 @@ export const DEFAULT_PARAMS: StructureParams = {
     brace: { width: 80, height: 100 },
     strengthClass: 'C24',
   },
+  lockedSections: [],
   loads: { snowLoad: 0.85, roofCovering: 'trapezoidal-sheet', serviceClass: 2, windLoad: 0.65 },
   floor: structuredClone(FLOOR_DEFAULTS),
 };
@@ -196,6 +197,7 @@ export function normalizeProject(input: unknown): ProjectState {
       stud: { ...base.params.timber.stud, ...(p.timber?.stud ?? {}) },
       brace: { ...base.params.timber.brace, ...(p.timber?.brace ?? {}) },
     },
+    lockedSections: Array.isArray(p.lockedSections) ? TIMBER_KEYS.filter((k) => p.lockedSections!.includes(k)) : [],
     loads: { ...base.params.loads, ...(p.loads ?? {}) },
     floor: sanitizeFloor(p.floor),
     midPurlinPositions: Array.isArray(p.midPurlinPositions) ? p.midPurlinPositions.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)) : [],
