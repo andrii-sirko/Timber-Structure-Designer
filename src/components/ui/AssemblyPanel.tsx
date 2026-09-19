@@ -132,7 +132,7 @@ export function AssemblyPanel({ model }: { model: DerivedModel }) {
   return (
     <div
       className="pointer-events-auto absolute z-10 flex w-80 max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-lg border border-lime-500/40 bg-slate-950/92 shadow-xl backdrop-blur"
-      style={{ right: '0.75rem', bottom: 'calc(var(--sheet-h, 0px) + 0.75rem)', maxHeight: 'calc(100% - var(--sheet-h, 0px) - 8.5rem)' }}
+      style={{ right: '0.75rem', bottom: 'calc(var(--sheet-h, 0px) + 0.75rem)', height: 'calc((100% - var(--sheet-h, 0px)) / 2)', maxHeight: 'calc(100% - var(--sheet-h, 0px) - var(--tools-r-h, 7.5rem) - 2rem)' }}
       aria-label={t('Assembly guide')}
     >
       <div className="flex shrink-0 items-start gap-2 border-b border-slate-800 px-3 py-2">
@@ -199,7 +199,7 @@ export function AssemblyPanel({ model }: { model: DerivedModel }) {
         </button>
       </div>
 
-      <div className="scroll-thin min-h-0 flex-1 overflow-y-auto border-t border-slate-800">
+      <div className="scroll-thin min-h-0 shrink overflow-y-auto border-t border-slate-800 pb-2">
         <p className="px-3 pt-2 text-[12px] leading-snug text-slate-200">{tx(step.instruction)}</p>
 
         {(parts.length > 0 || panelCount > 0) && (
@@ -243,8 +243,10 @@ export function AssemblyPanel({ model }: { model: DerivedModel }) {
             </ul>
           </div>
         )}
+      </div>
 
-        <div className="mt-2 flex items-center justify-between border-t border-slate-800 px-3 pt-2">
+      <div className="flex min-h-28 flex-1 flex-col border-t border-slate-800">
+        <div className="flex shrink-0 items-center justify-between px-3 pt-2">
           <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
             {t('All steps')}
             {customOrder && <span className="ml-1.5 rounded bg-amber-500/15 px-1 py-0.5 text-amber-200 normal-case">{t('Custom order')}</span>}
@@ -259,7 +261,7 @@ export function AssemblyPanel({ model }: { model: DerivedModel }) {
             <RotateCcw className="h-3 w-3" /> {t('Reset to the recommended order')}
           </button>
         </div>
-        <ol className="px-1.5 pt-1 pb-2">
+        <ol className="scroll-thin min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2">
           {steps.map((s, i) => (
             <li
               key={s.key}

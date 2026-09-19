@@ -24,6 +24,7 @@ import {
   Rows3,
   Hammer,
 } from 'lucide-react';
+import { useLayoutEffect, useRef } from 'react';
 import type { CameraPreset, HighlightMode, LayerVisibility } from '@/types';
 import { useProjectStore } from '@/store';
 import { useUiStore } from '@/store/uiStore';
@@ -72,6 +73,17 @@ export function ViewportControls({ canvasContainer }: { canvasContainer: React.R
   const resetPending = useMeasureStore((s) => s.reset);
   const assemblyActive = useUiStore((s) => s.assemblyActive);
   const setAssemblyActive = useUiStore((s) => s.setAssemblyActive);
+  const rightTools = useRef<HTMLDivElement>(null);
+
+  // Publish the right toolbar's height so panels below it (assembly guide) can stop short of it
+  useLayoutEffect(() => {
+    const tools = rightTools.current;
+    const container = canvasContainer.current;
+    if (!tools || !container) return;
+    const observer = new ResizeObserver(() => container.style.setProperty('--tools-r-h', `${tools.offsetHeight}px`));
+    observer.observe(tools);
+    return () => observer.disconnect();
+  }, [canvasContainer]);
 
   const screenshot = (): void => {
     const canvas = canvasContainer.current?.querySelector('canvas');
@@ -106,7 +118,7 @@ export function ViewportControls({ canvasContainer }: { canvasContainer: React.R
         </div>
       </div>
 
-      <div className="pointer-events-auto flex max-h-full max-w-[60%] flex-col items-end gap-2 self-start overflow-y-auto scroll-thin">
+      <div ref={rightTools} className="pointer-events-auto flex max-h-full max-w-[60%] flex-col items-end gap-2 self-start overflow-y-auto scroll-thin">
         <div className={cx(group, 'flex-row')} title={t('Render mode')}>
           {HIGHLIGHTS.map((h) => (
             <IconButton key={h.id} icon={h.icon} title={t(h.label)} active={view.highlight === h.id} onClick={() => setHighlight(h.id)} />
