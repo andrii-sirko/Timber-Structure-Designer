@@ -56,7 +56,7 @@ const interpolate = (s: string, params?: Params): string =>
 /** Translate a UI string (English source text, optionally a `{placeholder}` template). */
 export function t(key: string, params?: Params, lang: Lang = getLang()): string {
   const entry = lang === 'en' ? undefined : DICTIONARY[key];
-  return interpolate(entry ? entry[lang] : key, params);
+  return interpolate(entry && lang !== 'en' ? entry[lang] : key, params);
 }
 
 // ---------------------------------------------------------------------------------------------
