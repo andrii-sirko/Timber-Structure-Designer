@@ -6,6 +6,7 @@ import type { GroundPoint, PavedArea, PavedAreaSummary, PavingPattern } from '@/
 import { useProjectStore } from '@/store';
 import { edgeMidpoint, offsetEdge } from '@/engine/paving';
 import { MM } from './materials';
+import { useRedraw } from './renderLoop';
 import { Dimension } from './DimensionLines';
 import { useMeasureStore } from './MeasureTool';
 import { openObjectSettings } from './openObjectSettings';
@@ -148,10 +149,12 @@ export const PavedAreaMesh = memo(function PavedAreaMesh({ area, summary, select
 
   const material = useMemo(() => new THREE.MeshStandardMaterial({ map: tile.texture, color: area.color, roughness: 0.95, metalness: 0 }), [tile, area.color]);
   useEffect(() => () => material.dispose(), [material]);
+  const redraw = useRedraw();
   useEffect(() => {
     material.emissive.set(selected ? '#0ea5e9' : '#000000');
     material.emissiveIntensity = selected ? 0.08 : 0;
-  }, [material, selected]);
+    redraw();
+  }, [material, selected, redraw]);
 
   const outline = useMemo(() => {
     const pts = area.points.map((p) => [p.x * MM, TOP_Y + 0.002, p.z * MM] as [number, number, number]);

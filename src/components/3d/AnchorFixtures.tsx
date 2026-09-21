@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { Member } from '@/types';
 import { endStudBrackets, plateAnchors, postBases } from '@/engine/joinery/anchors';
 import { getGalvanisedMaterial, MM } from './materials';
+import { useRedraw } from './renderLoop';
 
 /** Frame anchor washer and head on the plate top (mm). */
 const WASHER_DIAMETER = 32;
@@ -43,13 +44,15 @@ function useGeometries(): Record<Part, THREE.BufferGeometry> {
 
 function Instanced({ geometry, matrices }: { geometry: THREE.BufferGeometry; matrices: THREE.Matrix4[] }) {
   const ref = useRef<THREE.InstancedMesh>(null);
+  const redraw = useRedraw();
   useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
     matrices.forEach((m, i) => mesh.setMatrixAt(i, m));
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
-  }, [matrices]);
+    redraw();
+  }, [matrices, redraw]);
   if (matrices.length === 0) return null;
   // keyed by count: an InstancedMesh cannot grow after creation
   return <instancedMesh key={matrices.length} ref={ref} args={[geometry, getGalvanisedMaterial(), matrices.length]} castShadow receiveShadow />;

@@ -29,6 +29,7 @@ import type { CameraPreset, HighlightMode, LayerVisibility } from '@/types';
 import { useProjectStore } from '@/store';
 import { useUiStore } from '@/store/uiStore';
 import { useMeasureStore } from '@/components/3d/MeasureTool';
+import { snapshotPng } from '@/components/3d/renderLoop';
 import { useT } from '@/i18n';
 import { IconButton, cx } from './primitives';
 
@@ -86,10 +87,10 @@ export function ViewportControls({ canvasContainer }: { canvasContainer: React.R
   }, [canvasContainer]);
 
   const screenshot = (): void => {
-    const canvas = canvasContainer.current?.querySelector('canvas');
-    if (!canvas) return;
+    const png = snapshotPng();
+    if (!png) return;
     const a = document.createElement('a');
-    a.href = canvas.toDataURL('image/png');
+    a.href = png;
     a.download = 'timber-structure.png';
     a.click();
   };

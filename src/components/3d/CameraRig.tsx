@@ -4,6 +4,7 @@ import { useThree } from '@react-three/fiber';
 import type { CameraPreset, DerivedModel } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
 import { MM } from './materials';
+import { useRedraw } from './renderLoop';
 
 interface Bounds {
   min: THREE.Vector3;
@@ -51,6 +52,7 @@ export function CameraRig({ bounds }: { bounds: Bounds }) {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as unknown as OrbitLike | null;
   const size = useThree((s) => s.size);
+  const redraw = useRedraw();
 
   // Everything except the nonce is read through a ref: the view is only re-framed when a view
   // button bumps the nonce, never by editing, selecting, resizing the viewport or undo/redo.
@@ -71,6 +73,7 @@ export function CameraRig({ bounds }: { bounds: Bounds }) {
         controls.update();
       }
       applied.current = { ...prev, camera, target: controls ? controls.target : prev.target };
+      redraw();
       return;
     }
 
@@ -163,7 +166,8 @@ export function CameraRig({ bounds }: { bounds: Bounds }) {
     }
     // a preset that switches projection frames once with the old camera, then again once the new camera is mounted
     applied.current = { nonce, camera, target: controls ? controls.target : target, awaitingCamera: isOrtho !== orthographic };
-  }, [nonce, camera, controls]);
+    redraw();
+  }, [nonce, camera, controls, redraw]);
 
   return null;
 }

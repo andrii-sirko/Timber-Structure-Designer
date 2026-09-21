@@ -30,6 +30,12 @@ import { PanelMesh } from './PanelMesh';
 import { TimberMember } from './TimberMember';
 import { VehicleMesh } from './VehicleMesh';
 import { PavedAreaMesh } from './PavedAreaMesh';
+import { RenderLoop } from './renderLoop';
+
+/** Touch devices get a lighter pixel ratio and shadow map: fill-rate, not draw calls, limits phones. */
+const COARSE_POINTER = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+const MAX_DPR = COARSE_POINTER ? 1.5 : 1.75;
+const SHADOW_MAP_SIZE = COARSE_POINTER ? 1024 : 2048;
 
 function HoverTooltip({ members }: { members: Member[] }) {
   const hoveredId = useProjectStore((s) => s.hoveredMemberId);
@@ -59,6 +65,8 @@ function HoverTooltip({ members }: { members: Member[] }) {
 }
 
 export function Scene({ model }: { model: DerivedModel }) {
+  const { t } = useT();
+  const [contextLost, setContextLost] = useState(false);
   const project = useProjectStore((s) => s.project);
   const layers = useProjectStore((s) => s.view.layers);
   const highlight = useProjectStore((s) => s.view.highlight);
@@ -412,170 +420,179 @@ export function Scene({ model }: { model: DerivedModel }) {
   const groundSize = extent * 7;
 
   return (
-    <Canvas
-      shadows={{ type: THREE.PCFShadowMap }}
-      dpr={[1, 1.75]}
-      gl={{ antialias: true, preserveDrawingBuffer: true }}
-      onPointerMissed={() => {
-        if (!measureMode && !isDragging && !placingPost) {
-          selectWall(null);
-          selectMember(null);
-          selectVehicle(null);
-          selectPavedArea(null);
-        }
-      }}
-      className={measureMode || placingPost ? 'cursor-crosshair' : undefined}
-    >
-      <color attach="background" args={['#0b1220']} />
-      <fog attach="fog" args={['#0b1220', fogNear, fogFar]} />
-      {orthographic ? (
-        <OrthographicCamera makeDefault position={[8, 8, -8]} near={0.01} far={Math.max(500, extent * 40)} zoom={60} />
-      ) : (
-        <PerspectiveCamera makeDefault position={[8, 6, -9]} fov={42} near={0.05} far={Math.max(500, extent * 40)} />
-      )}
-      <hemisphereLight args={['#dbeafe', '#3b2a17', 0.55]} />
-      <directionalLight
-        position={[centre[0] + extent * 0.75, extent * 1.2, centre[2] - extent * 0.6]}
-        intensity={1.7}
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-left={-shadowHalf}
-        shadow-camera-right={shadowHalf}
-        shadow-camera-top={shadowHalf}
-        shadow-camera-bottom={-shadowHalf}
-        shadow-camera-near={0.5}
-        shadow-camera-far={extent * 5}
-        shadow-bias={-0.0004}
-      />
-      <directionalLight position={[-8, 6, 9]} intensity={0.45} />
-
-      {layers.grid && (
-        <Grid
-          position={[centre[0], -0.002, centre[2]]}
-          args={[60, 60]}
-          cellSize={0.5}
-          cellThickness={0.6}
-          cellColor="#1e293b"
-          sectionSize={2}
-          sectionThickness={1.1}
-          sectionColor="#334155"
-          fadeDistance={extent * 4}
-          fadeStrength={1.5}
-          infiniteGrid
-        />
-      )}
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[centre[0], -0.003, centre[2]]}
-        receiveShadow
-        onClick={(e) => {
-          if (placePostAt(e)) return;
-          if (measureMode) {
-            e.stopPropagation();
-            addPoint(e.point);
+    <>
+      <Canvas
+        frameloop="demand"
+        shadows={{ type: THREE.PCFShadowMap }}
+        dpr={[1, MAX_DPR]}
+        gl={{ antialias: true }}
+        onPointerMissed={() => {
+          if (!measureMode && !isDragging && !placingPost) {
+            selectWall(null);
+            selectMember(null);
+            selectVehicle(null);
+            selectPavedArea(null);
           }
         }}
+        className={measureMode || placingPost ? 'cursor-crosshair' : undefined}
       >
-        <planeGeometry args={[groundSize, groundSize]} />
-        <shadowMaterial transparent opacity={0.3} />
-      </mesh>
+        <RenderLoop onContextLost={setContextLost} />
+        <color attach="background" args={['#0b1220']} />
+        <fog attach="fog" args={['#0b1220', fogNear, fogFar]} />
+        {orthographic ? (
+          <OrthographicCamera makeDefault position={[8, 8, -8]} near={0.01} far={Math.max(500, extent * 40)} zoom={60} />
+        ) : (
+          <PerspectiveCamera makeDefault position={[8, 6, -9]} fov={42} near={0.05} far={Math.max(500, extent * 40)} />
+        )}
+        <hemisphereLight args={['#dbeafe', '#3b2a17', 0.55]} />
+        <directionalLight
+          position={[centre[0] + extent * 0.75, extent * 1.2, centre[2] - extent * 0.6]}
+          intensity={1.7}
+          castShadow
+          shadow-mapSize-width={SHADOW_MAP_SIZE}
+          shadow-mapSize-height={SHADOW_MAP_SIZE}
+          shadow-camera-left={-shadowHalf}
+          shadow-camera-right={shadowHalf}
+          shadow-camera-top={shadowHalf}
+          shadow-camera-bottom={-shadowHalf}
+          shadow-camera-near={0.5}
+          shadow-camera-far={extent * 5}
+          shadow-bias={-0.0004}
+        />
+        <directionalLight position={[-8, 6, 9]} intensity={0.45} />
 
-      <Suspense fallback={null}>
-        {(layers.frame || assembly) &&
-          model.framing.members.map((m) => {
-            const state = assemblyState(m.id);
-            if (state === 'hidden' || (state !== 'current' && !layers.frame)) return null;
-            return (
-            <TimberMember
-              key={state === 'ghost' ? `${m.id}:ghost` : m.id}
-              assembly={state}
-              member={m}
-              highlight={highlight}
-              hovered={m.id === hoveredId}
-              inspected={m.id === (subject ?? selectedStud)?.id}
-              neighbour={neighbourIds.has(m.id)}
-              focused={m.id === focusedNeighbourId}
-              selected={selectedMemberId === m.id || (selectedWallId !== null && (m.wallId ?? m.partitionId) === selectedWallId && (m.category === 'stud' || m.category === 'header' || m.category === 'sill' || m.category === 'plate'))}
-              onHover={setHovered}
-              onClick={onMemberClick}
-              onDoubleClick={onMemberDoubleClick}
-              onPostDragStart={onPostDragStart}
-              onPostDrag={onPostDrag}
-              onPostDragEnd={onPostDragEnd}
-              onRemovePost={onRemovePost}
-              dragCursor={measureMode || placingPost ? undefined : memberDragCursor(m)}
-            />
-            );
+        {layers.grid && (
+          <Grid
+            position={[centre[0], -0.002, centre[2]]}
+            args={[60, 60]}
+            cellSize={0.5}
+            cellThickness={0.6}
+            cellColor="#1e293b"
+            sectionSize={2}
+            sectionThickness={1.1}
+            sectionColor="#334155"
+            fadeDistance={extent * 4}
+            fadeStrength={1.5}
+            infiniteGrid
+          />
+        )}
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[centre[0], -0.003, centre[2]]}
+          receiveShadow
+          onClick={(e) => {
+            if (placePostAt(e)) return;
+            if (measureMode) {
+              e.stopPropagation();
+              addPoint(e.point);
+            }
+          }}
+        >
+          <planeGeometry args={[groundSize, groundSize]} />
+          <shadowMaterial transparent opacity={0.3} />
+        </mesh>
+
+        <Suspense fallback={null}>
+          {(layers.frame || assembly) &&
+            model.framing.members.map((m) => {
+              const state = assemblyState(m.id);
+              if (state === 'hidden' || (state !== 'current' && !layers.frame)) return null;
+              return (
+              <TimberMember
+                key={state === 'ghost' ? `${m.id}:ghost` : m.id}
+                assembly={state}
+                member={m}
+                highlight={highlight}
+                hovered={m.id === hoveredId}
+                inspected={m.id === (subject ?? selectedStud)?.id}
+                neighbour={neighbourIds.has(m.id)}
+                focused={m.id === focusedNeighbourId}
+                selected={selectedMemberId === m.id || (selectedWallId !== null && (m.wallId ?? m.partitionId) === selectedWallId && (m.category === 'stud' || m.category === 'header' || m.category === 'sill' || m.category === 'plate'))}
+                onHover={setHovered}
+                onClick={onMemberClick}
+                onDoubleClick={onMemberDoubleClick}
+                onPostDragStart={onPostDragStart}
+                onPostDrag={onPostDrag}
+                onPostDragEnd={onPostDragEnd}
+                onRemovePost={onRemovePost}
+                dragCursor={measureMode || placingPost ? undefined : memberDragCursor(m)}
+              />
+              );
+            })}
+          {layers.frame && !wireframe && <AnchorFixtures members={builtMembers} />}
+          {model.framing.panels.map((p) => {
+            const state = assemblyState(p.id);
+            const layerOn = (p.kind === 'roof' && layers.roof) || (p.kind === 'cladding' && layers.cladding) || (p.kind === 'floor' && layers.floor);
+            // The panel being fitted always shows, even with its layer switched off to see the framing below
+            return state !== 'hidden' && (layerOn || state === 'current') ? (
+              <PanelMesh
+                key={state === 'ghost' ? `${p.id}:ghost` : p.id}
+                assembly={state}
+                panel={p}
+                covering={project.params.loads.roofCovering}
+                wireframe={wireframe}
+                onClick={onPanelClick}
+                onDoubleClick={onPanelDoubleClick}
+                onDragStart={p.partitionId || p.wallId ? onPanelDragStart : undefined}
+                onDrag={p.partitionId || p.wallId ? onPanelDrag : undefined}
+                onDragEnd={p.partitionId || p.wallId ? onPanelDragEnd : undefined}
+                dragCursor={
+                  measureMode || placingPost
+                    ? undefined
+                    : p.partitionId
+                      ? partitionDragCursor('move', partitionsById.get(p.partitionId)?.axis ?? 'x')
+                      : p.wallId
+                        ? panelDragCursorAt
+                        : undefined
+                }
+              />
+            ) : null;
           })}
-        {layers.frame && !wireframe && <AnchorFixtures members={builtMembers} />}
-        {model.framing.panels.map((p) => {
-          const state = assemblyState(p.id);
-          const layerOn = (p.kind === 'roof' && layers.roof) || (p.kind === 'cladding' && layers.cladding) || (p.kind === 'floor' && layers.floor);
-          // The panel being fitted always shows, even with its layer switched off to see the framing below
-          return state !== 'hidden' && (layerOn || state === 'current') ? (
-            <PanelMesh
-              key={state === 'ghost' ? `${p.id}:ghost` : p.id}
-              assembly={state}
-              panel={p}
-              covering={project.params.loads.roofCovering}
-              wireframe={wireframe}
-              onClick={onPanelClick}
-              onDoubleClick={onPanelDoubleClick}
-              onDragStart={p.partitionId || p.wallId ? onPanelDragStart : undefined}
-              onDrag={p.partitionId || p.wallId ? onPanelDrag : undefined}
-              onDragEnd={p.partitionId || p.wallId ? onPanelDragEnd : undefined}
-              dragCursor={
-                measureMode || placingPost
-                  ? undefined
-                  : p.partitionId
-                    ? partitionDragCursor('move', partitionsById.get(p.partitionId)?.axis ?? 'x')
-                    : p.wallId
-                      ? panelDragCursorAt
-                      : undefined
-              }
-            />
-          ) : null;
-        })}
-        {layers.paving &&
-          project.pavedAreas.map((a) => (
-            <PavedAreaMesh
-              key={a.id}
-              area={a}
-              summary={model.paving.areas.find((s) => s.id === a.id)}
-              selected={a.id === selectedPavedAreaId}
-              selectedPointIndex={a.id === selectedPavedAreaId ? selectedPavedPointIndex : null}
-            />
-          ))}
-        {layers.vehicles &&
-          project.vehicles.map((v) => (
-            <VehicleMesh key={v.id} vehicle={v} fit={model.vehicles.find((f) => f.vehicleId === v.id)} selected={v.id === selectedVehicleId} />
-          ))}
-        {layers.dimensions && <DimensionLines model={model} />}
-        {draggingPartition && partitionDrag?.mode === 'move' && <PartitionDragDistances partition={draggingPartition} params={project.params} />}
-        {draggingPartition && partitionDrag?.mode !== 'move' && <PartitionResizeRuler partition={draggingPartition} />}
-        {wallExtentDrag && wallFrames[wallExtentDrag.wallId] && <WallExtentRuler frame={wallFrames[wallExtentDrag.wallId]} />}
-        {draggingPost && <PostDragDistances post={draggingPost} uprights={postUprights} params={project.params} />}
-        {draggingMidPurlin !== null && <MidPurlinDragDistances index={draggingMidPurlin} model={model} params={project.params} />}
-        {layers.cladding && !wireframe && (!assembly || assembly.progress.fixtures) && <OpeningFixtures />}
-        <OpeningsEditor />
-        <MeasureTool />
-        <NeighbourDistances subject={subject} links={unspacedLinks} members={model.framing.members} />
-        <StudSpacingDimensions spacing={spacing} />
-        {layers.frame && <HoverTooltip members={model.framing.members} />}
-      </Suspense>
+          {layers.paving &&
+            project.pavedAreas.map((a) => (
+              <PavedAreaMesh
+                key={a.id}
+                area={a}
+                summary={model.paving.areas.find((s) => s.id === a.id)}
+                selected={a.id === selectedPavedAreaId}
+                selectedPointIndex={a.id === selectedPavedAreaId ? selectedPavedPointIndex : null}
+              />
+            ))}
+          {layers.vehicles &&
+            project.vehicles.map((v) => (
+              <VehicleMesh key={v.id} vehicle={v} fit={model.vehicles.find((f) => f.vehicleId === v.id)} selected={v.id === selectedVehicleId} />
+            ))}
+          {layers.dimensions && <DimensionLines model={model} />}
+          {draggingPartition && partitionDrag?.mode === 'move' && <PartitionDragDistances partition={draggingPartition} params={project.params} />}
+          {draggingPartition && partitionDrag?.mode !== 'move' && <PartitionResizeRuler partition={draggingPartition} />}
+          {wallExtentDrag && wallFrames[wallExtentDrag.wallId] && <WallExtentRuler frame={wallFrames[wallExtentDrag.wallId]} />}
+          {draggingPost && <PostDragDistances post={draggingPost} uprights={postUprights} params={project.params} />}
+          {draggingMidPurlin !== null && <MidPurlinDragDistances index={draggingMidPurlin} model={model} params={project.params} />}
+          {layers.cladding && !wireframe && (!assembly || assembly.progress.fixtures) && <OpeningFixtures />}
+          <OpeningsEditor />
+          <MeasureTool />
+          <NeighbourDistances subject={subject} links={unspacedLinks} members={model.framing.members} />
+          <StudSpacingDimensions spacing={spacing} />
+          {layers.frame && <HoverTooltip members={model.framing.members} />}
+        </Suspense>
 
-      <CameraRig bounds={bounds} />
-      <OrbitControls
-        makeDefault
-        enabled={!isDragging}
-        enableDamping
-        dampingFactor={0.1}
-        maxPolarAngle={Math.PI / 2 - 0.01}
-        minDistance={1}
-        maxDistance={Math.max(120, extent * 12)}
-        mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
-      />
-    </Canvas>
+        <CameraRig bounds={bounds} />
+        <OrbitControls
+          makeDefault
+          enabled={!isDragging}
+          enableDamping
+          dampingFactor={0.1}
+          maxPolarAngle={Math.PI / 2 - 0.01}
+          minDistance={1}
+          maxDistance={Math.max(120, extent * 12)}
+          mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
+        />
+      </Canvas>
+      {contextLost && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/70">
+          <p className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200">{t('3D view lost the graphics context – restoring…')}</p>
+        </div>
+      )}
+    </>
   );
 }

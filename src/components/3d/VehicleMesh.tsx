@@ -7,6 +7,7 @@ import { useProjectStore } from '@/store';
 import { resolveVehicleModel, vehicleCorners } from '@/engine/vehicles';
 import { toRad } from '@/engine/geometry';
 import { MM } from './materials';
+import { useRedraw } from './renderLoop';
 import { clipSilhouette, FRAME_STYLES, GLASS, MATTE_STYLES, SILHOUETTES, WHEEL_LAYOUT, WHEELS } from './vehicleShapes';
 import { FurnitureBody } from './FurnitureBody';
 import { useMeasureStore } from './MeasureTool';
@@ -80,10 +81,12 @@ export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }:
     [vehicle.color, matte],
   );
   useEffect(() => () => bodyMaterial.dispose(), [bodyMaterial]);
+  const redraw = useRedraw();
   useEffect(() => {
     bodyMaterial.emissive.set(selected ? '#0ea5e9' : '#000000');
     bodyMaterial.emissiveIntensity = selected ? 0.12 : 0;
-  }, [bodyMaterial, selected]);
+    redraw();
+  }, [bodyMaterial, selected, redraw]);
 
   const wheelsToRender = useMemo((): [number, number, number][] => {
     if (!wheel) return [];

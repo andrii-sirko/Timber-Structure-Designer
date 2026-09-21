@@ -18,4 +18,9 @@ export default {
   'Remove this measurement': { uk: 'Видалити цей вимір', de: 'Diese Messung entfernen', pl: 'Usuń ten pomiar' },
   '{n} corners': { uk: '{n} кутів', de: '{n} Ecken', pl: '{n} narożników' },
   '{n} stones': { uk: '{n} каменів', de: '{n} Steine', pl: '{n} kamieni' },
+  '3D view lost the graphics context – restoring…': {
+    uk: '3D-вид втратив графічний контекст – відновлюємо…',
+    de: '3D-Ansicht hat den Grafikkontext verloren – wird wiederhergestellt…',
+    pl: 'Widok 3D utracił kontekst graficzny – przywracanie…',
+  },
 } satisfies Dict;
