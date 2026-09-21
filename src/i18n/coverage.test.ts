@@ -22,7 +22,7 @@ function collect(value: unknown, out: Set<string>, key = ''): void {
 
 
 /** Words that legitimately survive translation: German trade terms in parentheses, symbols, brands, units. */
-const KEEP = /^(mm|kN|kNm|max|min|incl|span|beam|stoß|kerve|hakenblatt|pfette|pfosten|sparren|epdm|osb|din|wpc|dpc|vs|minimum|option|crossover|pickup|trekking|stulp)$/i;
+const KEEP = /^(mm|kN|kNm|max|min|incl|span|beam|stoß|kerve|hakenblatt|pfette|pfosten|sparren|epdm|osb|din|wpc|dpc|vs|minimum|option|crossover|pickup|trekking|stulp|moment|sedan|grill)$/i;
 
 /** English words (4+ letters) of the source still present in the translation, ignoring (…) asides and brand names. */
 function leftoverEnglish(source: string, translated: string): string[] {
@@ -52,7 +52,7 @@ function variants(): ProjectState[] {
   return out;
 }
 
-test('every engine text shown in the UI has a Ukrainian and German translation', () => {
+test('every engine text shown in the UI has a Ukrainian, German and Polish translation', () => {
   const texts = new Set<string>();
   for (const project of variants()) {
     collect(buildModel(project), texts);
@@ -66,9 +66,9 @@ test('every engine text shown in the UI has a Ukrainian and German translation',
   }
   collect(OPENING_PRESETS, texts);
   collect(VEHICLE_CATALOG, texts);
-  const missing = { uk: [] as string[], de: [] as string[] };
+  const missing = { uk: [] as string[], de: [] as string[], pl: [] as string[] };
   for (const s of texts) {
-    for (const lang of ['uk', 'de'] as const) {
+    for (const lang of ['uk', 'de', 'pl'] as const) {
       if (!hasTranslation(s, lang)) missing[lang].push(s);
       else {
         const left = leftoverEnglish(s, tx(s, lang));
@@ -77,12 +77,14 @@ test('every engine text shown in the UI has a Ukrainian and German translation',
     }
   }
   if (process.env.I18N_REPORT) {
-    console.log(`${texts.size} engine texts; missing uk ${missing.uk.length}, de ${missing.de.length}`);
+    console.log(`${texts.size} engine texts; missing uk ${missing.uk.length}, de ${missing.de.length}, pl ${missing.pl.length}`);
     for (const s of missing.uk) console.log('  uk ✗', JSON.stringify(s));
     for (const s of missing.de) console.log('  de ✗', JSON.stringify(s));
+    for (const s of missing.pl) console.log('  pl ✗', JSON.stringify(s));
   }
   assert.deepEqual(missing.uk.slice(0, 20), [], `${missing.uk.length} engine texts without a Ukrainian translation (run with I18N_REPORT=1)`);
   assert.deepEqual(missing.de.slice(0, 20), [], `${missing.de.length} engine texts without a German translation`);
+  assert.deepEqual(missing.pl.slice(0, 20), [], `${missing.pl.length} engine texts without a Polish translation`);
 });
 
 test('dictionary entries keep their placeholders and have no conflicting duplicates', () => {
@@ -92,10 +94,11 @@ test('dictionary entries keep their placeholders and have no conflicting duplica
       const ph = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort().join();
       assert.equal(ph(entry.uk), ph(key), `uk placeholders differ for "${key}" (${part})`);
       assert.equal(ph(entry.de), ph(key), `de placeholders differ for "${key}" (${part})`);
+      assert.equal(ph(entry.pl), ph(key), `pl placeholders differ for "${key}" (${part})`);
       const prev = seen.get(key);
       if (prev) {
         const a = DICTIONARY_PARTS[prev][key];
-        assert.ok(a.uk === entry.uk && a.de === entry.de, `"${key}" translated differently in ${prev} and ${part}`);
+        assert.ok(a.uk === entry.uk && a.de === entry.de && a.pl === entry.pl, `"${key}" translated differently in ${prev} and ${part}`);
       }
       seen.set(key, part);
     }

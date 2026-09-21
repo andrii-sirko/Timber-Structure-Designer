@@ -79,8 +79,8 @@ export async function exportCutListPdf(
   const [{ jsPDF }, autoTableModule] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   const autoTable = autoTableModule.default;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  // Helvetica only covers Latin-1; Ukrainian needs an embedded Cyrillic font
-  const font = getLang() === 'uk' ? UNICODE_FONT : 'helvetica';
+  // Helvetica only covers Latin-1; Ukrainian (Cyrillic) and Polish (ą, ę, ł, ś, ż…) need an embedded font
+  const font = getLang() === 'uk' || getLang() === 'pl' ? UNICODE_FONT : 'helvetica';
   if (font === UNICODE_FONT) await embedUnicodeFont(doc);
   const p = project.params;
   const lang = getLang();
@@ -197,5 +197,5 @@ export async function exportCutListPdf(
     headStyles: { fillColor: [92, 61, 28] },
   });
 
-  doc.save(`${safeName(project.name)}_cutlist.pdf`);
+  doc.save(`${safeName(project.name)}_cutlist_${lang}.pdf`);
 }

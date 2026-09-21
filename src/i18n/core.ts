@@ -3,15 +3,15 @@ import { DICTIONARY } from './dict';
 
 /**
  * Minimal i18n: English source strings are the keys; each dictionary entry carries its
- * Ukrainian and German text. Keys may contain `{name}` placeholders:
+ * Ukrainian, German and Polish text. Keys may contain `{name}` placeholders:
  *   - `t(key, params)` interpolates params into the translated template (UI code).
  *   - `tx(text)` translates an already-built English string from the engine by matching it
  *     against the templates, translating the captured pieces recursively (so "Post front 2"
  *     matches "Post {side} {n}"), and falling back to sentence-by-sentence translation.
  * Anything without an entry stays English.
  */
-export type Lang = 'en' | 'uk' | 'de';
-export type Entry = { uk: string; de: string };
+export type Lang = 'en' | 'uk' | 'de' | 'pl';
+export type Entry = { uk: string; de: string; pl: string };
 export type Dict = Record<string, Entry>;
 export type Params = Record<string, string | number>;
 
@@ -19,6 +19,7 @@ export const LANGS: { id: Lang; short: string; name: string }[] = [
   { id: 'en', short: 'EN', name: 'English' },
   { id: 'uk', short: 'UA', name: 'Українська' },
   { id: 'de', short: 'DE', name: 'Deutsch' },
+  { id: 'pl', short: 'PL', name: 'Polski' },
 ];
 
 const STORAGE_KEY = 'timber-lang';
@@ -26,9 +27,9 @@ const STORAGE_KEY = 'timber-lang';
 function initialLang(): Lang {
   try {
     const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
-    if (stored === 'en' || stored === 'uk' || stored === 'de') return stored;
+    if (stored && LANGS.some((l) => l.id === stored)) return stored as Lang;
     const nav = globalThis.navigator?.language?.slice(0, 2);
-    if (nav === 'uk' || nav === 'de') return nav;
+    if (nav === 'uk' || nav === 'de' || nav === 'pl') return nav;
   } catch {
     // storage unavailable (private mode, node tests)
   }
@@ -55,7 +56,7 @@ const interpolate = (s: string, params?: Params): string =>
 /** Translate a UI string (English source text, optionally a `{placeholder}` template). */
 export function t(key: string, params?: Params, lang: Lang = getLang()): string {
   const entry = lang === 'en' ? undefined : DICTIONARY[key];
-  return interpolate(entry ? entry[lang as 'uk' | 'de'] : key, params);
+  return interpolate(entry ? entry[lang] : key, params);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -90,7 +91,7 @@ const TEMPLATES: Template[] = Object.entries(DICTIONARY)
   // most specific (most literal text) first
   .sort((a, b) => b.literal - a.literal);
 
-const caches: Record<'uk' | 'de', Map<string, string>> = { uk: new Map(), de: new Map() };
+const caches: Record<Exclude<Lang, 'en'>, Map<string, string>> = { uk: new Map(), de: new Map(), pl: new Map() };
 
 /** English words of the source still left in a candidate translation (lower is better). */
 function leftover(source: string, out: string): number {
@@ -98,7 +99,7 @@ function leftover(source: string, out: string): number {
   return (out.match(/[A-Za-z]{3,}/g) ?? []).filter((w) => src.has(w)).length;
 }
 
-function translateDynamic(text: string, lang: 'uk' | 'de', depth: number): string | undefined {
+function translateDynamic(text: string, lang: Exclude<Lang, 'en'>, depth: number): string | undefined {
   const exact = DICTIONARY[text];
   if (exact) return exact[lang];
   if (depth > 4 || !/[A-Za-z]/.test(text)) return undefined;
@@ -162,6 +163,6 @@ export function tx(text: string, lang: Lang = getLang()): string {
 }
 
 /** True when `tx` finds a translation (used by the coverage test). */
-export function hasTranslation(text: string, lang: 'uk' | 'de'): boolean {
+export function hasTranslation(text: string, lang: Exclude<Lang, 'en'>): boolean {
   return translateDynamic(text, lang, 0) !== undefined;
 }

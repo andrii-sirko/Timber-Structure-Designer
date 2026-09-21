@@ -1,7 +1,7 @@
 import { Languages } from 'lucide-react';
 import { LANGS, setLang, useT, type Lang } from '@/i18n';
 
-/** Header dropdown switching the UI language (English / Ukrainian / German). */
+/** Header dropdown switching the UI language (English / Ukrainian / German / Polish). */
 export function LanguageSelect() {
   const { t, lang } = useT();
   return (

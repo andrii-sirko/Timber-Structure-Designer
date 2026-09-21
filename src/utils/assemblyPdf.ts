@@ -49,7 +49,7 @@ function safeName(name: string): string {
 }
 
 export async function exportAssemblyPdf(project: ProjectState, model: DerivedModel): Promise<void> {
-  (await buildAssemblyPdf(project, model)).save(`${safeName(project.name)}_assembly.pdf`);
+  (await buildAssemblyPdf(project, model)).save(`${safeName(project.name)}_assembly_${getLang()}.pdf`);
 }
 
 export async function buildAssemblyPdf(project: ProjectState, model: DerivedModel): Promise<jsPDF> {
@@ -141,7 +141,7 @@ export async function buildAssemblyPdf(project: ProjectState, model: DerivedMode
       text(t(label).toUpperCase(), x, y, 7, 'bold', GREY);
       text(value, x, y + 6, 11, 'bold');
     });
-    text(new Date().toLocaleDateString(lang === 'uk' ? 'uk-UA' : lang === 'de' ? 'de-DE' : 'en-GB'), MARGIN, PAGE_H - 22, 8, 'normal', GREY);
+    text(new Date().toLocaleDateString(lang === 'uk' ? 'uk-UA' : lang === 'de' ? 'de-DE' : lang === 'pl' ? 'pl-PL' : 'en-GB'), MARGIN, PAGE_H - 22, 8, 'normal', GREY);
 
     // ── Before you start ─────────────────────────────────────────────────────
     doc.addPage();
