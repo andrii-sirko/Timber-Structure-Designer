@@ -23,11 +23,11 @@ Engine work (phases 1–2) is not the bottleneck; look at rendering/GPU and stor
 | 0 | Baseline measurements | — | in progress (engine done, browser todo) | |
 | 1 | Compute wall frames once | ~~High~~ Negligible | on hold (measured ≈0.2 ms/edit) | |
 | 2 | Hold statics/BOM during drags | ~~High~~ Low (≈0.5 ms/edit) | on hold | |
-| 3 | Fewer IndexedDB writes (filter, not debounce) | Med | done | see log |
+| 3 | Fewer IndexedDB writes (filter, not debounce) | Med | done | `980a1f5` |
 | 4 | Stop hover from redrawing shadows | Med | done | `af1e074` |
 | 5 | Reuse member + panel geometry | Med | done | `f99314a` |
 | 6 | Stable dimension lines | **Med** (all remaining buffer churn) | done | `fdc2c42` |
-| 7 | Hygiene (tsbuildinfo, ARIA tabs) | Low | todo | |
+| 7 | Hygiene (tsbuildinfo, ARIA tabs) | Low | done | see log |
 | 8 | Tests & tooling (pricing/BOM tests, ESLint, CI) | Med | todo | |
 
 ## Open decisions
@@ -230,11 +230,13 @@ Labels checked after length/height edits (L, H1, Roof, α update and restore). 1
 
 ## Phase 7 — Hygiene · Risk: Low
 
-- [ ] **Stop tracking build caches [Certain].** `tsconfig.app.tsbuildinfo` and
+- [x] **Stop tracking build caches [Certain].** `tsconfig.app.tsbuildinfo` and
       `tsconfig.node.tsbuildinfo` are committed. Add `*.tsbuildinfo` to `.gitignore`, then
       `git rm --cached tsconfig.*.tsbuildinfo`.
-- [ ] **ARIA tabs in `ResultsPanel` [Certain].** `src/components/ui/ResultsPanel.tsx:62-88`: add
+- [x] **ARIA tabs in `ResultsPanel` [Certain].** `src/components/ui/ResultsPanel.tsx:62-88`: add
       `role="tablist"` / `role="tab"` / `aria-selected`, following `ParameterSidebar.tsx:246-258`.
+      Done: plus `role="tabpanel"` on the content and a translated `aria-label` ("Results sections", uk/de/pl).
+      Accessibility tree checked: tablist "Results sections" with 6 tabs + tabpanel.
 
 ## Phase 8 — Tests & tooling · Risk: Low
 
@@ -280,7 +282,8 @@ check the preview for regressions (drag, hover, shadows, PDF export, reload rest
 
 Newest first. Format: `YYYY-MM-DD · phase · what happened · commit`.
 
-- 2026-09-24 · 3 · Debounce rejected (lost an edit on quick reload); write filter shipped: hover 21 → 0, drag 62 → 1 IDB writes · see git log
+- 2026-09-24 · 7 · `*.tsbuildinfo` untracked + ignored; ResultsPanel ARIA tabs · see git log
+- 2026-09-24 · 3 · Debounce rejected (lost an edit on quick reload); write filter shipped: hover 21 → 0, drag 62 → 1 IDB writes · `980a1f5`
 - 2026-09-24 · 6 · `Dimension` memoised by value; no-op edit uploads 130 → 0 buffers, height edit 165 → 55 · `fdc2c42`
 - 2026-09-24 · 5 · Member + panel geometry keyed on content; buffer uploads per no-op edit 215 → 130; rest is `DimensionLines` (Phase 6, raised to Med) · `f99314a`
 - 2026-09-24 · 4 · Hover subscription moved from `Scene` into `TimberMember`; 102 → 66 draw calls per hover, shadow pass no longer runs on hover · `af1e074`

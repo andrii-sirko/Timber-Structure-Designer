@@ -74,6 +74,7 @@ export default {
   'Free post {n}': { uk: 'Вільний стовп {n}', de: 'Freier Pfosten {n}', pl: 'Wolny słup {n}' },
   'Remove free post {n}': { uk: 'Видалити вільний стовп {n}', de: 'Freien Pfosten {n} entfernen', pl: 'Usuń wolny słup {n}' },
   'Designer sections': { uk: 'Розділи конструктора', de: 'Designer-Bereiche', pl: 'Sekcje projektanta' },
+  'Results sections': { uk: 'Розділи результатів', de: 'Ergebnis-Bereiche', pl: 'Sekcje wyników' },
   'Structure shape': { uk: 'Форма конструкції', de: 'Baukörperform', pl: 'Kształt konstrukcji' },
   'Length L': { uk: 'Довжина L', de: 'Länge L', pl: 'Długość L' },
   'Width W': { uk: 'Ширина W', de: 'Breite W', pl: 'Szerokość W' },

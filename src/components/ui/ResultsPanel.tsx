@@ -59,11 +59,13 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex border-b border-slate-800">
+      <div className="flex border-b border-slate-800" role="tablist" aria-label={t("Results sections")}>
         {TABS.map((tabDef) => (
           <button
             key={tabDef.id}
             type="button"
+            role="tab"
+            aria-selected={tab === tabDef.id}
             onClick={() => setTab(tabDef.id)}
             className={cx(
               "relative flex-1 px-2 py-2.5 text-xs font-medium transition-colors",
@@ -88,7 +90,7 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
         ))}
       </div>
 
-      <div className="scroll-thin min-h-0 flex-1 overflow-auto">
+      <div className="scroll-thin min-h-0 flex-1 overflow-auto" role="tabpanel">
         {tab === "bom" && (
           <div>
             <table className="w-full border-collapse">
