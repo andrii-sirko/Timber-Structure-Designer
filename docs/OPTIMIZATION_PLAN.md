@@ -256,7 +256,7 @@ Labels checked after length/height edits (L, H1, Roof, α update and restore). 1
       The pre-commit hook (`scripts/git-hooks/pre-commit`) only bumps the version.
       Done: `.github/workflows/ci.yml` (Node 24; typecheck, lint, test, build on push to main and PRs).
       First run on push (run 36020532162) passed: typecheck, lint, test and build all green.
-      Annotation: `actions/checkout@v4` / `setup-node@v4` target the deprecated Node 20 runtime; bump to v5 when convenient.
+      Annotation: `actions/checkout@v4` / `setup-node@v4` targeted the deprecated Node 20 runtime; bumped to v5 (runs on node24).
 
 ---
 

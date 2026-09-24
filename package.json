@@ -1,7 +1,7 @@
 {
   "name": "timber-structure-designer",
   "private": true,
-  "version": "0.1.21",
+  "version": "0.1.22",
   "type": "module",
   "description": "Client-side 3D parametric timber structure designer (carports, garden sheds, Überdachungen)",
   "scripts": {
