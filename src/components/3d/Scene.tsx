@@ -72,7 +72,6 @@ export function Scene({ model }: { model: DerivedModel }) {
   const highlight = useProjectStore((s) => s.view.highlight);
   const orthographic = useProjectStore((s) => s.view.orthographic);
   const measureMode = useProjectStore((s) => s.view.measureMode);
-  const hoveredId = useProjectStore((s) => s.hoveredMemberId);
   const selectedWallId = useProjectStore((s) => s.selectedWallId);
   const isDragging = useProjectStore((s) => s.isDragging);
   const setHovered = useProjectStore((s) => s.setHoveredMember);
@@ -503,7 +502,6 @@ export function Scene({ model }: { model: DerivedModel }) {
                 assembly={state}
                 member={m}
                 highlight={highlight}
-                hovered={m.id === hoveredId}
                 inspected={m.id === (subject ?? selectedStud)?.id}
                 neighbour={neighbourIds.has(m.id)}
                 focused={m.id === focusedNeighbourId}

@@ -6,6 +6,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import type { HighlightMode, Member, Vec3 } from '@/types';
 import { canDragMember, canMovePost } from '@/engine/postDrag';
 import { useT } from '@/i18n';
+import { useProjectStore } from '@/store';
 import {
   getAssemblyCurrentMaterial,
   getAssemblyGhostMaterial,
@@ -43,7 +44,6 @@ export function useMemberGeometry(member: Member): THREE.ExtrudeGeometry {
 interface TimberMemberProps {
   member: Member;
   highlight: HighlightMode;
-  hovered: boolean;
   selected: boolean;
   /** This member's distances to its neighbours are on screen */
   inspected?: boolean;
@@ -67,7 +67,6 @@ interface TimberMemberProps {
 export const TimberMember = memo(function TimberMember({
   member,
   highlight,
-  hovered,
   selected,
   inspected = false,
   neighbour = false,
@@ -82,6 +81,8 @@ export const TimberMember = memo(function TimberMember({
   dragCursor,
   assembly,
 }: TimberMemberProps) {
+  // Subscribed here rather than passed in, so a hover re-renders the two members involved, not the whole scene.
+  const hovered = useProjectStore((s) => s.hoveredMemberId === member.id);
   const postDragging = useRef(false);
   const { t } = useT();
   const geometry = useMemberGeometry(member);
