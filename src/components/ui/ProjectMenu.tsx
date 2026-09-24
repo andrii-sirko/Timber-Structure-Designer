@@ -31,6 +31,7 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
 
   useLayoutEffect(() => setCompact(false), [lang, savedProjects.length]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-measures after every render; `compact` stops the loop
   useLayoutEffect(() => {
     const header = wrapper.current?.closest('header');
     if (!header || compact || header.scrollWidth <= header.clientWidth + 1) return;

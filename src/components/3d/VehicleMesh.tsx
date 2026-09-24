@@ -45,6 +45,7 @@ interface VehicleMeshProps {
 /** Simplified parametric object built from a side silhouette (or a board frame) – exact footprint, height and mirror width. */
 export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }: VehicleMeshProps) {
   const { tx } = useT();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only the model and size matter, not position / colour
   const model = useMemo(() => resolveVehicleModel(vehicle), [vehicle.modelId, vehicle.size?.length, vehicle.size?.width, vehicle.size?.height]);
   const isFrame = FRAME_STYLES.has(model.style);
   const measureMode = useProjectStore((s) => s.view.measureMode);

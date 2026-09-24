@@ -8,6 +8,7 @@ import type { ProfilePoint } from '@/types';
  * `key` must encode everything `build` reads. Disposed when replaced or unmounted.
  */
 export function useKeyedGeometry<T extends THREE.BufferGeometry>(key: string, build: () => T): T {
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react/use-memo -- `key` stands for everything `build` reads
   const geometry = useMemo(build, [key]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   return geometry;

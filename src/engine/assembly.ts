@@ -220,7 +220,7 @@ export function buildAssemblySteps(model: DerivedModel, project: ProjectState): 
     push(`braces:${row}`, 'braces', where, braces.filter((m) => braceRow.get(m.id) === row));
   }
   // Posts that carry no purlin: intermediate posts of closed walls, then the freely placed ones
-  for (const key of [...new Set(gridPosts.filter((m) => !taken.has(m.id)).map((m) => postRowKey(m.id)))]) {
+  for (const key of new Set(gridPosts.filter((m) => !taken.has(m.id)).map((m) => postRowKey(m.id)))) {
     const rowPosts = gridPosts.filter((m) => !taken.has(m.id) && postRowKey(m.id) === key);
     push(`posts:${key}`, 'posts', rowPosts[0].wallId ? `${rowPosts[0].wallId} wall` : `${key} row`, rowPosts);
   }
