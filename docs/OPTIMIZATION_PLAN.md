@@ -25,8 +25,8 @@ Engine work (phases 1–2) is not the bottleneck; look at rendering/GPU and stor
 | 2 | Hold statics/BOM during drags | ~~High~~ Low (≈0.5 ms/edit) | on hold | |
 | 3 | Debounce IndexedDB writes | Med | todo | |
 | 4 | Stop hover from redrawing shadows | Med | done | `af1e074` |
-| 5 | Reuse member + panel geometry | Med | done | see log |
-| 6 | Narrow `DimensionLines` selector | **Med** (all remaining buffer churn) | todo | |
+| 5 | Reuse member + panel geometry | Med | done | `f99314a` |
+| 6 | Stable dimension lines | **Med** (all remaining buffer churn) | done | see log |
 | 7 | Hygiene (tsbuildinfo, ARIA tabs) | Low | todo | |
 | 8 | Tests & tooling (pricing/BOM tests, ESLint, CI) | Med | todo | |
 
@@ -182,9 +182,25 @@ disposed and rebuilt on every edit, even for unchanged members.
 
 ## Phase 6 — Narrow the `DimensionLines` selector [Certain] · Impact: Low–Med · Risk: Low
 
-- [ ] `src/components/3d/DimensionLines.tsx:53` selects the whole `project`; the memo at line 118
+- [x] `src/components/3d/DimensionLines.tsx:53` selects the whole `project`; the memo at line 118
 depends on it. Select only the fields actually read (`project.params`, …) so editing a vehicle or
 a paved area doesn't rebuild every `Html` label.
+
+**Done, and the selector turned out not to be the main issue:** `model` is also rebuilt on every
+project change, so the list recomputed anyway. The real cost: `Dimension` builds new point arrays
+on every render, and drei `<Line>` re-uploads its geometry when `points` changes identity.
+- [x] `Dimension` wrapped in `memo` with a by-value comparator (points, offset, label, color).
+  It also covers the drag rulers and paved-area dimensions that reuse it.
+- [x] Selector narrowed to `s.project.params`.
+
+**Measured** (WebGL `createBuffer` per edit, default carport, dimensions on):
+
+| Edit | After Phase 5 | After Phase 6 |
+|---|---|---|
+| Rename project | 130 | **0** |
+| Front height ±100 mm | 165–170 | 55–60 |
+
+Labels checked after length/height edits (L, H1, Roof, α update and restore). 127/127 tests pass.
 
 ---
 
@@ -240,7 +256,8 @@ check the preview for regressions (drag, hover, shadows, PDF export, reload rest
 
 Newest first. Format: `YYYY-MM-DD · phase · what happened · commit`.
 
-- 2026-09-24 · 5 · Member + panel geometry keyed on content; buffer uploads per no-op edit 215 → 130; rest is `DimensionLines` (Phase 6, raised to Med) · see git log
+- 2026-09-24 · 6 · `Dimension` memoised by value; no-op edit uploads 130 → 0 buffers, height edit 165 → 55 · see git log
+- 2026-09-24 · 5 · Member + panel geometry keyed on content; buffer uploads per no-op edit 215 → 130; rest is `DimensionLines` (Phase 6, raised to Med) · `f99314a`
 - 2026-09-24 · 4 · Hover subscription moved from `Scene` into `TimberMember`; 102 → 66 draw calls per hover, shadow pass no longer runs on hover · `af1e074`
 - 2026-09-24 · 1, 2 · Put on hold: engine timings (Phase 0 table) show ≈0.2 ms/edit of repeated framing and ≈0.5 ms per `buildModel`. At 60 drag events/s that is ≈30 ms/s: not worth the added code/cache risk. Revisit only if a browser profile shows otherwise · —
 - 2026-09-24 · 0 · Engine timings measured in Node · —

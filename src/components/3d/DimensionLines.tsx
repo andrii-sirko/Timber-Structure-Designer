@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import * as THREE from 'three';
 import { Html, Line } from '@react-three/drei';
 import type { DerivedModel, Member, Partition, StructureParams } from '@/types';
@@ -28,7 +28,13 @@ const norm = (v: V): V => {
 };
 const addV = (p: V, q: V, s = 1): V => [p[0] + q[0] * s, p[1] + q[1] * s, p[2] + q[2] * s];
 
-export function Dimension({ a, b, offset, label, color = '#7dd3fc' }: DimensionProps) {
+const sameV = (p: V, q: V): boolean => p[0] === q[0] && p[1] === q[1] && p[2] === q[2];
+
+/**
+ * Compared by value: callers rebuild their point arrays on every project change, and each drei <Line>
+ * re-uploads its geometry when `points` changes identity.
+ */
+export const Dimension = memo(function Dimension({ a, b, offset, label, color = '#7dd3fc' }: DimensionProps) {
   const A = addV(a, offset);
   const B = addV(b, offset);
   const dir = norm(offset);
@@ -47,13 +53,13 @@ export function Dimension({ a, b, offset, label, color = '#7dd3fc' }: DimensionP
       </Html>
     </group>
   );
-}
+}, (x, y) => sameV(x.a, y.a) && sameV(x.b, y.b) && sameV(x.offset, y.offset) && x.label === y.label && x.color === y.color);
 
 export function DimensionLines({ model }: { model: DerivedModel }) {
-  const project = useProjectStore((s) => s.project);
+  const params = useProjectStore((s) => s.project.params);
   const { t } = useT();
   const dims = useMemo(() => {
-    const p = sanitizeParams(project.params);
+    const p = sanitizeParams(params);
     const { length: L, width: W, overhangs: o, roofDirection: dir } = p;
     // Purlin rows, eave heights and the roof depth are canonical-frame quantities: compute them
     // there and rotate the points into world space.
@@ -115,7 +121,7 @@ export function DimensionLines({ model }: { model: DerivedModel }) {
     const zMid = (Wc + oc.rear - oc.front) / 2;
     const pitchPos = toW(Lc + oc.right + 0.3 / MM, roof.topAt(zMid) + 0.15 / MM, zMid);
     return { list, pitchPos, roofDepth: Wc + oc.front + oc.rear, pitch: roof.pitchDeg };
-  }, [project, model, t]);
+  }, [params, model, t]);
 
   return (
     <group>
