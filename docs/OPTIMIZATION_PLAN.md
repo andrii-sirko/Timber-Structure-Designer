@@ -28,7 +28,7 @@ Engine work (phases 1–2) is not the bottleneck; look at rendering/GPU and stor
 | 5 | Reuse member + panel geometry | Med | done | `f99314a` |
 | 6 | Stable dimension lines | **Med** (all remaining buffer churn) | done | `fdc2c42` |
 | 7 | Hygiene (tsbuildinfo, ARIA tabs) | Low | done | `fe66429` |
-| 8 | Tests & tooling (pricing/BOM tests, oxlint, CI) | Med | done (CI not yet run: needs a push) | see log |
+| 8 | Tests & tooling (pricing/BOM tests, oxlint, CI) | Med | done | `94904b5` |
 
 ## Open decisions
 
@@ -255,7 +255,8 @@ Labels checked after length/height edits (L, H1, Roof, α update and restore). 1
 - [x] **CI** (`.github/workflows/ci.yml`): `npm ci && npm run typecheck && npm test && npm run build`.
       The pre-commit hook (`scripts/git-hooks/pre-commit`) only bumps the version.
       Done: `.github/workflows/ci.yml` (Node 24; typecheck, lint, test, build on push to main and PRs).
-      Build passes locally; the workflow itself runs on the first push.
+      First run on push (run 36020532162) passed: typecheck, lint, test and build all green.
+      Annotation: `actions/checkout@v4` / `setup-node@v4` target the deprecated Node 20 runtime; bump to v5 when convenient.
 
 ---
 
@@ -291,6 +292,7 @@ check the preview for regressions (drag, hover, shadows, PDF export, reload rest
 
 Newest first. Format: `YYYY-MM-DD · phase · what happened · commit`.
 
+- 2026-09-24 · 8 · Pushed 8 commits; first CI run green · `94904b5`
 - 2026-09-24 · 8 · BOM/pricing tests (`7dc1c0e`), oxlint instead of ESLint (`8564e8c`), GitHub Actions CI · see git log
 - 2026-09-24 · 7 · `*.tsbuildinfo` untracked + ignored; ResultsPanel ARIA tabs · `fe66429`
 - 2026-09-24 · 3 · Debounce rejected (lost an edit on quick reload); write filter shipped: hover 21 → 0, drag 62 → 1 IDB writes · `980a1f5`
