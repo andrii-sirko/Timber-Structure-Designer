@@ -23,10 +23,10 @@ Engine work (phases 1–2) is not the bottleneck; look at rendering/GPU and stor
 | 0 | Baseline measurements | — | in progress (engine done, browser todo) | |
 | 1 | Compute wall frames once | ~~High~~ Negligible | on hold (measured ≈0.2 ms/edit) | |
 | 2 | Hold statics/BOM during drags | ~~High~~ Low (≈0.5 ms/edit) | on hold | |
-| 3 | Debounce IndexedDB writes | Med | todo | |
+| 3 | Fewer IndexedDB writes (filter, not debounce) | Med | done | see log |
 | 4 | Stop hover from redrawing shadows | Med | done | `af1e074` |
 | 5 | Reuse member + panel geometry | Med | done | `f99314a` |
-| 6 | Stable dimension lines | **Med** (all remaining buffer churn) | done | see log |
+| 6 | Stable dimension lines | **Med** (all remaining buffer churn) | done | `fdc2c42` |
 | 7 | Hygiene (tsbuildinfo, ARIA tabs) | Low | todo | |
 | 8 | Tests & tooling (pricing/BOM tests, ESLint, CI) | Med | todo | |
 
@@ -117,15 +117,39 @@ until drag end. Check `Scene.tsx` for use of `model.statics` before merging.
 `{ project, savedProjects, view }` and calls `idbSet` on **every** state change: drags, hover,
 selection. `savedProjects` can be large and gets rewritten every time.
 
-**Plan.**
-- [ ] Wrap `idbStorage.setItem` (`src/store/projectStore.ts:46`) in a trailing debounce (400 ms)
-   that keeps only the latest value.
-- [ ] Flush the pending write on `visibilitychange` (hidden) and `pagehide`, so closing the tab
-   loses nothing.
-- [ ] Keep the localStorage fallback path unchanged.
+**Original plan (superseded, see Outcome):**
+- [x] ~~Wrap `idbStorage.setItem` (`src/store/projectStore.ts:46`) in a trailing debounce (400 ms)
+   that keeps only the latest value.~~
+- [x] ~~Flush the pending write on `visibilitychange` (hidden) and `pagehide`, so closing the tab
+   loses nothing.~~
+- [x] ~~Keep the localStorage fallback path unchanged.~~
 
-- [ ] **Tests.** Unit-test the debounce helper with a fake timer: 10 calls → 1 write with the last value;
-flush writes immediately.
+- [x] ~~**Tests.** Unit-test the debounce helper with a fake timer: 10 calls → 1 write with the last value;
+flush writes immediately.~~
+
+**Outcome: the debounce plan was dropped; a write filter shipped instead.**
+- [x] ~~Trailing debounce (400 ms) + flush on `pagehide` / `visibilitychange`~~. Tested and **rejected**:
+  an edit followed by a reload inside the 400 ms window was lost. The flush starts an async IndexedDB
+  write the browser drops during unload.
+- [x] `src/store/filteredStorage.ts`: `filterWrites(storage, paused)` wraps `idbStorage`, with no timer:
+  - skips a write whose JSON equals the last one saved (hover, selection and other UI-only state);
+  - skips writes while `isDragging`; the `setDragging(false)` at drag end saves the final state.
+    Every drag end handles both pointer-up and pointer-cancel (Scene, OpeningsEditor, VehicleMesh,
+    PavedAreaMesh, TimberMember, PanelMesh).
+- [x] Tests: `src/store/filteredStorage.test.ts` (dedupe, pause/resume, remove).
+
+**Measured** (`IDBObjectStore.put` calls):
+
+| Action | Before | After |
+|---|---|---|
+| Hover sweep over 20 members | 21 | **0** |
+| Select + deselect a member | 2 | **0** |
+| 30-step drag | 62 | **1** |
+| Single edit | 1 | 1 |
+
+Drag end, then reload 100 ms later: final value restored. An edit followed by `location.reload()` in the
+**same JS task** is lost with both old and new code (the async IDB write can't commit), so that's an existing limitation.
+Known trade-off: closing the tab mid-drag loses that drag.
 
 ---
 
@@ -256,7 +280,8 @@ check the preview for regressions (drag, hover, shadows, PDF export, reload rest
 
 Newest first. Format: `YYYY-MM-DD · phase · what happened · commit`.
 
-- 2026-09-24 · 6 · `Dimension` memoised by value; no-op edit uploads 130 → 0 buffers, height edit 165 → 55 · see git log
+- 2026-09-24 · 3 · Debounce rejected (lost an edit on quick reload); write filter shipped: hover 21 → 0, drag 62 → 1 IDB writes · see git log
+- 2026-09-24 · 6 · `Dimension` memoised by value; no-op edit uploads 130 → 0 buffers, height edit 165 → 55 · `fdc2c42`
 - 2026-09-24 · 5 · Member + panel geometry keyed on content; buffer uploads per no-op edit 215 → 130; rest is `DimensionLines` (Phase 6, raised to Med) · `f99314a`
 - 2026-09-24 · 4 · Hover subscription moved from `Scene` into `TimberMember`; 102 → 66 draw calls per hover, shadow pass no longer runs on hover · `af1e074`
 - 2026-09-24 · 1, 2 · Put on hold: engine timings (Phase 0 table) show ≈0.2 ms/edit of repeated framing and ≈0.5 ms per `buildModel`. At 60 drag events/s that is ≈30 ms/s: not worth the added code/cache risk. Revisit only if a browser profile shows otherwise · —

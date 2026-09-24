@@ -34,6 +34,7 @@ import { defaultPavedArea, insertVertex, PAVING_COLORS, resizePolygon, translate
 import { clampFreePost, freePostMemberId } from '@/engine/freePosts';
 import { uuid } from '@/engine/geometry';
 import { createDefaultProject, DEFAULT_VIEW, normalizeProject, PROJECT_TEMPLATES } from './defaults';
+import { filterWrites } from './filteredStorage';
 import { withHistory, type HistorySlice } from './history';
 
 const STORAGE_KEY = 'timber-structure-designer-v1';
@@ -77,6 +78,9 @@ const idbStorage: StateStorage = {
     }
   },
 };
+
+/** Skips unchanged saves (hover, selection) and saves a drag once, when it ends. */
+const storage = filterWrites(idbStorage, () => useProjectStore.getState().isDragging);
 
 
 interface ProjectStoreBase {
@@ -661,7 +665,7 @@ export const useProjectStore = create<ProjectStore>()(
     {
       name: STORAGE_KEY,
       version: 1,
-      storage: createJSONStorage(() => idbStorage),
+      storage: createJSONStorage(() => storage),
       partialize: (s) => ({
         project: s.project,
         savedProjects: s.savedProjects,
