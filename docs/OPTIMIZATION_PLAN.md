@@ -27,8 +27,8 @@ Engine work (phases 1–2) is not the bottleneck; look at rendering/GPU and stor
 | 4 | Stop hover from redrawing shadows | Med | done | `af1e074` |
 | 5 | Reuse member + panel geometry | Med | done | `f99314a` |
 | 6 | Stable dimension lines | **Med** (all remaining buffer churn) | done | `fdc2c42` |
-| 7 | Hygiene (tsbuildinfo, ARIA tabs) | Low | done | see log |
-| 8 | Tests & tooling (pricing/BOM tests, ESLint, CI) | Med | todo | |
+| 7 | Hygiene (tsbuildinfo, ARIA tabs) | Low | done | `fe66429` |
+| 8 | Tests & tooling (pricing/BOM tests, oxlint, CI) | Med | done (CI not yet run: needs a push) | see log |
 
 ## Open decisions
 
@@ -240,13 +240,22 @@ Labels checked after length/height edits (L, H1, Roof, α update and restore). 1
 
 ## Phase 8 — Tests & tooling · Risk: Low
 
-- [ ] **Pricing + BOM tests [Certain: none exist].** `src/engine/pricing/index.ts`,
+- [x] **Pricing + BOM tests [Certain: none exist].** `src/engine/pricing/index.ts`,
       `src/engine/bom/index.ts`. Snapshot the default project and each `PROJECT_TEMPLATES` entry
       (totals, line counts, quantities), plus unit checks for area/length conversions (mm → m/m²).
-- [ ] **ESLint** with `typescript-eslint` + `eslint-plugin-react-hooks` (would have flagged
-      the deps-less effect in Phase 4). Add a `lint` script.
-- [ ] **CI** (`.github/workflows/ci.yml`): `npm ci && npm run typecheck && npm test && npm run build`.
+      Done (`7dc1c0e`): 30 tests in `src/engine/bom.test.ts` and `src/engine/pricing.test.ts`. They check
+      invariants per template instead of snapshots, so price/framing tweaks don't break them. Mutation-checked:
+      a mm→m slip and a dropped hardware line each fail 4 tests.
+- [x] **ESLint** with `typescript-eslint` + `eslint-plugin-react-hooks` (~~would have flagged
+      the deps-less effect in Phase 4~~: it doesn't. An effect with no dependency array is legal React, so no rule catches Phase 4). Add a `lint` script.
+      **Changed to oxlint** (`8564e8c`): typescript-eslint supports TypeScript ≤ 6.0 and this repo is on TS 7.
+      `.oxlintrc.json`: correctness + rules-of-hooks + exhaustive-deps; `npm run lint` fails on warnings.
+      React Compiler rules are off (false positives on R3F's mutable renderer objects). 3 intentional
+      content-keyed hooks are annotated. Verified: removing a hook dep fails lint (exit 1).
+- [x] **CI** (`.github/workflows/ci.yml`): `npm ci && npm run typecheck && npm test && npm run build`.
       The pre-commit hook (`scripts/git-hooks/pre-commit`) only bumps the version.
+      Done: `.github/workflows/ci.yml` (Node 24; typecheck, lint, test, build on push to main and PRs).
+      Build passes locally; the workflow itself runs on the first push.
 
 ---
 
@@ -282,7 +291,8 @@ check the preview for regressions (drag, hover, shadows, PDF export, reload rest
 
 Newest first. Format: `YYYY-MM-DD · phase · what happened · commit`.
 
-- 2026-09-24 · 7 · `*.tsbuildinfo` untracked + ignored; ResultsPanel ARIA tabs · see git log
+- 2026-09-24 · 8 · BOM/pricing tests (`7dc1c0e`), oxlint instead of ESLint (`8564e8c`), GitHub Actions CI · see git log
+- 2026-09-24 · 7 · `*.tsbuildinfo` untracked + ignored; ResultsPanel ARIA tabs · `fe66429`
 - 2026-09-24 · 3 · Debounce rejected (lost an edit on quick reload); write filter shipped: hover 21 → 0, drag 62 → 1 IDB writes · `980a1f5`
 - 2026-09-24 · 6 · `Dimension` memoised by value; no-op edit uploads 130 → 0 buffers, height edit 165 → 55 · `fdc2c42`
 - 2026-09-24 · 5 · Member + panel geometry keyed on content; buffer uploads per no-op edit 215 → 130; rest is `DimensionLines` (Phase 6, raised to Med) · `f99314a`
