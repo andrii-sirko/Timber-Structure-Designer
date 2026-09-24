@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Edges, Html } from '@react-three/drei';
 import { Trash2 } from 'lucide-react';
@@ -19,6 +19,7 @@ import {
   MM,
   noRaycast,
 } from './materials';
+import { outlineKey, useKeyedGeometry } from './useKeyedGeometry';
 
 /** Quaternion that maps local X→direction, Y→up, Z→direction×up. */
 export function basisQuaternion(direction: Vec3, up: Vec3): THREE.Quaternion {
@@ -30,15 +31,13 @@ export function basisQuaternion(direction: Vec3, up: Vec3): THREE.Quaternion {
 }
 
 export function useMemberGeometry(member: Member): THREE.ExtrudeGeometry {
-  const geometry = useMemo(() => {
+  return useKeyedGeometry(`${outlineKey(member.profile)}|${member.section.width}`, () => {
     const shape = new THREE.Shape(member.profile.map((p) => new THREE.Vector2(p.u * MM, p.v * MM)));
     const depth = member.section.width * MM;
     const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, steps: 1, curveSegments: 1 });
     geo.translate(0, 0, -depth / 2);
     return geo;
-  }, [member.profile, member.section.width]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  return geometry;
+  });
 }
 
 interface TimberMemberProps {

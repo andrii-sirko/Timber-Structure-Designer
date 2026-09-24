@@ -1,9 +1,10 @@
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { Panel, RoofCovering } from '@/types';
 import { getAssemblyCurrentMaterial, getAssemblyGhostMaterial, getCladdingMaterial, getFloorMaterial, getRoofMaterial, getWireframeMaterial, MM, noRaycast } from './materials';
 import { basisQuaternion } from './TimberMember';
+import { outlineKey, useKeyedGeometry } from './useKeyedGeometry';
 
 interface PanelMeshProps {
   panel: Panel;
@@ -24,18 +25,21 @@ interface PanelMeshProps {
 export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, onClick, onDoubleClick, onDragStart, onDrag, onDragEnd, dragCursor, assembly }: PanelMeshProps) {
   const dragging = useRef(false);
   const draggable = Boolean(onDragStart && onDrag && onDragEnd);
-  const geometry = useMemo(() => {
-    if (panel.outline) {
-      const shape = new THREE.Shape(panel.outline.outer.map((p) => new THREE.Vector2(p.u * MM, p.v * MM)));
-      for (const hole of panel.outline.holes) {
+  const outline = panel.outline;
+  const geometryKey = outline
+    ? `${outlineKey(outline.outer)}|${outline.holes.map(outlineKey).join('/')}|${outline.thickness}`
+    : `box|${panel.size?.join(',')}`;
+  const geometry = useKeyedGeometry<THREE.BufferGeometry>(geometryKey, () => {
+    if (outline) {
+      const shape = new THREE.Shape(outline.outer.map((p) => new THREE.Vector2(p.u * MM, p.v * MM)));
+      for (const hole of outline.holes) {
         shape.holes.push(new THREE.Path(hole.map((p) => new THREE.Vector2(p.u * MM, p.v * MM))));
       }
-      return new THREE.ExtrudeGeometry(shape, { depth: panel.outline.thickness * MM, bevelEnabled: false, steps: 1 });
+      return new THREE.ExtrudeGeometry(shape, { depth: outline.thickness * MM, bevelEnabled: false, steps: 1 });
     }
     const [a, b, t] = panel.size ?? [1, 1, 0.02];
     return new THREE.BoxGeometry(a * MM, b * MM, t * MM);
-  }, [panel.outline, panel.size]);
-  useEffect(() => () => geometry.dispose(), [geometry]);
+  });
 
   const quaternion = useMemo(() => basisQuaternion(panel.direction, panel.up), [panel.direction, panel.up]);
   const position = useMemo<[number, number, number]>(

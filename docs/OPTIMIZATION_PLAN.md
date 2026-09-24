@@ -24,9 +24,9 @@ Engine work (phases 1–2) is not the bottleneck; look at rendering/GPU and stor
 | 1 | Compute wall frames once | ~~High~~ Negligible | on hold (measured ≈0.2 ms/edit) | |
 | 2 | Hold statics/BOM during drags | ~~High~~ Low (≈0.5 ms/edit) | on hold | |
 | 3 | Debounce IndexedDB writes | Med | todo | |
-| 4 | Stop hover from redrawing shadows | Med | done (uncommitted) | |
-| 5 | Reuse member geometry | Med | todo | |
-| 6 | Narrow `DimensionLines` selector | Low–Med | todo | |
+| 4 | Stop hover from redrawing shadows | Med | done | `af1e074` |
+| 5 | Reuse member + panel geometry | Med | done | see log |
+| 6 | Narrow `DimensionLines` selector | **Med** (all remaining buffer churn) | todo | |
 | 7 | Hygiene (tsbuildinfo, ARIA tabs) | Low | todo | |
 | 8 | Tests & tooling (pricing/BOM tests, ESLint, CI) | Med | todo | |
 
@@ -161,8 +161,19 @@ Shadows still update after a parameter edit and after WebGL context restore.
 disposed and rebuilt on every edit, even for unchanged members.
 
 **Plan.**
-- [ ] Memoise on a content key: `JSON.stringify(member.profile) + '|' + member.section.width`
+- [x] Memoise on a content key: `JSON.stringify(member.profile) + '|' + member.section.width`
    (or a cheap numeric hash). Unchanged members keep their geometry.
+   **Done** via `src/components/3d/useKeyedGeometry.ts`, also applied to `PanelMesh` (roof, cladding,
+   floor panels had the same problem). Vehicles / paved areas were fine: their data comes straight from the store.
+   **Measured** (default carport, WebGL `createBuffer` calls per edit):
+
+   | Edit | Before | After |
+   |---|---|---|
+   | Rename project (no geometry change) | 215 | 130 (0 with dimensions layer off) |
+   | Front height ±100 mm | 210–215 | 165–170 |
+
+   The remaining 130 come from `DimensionLines` (drei `<Line>` rebuilt on every project change): Phase 6.
+   Checked visually: length 6000 → 9000 and height 2600 → 3200 resize members and roof correctly. 127/127 tests pass.
 - [ ] Later, optional: a shared geometry cache with ref-counting, then `InstancedMesh` for high-count,
    non-interactive categories (use the pattern in `AnchorFixtures.tsx:45`). Needs per-instance
    selection handling, so only do it if draw calls show up as a bottleneck.
@@ -229,7 +240,8 @@ check the preview for regressions (drag, hover, shadows, PDF export, reload rest
 
 Newest first. Format: `YYYY-MM-DD · phase · what happened · commit`.
 
-- 2026-09-24 · 4 · Hover subscription moved from `Scene` into `TimberMember`; 102 → 66 draw calls per hover, shadow pass no longer runs on hover · uncommitted
+- 2026-09-24 · 5 · Member + panel geometry keyed on content; buffer uploads per no-op edit 215 → 130; rest is `DimensionLines` (Phase 6, raised to Med) · see git log
+- 2026-09-24 · 4 · Hover subscription moved from `Scene` into `TimberMember`; 102 → 66 draw calls per hover, shadow pass no longer runs on hover · `af1e074`
 - 2026-09-24 · 1, 2 · Put on hold: engine timings (Phase 0 table) show ≈0.2 ms/edit of repeated framing and ≈0.5 ms per `buildModel`. At 60 drag events/s that is ≈30 ms/s: not worth the added code/cache risk. Revisit only if a browser profile shows otherwise · —
 - 2026-09-24 · 0 · Engine timings measured in Node · —
 - 2026-09-24 · — · Audit done, plan written · —
