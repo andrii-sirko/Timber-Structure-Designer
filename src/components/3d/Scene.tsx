@@ -190,10 +190,11 @@ export function Scene({ model }: { model: DerivedModel }) {
     [measureMode, addPoint, selectWall, selectMember, neighbourMode, placePostAt],
   );
   const onMemberDoubleClick = useCallback((member: Member, e: ThreeEvent<MouseEvent>) => {
-    openObjectSettings({ kind: 'member', category: member.category, wallKey: member.wallId ?? member.partitionId, freePostId: freePostIdOf(member.id) }, e);
+    openObjectSettings({ kind: 'member', category: member.category, wallKey: member.wallId ?? member.partitionId, freePostId: freePostIdOf(member.id) }, e, `member:${member.id}`);
   }, []);
   const onPanelDoubleClick = useCallback((panel: Panel, e: ThreeEvent<MouseEvent>) => {
-    openObjectSettings({ kind: 'panel', panelKind: panel.kind, wallKey: panel.wallId ?? panel.partitionId }, e);
+    const wallKey = panel.wallId ?? panel.partitionId;
+    openObjectSettings({ kind: 'panel', panelKind: panel.kind, wallKey }, e, wallKey && `wall:${wallKey}`);
   }, []);
   /** Start moving / resizing a partition from the ground point under the pointer. */
   const beginPartitionDrag = useCallback((partitionId: string, mode: 'move' | 'start' | 'end' | null, e: ThreeEvent<PointerEvent>) => {

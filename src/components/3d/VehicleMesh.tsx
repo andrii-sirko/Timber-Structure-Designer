@@ -172,7 +172,7 @@ export const VehicleMesh = memo(function VehicleMesh({ vehicle, fit, selected }:
             addPoint(e.point);
           }
         }}
-        onDoubleClick={(e) => openObjectSettings({ kind: 'vehicle', id: vehicle.id }, e)}
+        onDoubleClick={(e) => openObjectSettings({ kind: 'vehicle', id: vehicle.id }, e, `vehicle:${vehicle.id}`)}
         onPointerOver={(e) => {
           e.stopPropagation();
           if (!measureMode) document.body.style.cursor = 'grab';

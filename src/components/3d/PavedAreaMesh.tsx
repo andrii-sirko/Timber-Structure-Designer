@@ -276,7 +276,7 @@ export const PavedAreaMesh = memo(function PavedAreaMesh({ area, summary, select
               addPoint(e.point);
             }
           }}
-          onDoubleClick={(e) => openObjectSettings({ kind: 'pavedArea', id: area.id }, e)}
+          onDoubleClick={(e) => openObjectSettings({ kind: 'pavedArea', id: area.id }, e, `paved:${area.id}`)}
           onPointerOver={(e) => {
             e.stopPropagation();
             if (!measureMode) document.body.style.cursor = 'grab';

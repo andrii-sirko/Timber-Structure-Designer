@@ -139,7 +139,7 @@ const Fixture = memo(function Fixture({ opening, hostKey, frame }: { opening: Op
     selectOpening(hostKey, opening.id);
   };
   return (
-    <group position={[frame.origin.x * MM, frame.origin.y * MM, frame.origin.z * MM]} quaternion={quaternion} onClick={onClick} onDoubleClick={(e) => openObjectSettings({ kind: 'opening', id: opening.id }, e)}>
+    <group position={[frame.origin.x * MM, frame.origin.y * MM, frame.origin.z * MM]} quaternion={quaternion} onClick={onClick} onDoubleClick={(e) => openObjectSettings({ kind: 'opening', id: opening.id }, e, `opening:${opening.id}`)}>
       {boxes.map((b, i) => (
         <mesh key={i} position={[b.u * MM, b.v * MM, b.n * MM]} material={MATERIALS[b.material]()} castShadow={b.material !== 'glass'} receiveShadow>
           <boxGeometry args={[b.w * MM, b.h * MM, b.d * MM]} />
