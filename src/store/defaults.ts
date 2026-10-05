@@ -80,6 +80,62 @@ export function createDefaultProject(): ProjectState {
   };
 }
 
+/** The project a first-time visitor sees (and "Reset project" returns to): an 8.75 × 5.8 m carport. */
+export function createStartupProject(): ProjectState {
+  return normalizeProject({
+    name: 'Carport 8 × 6 m',
+    params: {
+      ...structuredClone(DEFAULT_PARAMS),
+      length: 8750,
+      width: 5800,
+      frontHeight: 2750,
+      rearHeight: 2550,
+      roofScheme: 'sloped-purlins',
+      overhangs: { front: 100, rear: 100, left: 0, right: 0 },
+      maxPostSpacing: 4000,
+      maxRafterSpacing: 725,
+      maxRafterLength: 4000,
+      midPurlinPositions: [3770, 7010],
+      maxStudSpacing: 1000,
+      braces: false,
+      timber: {
+        post: { width: 140, height: 140 },
+        beam: { width: 120, height: 320 },
+        rafter: { width: 40, height: 160 },
+        stud: { width: 40, height: 40 },
+        brace: { width: 60, height: 40 },
+        strengthClass: 'C24',
+      },
+      lockedSections: ['post'],
+      loads: { snowLoad: 0.65, roofCovering: 'bitumen-shingles', serviceClass: 2, windLoad: 0.65 },
+    },
+    walls: {
+      front: { id: 'front', closed: true, openings: [], start: 0, end: 1750 },
+      rear: { id: 'rear', closed: true, openings: [], start: 0, end: 7430 },
+      left: { id: 'left', closed: false, openings: [] },
+      right: { id: 'right', closed: true, openings: [] },
+    },
+    vehicles: [
+      { modelId: 'motorcycle', x: 1760, z: 4090, rotationDeg: 90, color: '#e5e7eb' },
+      { modelId: 'bin-120', x: 530, z: 3340, rotationDeg: 0, color: '#9ca3af' },
+      { modelId: 'bin-240', x: 600, z: 5100, rotationDeg: 0, color: '#1d4ed8' },
+      { modelId: 'bin-240', x: 600, z: 4440, rotationDeg: 0, color: '#d97706' },
+      { modelId: 'bin-120', x: 480, z: 3860, rotationDeg: 0, color: '#166534' },
+      { modelId: 'bicycle', x: 1470, z: 1240, rotationDeg: 90, color: '#0e7490' },
+      { modelId: 'bicycle', x: 720, z: 1240, rotationDeg: 90, color: '#b91c1c' },
+      { modelId: 'cupra-formentor', x: 3680, z: 2870, rotationDeg: 90, color: '#0e7490' },
+      { modelId: 'opel-astra-k-sports-tourer', x: 6330, z: 3100, rotationDeg: 90, color: '#b91c1c' },
+    ],
+    postOverrides: {
+      'mid0:1': { removed: true },
+      'rear:1': { removed: true },
+      'mid1:1': { removed: true },
+      'left:1': { removed: true },
+      'right:1': { removed: true },
+    },
+  } as unknown as Partial<ProjectState>);
+}
+
 export interface ProjectTemplate {
   id: string;
   name: string;

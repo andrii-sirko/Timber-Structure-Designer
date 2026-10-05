@@ -33,7 +33,7 @@ import { defaultObjectSize, findVehicleSpot, getVehicleModel, VEHICLE_COLORS } f
 import { defaultPavedArea, insertVertex, PAVING_COLORS, resizePolygon, translatePolygon } from '@/engine/paving';
 import { clampFreePost, freePostMemberId } from '@/engine/freePosts';
 import { uuid } from '@/engine/geometry';
-import { createDefaultProject, DEFAULT_VIEW, normalizeProject, PROJECT_TEMPLATES } from './defaults';
+import { createStartupProject, DEFAULT_VIEW, normalizeProject, PROJECT_TEMPLATES } from './defaults';
 import { filterWrites } from './filteredStorage';
 import { withHistory, type HistorySlice } from './history';
 
@@ -233,7 +233,7 @@ function hostLength(project: ProjectState, key: WallKey): number {
 export const useProjectStore = create<ProjectStore>()(
   persist(
     withHistory<ProjectStoreBase>((set, get) => ({
-      project: createDefaultProject(),
+      project: createStartupProject(),
       savedProjects: [],
       view: DEFAULT_VIEW,
       selectedWallId: null,
@@ -659,7 +659,7 @@ export const useProjectStore = create<ProjectStore>()(
         const project = clampAllOpenings(normalizeProject(raw));
         set({ project, selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, selectedPavedAreaId: null, selectedPavedPointIndex: null, measurements: [] });
       },
-      resetProject: () => set({ project: createDefaultProject(), selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, selectedPavedAreaId: null, selectedPavedPointIndex: null, measurements: [] }),
+      resetProject: () => set({ project: createStartupProject(), selectedWallId: null, selectedOpeningId: null, selectedMemberId: null, selectedPavedAreaId: null, selectedPavedPointIndex: null, measurements: [] }),
       setHydrated: (hydrated) => set({ hydrated }),
     })),
     {
