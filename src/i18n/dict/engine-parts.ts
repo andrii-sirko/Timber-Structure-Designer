@@ -382,6 +382,7 @@ export default {
   "2 per post–purlin connection": { uk: "по 2 на з'єднання стовп–прогон", de: '2 je Verbindung Pfosten–Pfette', pl: '2 na połączenie słup–płatew' },
   '1 per rafter bearing': { uk: 'по 1 на опору крокви', de: '1 je Sparrenauflager', pl: '1 na oparcie krokwi' },
   '2 per brace end': { uk: 'по 2 на кінець підкосу', de: '2 je Kopfbandende', pl: '2 na koniec miecza' },
+  '1 per free wall end, on the open stud face': { uk: 'по 1 на вільний кінець стіни, з відкритого боку стійки', de: '1 je freiem Wandende, an der offenen Ständerseite', pl: '1 na wolny koniec ściany, od otwartej strony słupka' },
   '2 per stud end': { uk: 'по 2 на кінець стійки', de: '2 je Ständerende', pl: '2 na koniec słupka' },
   'Max. 800 mm apart, 150 mm from plate ends': { uk: "макс. 800 мм між собою, 150 мм від кінців обв'язки", de: 'max. 800 mm Abstand, 150 mm von den Schwellenenden', pl: 'Maks. co 800 mm, 150 mm od końców podwaliny' },
   '≈ 25 per m²': { uk: '≈ 25 на м²', de: '≈ 25 je m²', pl: '≈ 25 na m²' },

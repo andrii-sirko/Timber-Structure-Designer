@@ -84,6 +84,8 @@ export async function exportCutListPdf(
   if (font === UNICODE_FONT) await embedUnicodeFont(doc);
   const p = project.params;
   const lang = getLang();
+  // Helvetica's WinAnsi encoding has no '≈'; a single unsupported glyph garbles the whole cell
+  const pdfText = (s: string): string => (font === UNICODE_FONT ? s : s.replace(/≈/g, '~'));
   // `name (nameDe)` cell: the German term stays a secondary parenthetical unless the UI itself is German.
   const nameCell = (name: string, nameDe: string): string =>
     lang === 'de' ? nameDe : `${tx(name)} (${nameDe})`;
@@ -104,20 +106,38 @@ export async function exportCutListPdf(
     20,
   );
 
+  // One block per group and section (e.g. all 140×140 posts), headed by its piece count and total length
+  const sectionOf = (c: CutListItem): string => `${roundMm(c.section.width)}×${roundMm(c.section.height)}`;
+  const cutGroups = new Map<string, CutListItem[]>();
+  for (const c of cutList) {
+    const key = `${c.group}|${sectionOf(c)}`;
+    cutGroups.set(key, [...(cutGroups.get(key) ?? []), c]);
+  }
+  const groupHeadStyle = { fontStyle: 'bold' as const, fillColor: [238, 228, 214] as [number, number, number] };
   autoTable(doc, {
     startY: 25,
-    head: [[t('Pos'), t('Group'), t('Name'), t('Section'), t('Length'), t('Cut start °'), t('Cut end °'), t('Qty'), t('Notes')]],
-    body: cutList.map((c) => [
-      c.pos,
-      tx(c.group),
-      nameCell(c.name, c.nameDe),
-      `${roundMm(c.section.width)}×${roundMm(c.section.height)}`,
-      `${roundMm(c.length)} mm`,
-      `${c.cuts.start}°`,
-      `${c.cuts.end}°`,
-      c.quantity,
-      c.notes ? tx(c.notes) : '',
-    ]),
+    head: [[t('Pos'), t('Name'), t('Section'), t('Length'), t('Cut start °'), t('Cut end °'), t('Qty'), t('Notes')]],
+    body: [...cutGroups.values()].flatMap((items) => {
+      const pieces = items.reduce((s, c) => s + c.quantity, 0);
+      const totalM = items.reduce((s, c) => s + c.quantity * c.length, 0) / 1000;
+      return [
+        [
+          { content: `${tx(items[0].group)} · ${sectionOf(items[0])}`, colSpan: 6, styles: groupHeadStyle },
+          { content: pieces, styles: groupHeadStyle },
+          { content: `${t('Total')} ${totalM.toFixed(2)} m`, styles: groupHeadStyle },
+        ],
+        ...items.map((c) => [
+          c.pos,
+          nameCell(c.name, c.nameDe),
+          sectionOf(c),
+          `${roundMm(c.length)} mm`,
+          `${c.cuts.start}°`,
+          `${c.cuts.end}°`,
+          c.quantity,
+          c.notes ? pdfText(tx(c.notes)) : '',
+        ]),
+      ];
+    }),
     styles: { fontSize: 8, font },
     headStyles: { fillColor: [92, 61, 28] },
   });
@@ -154,7 +174,7 @@ export async function exportCutListPdf(
         nameCell(m.name, m.nameDe),
         tx(m.spec),
         `${m.quantity.toFixed(m.unit === 'pcs' ? 0 : 2)} ${t(m.unit)}`,
-        m.note ? tx(m.note) : '',
+        m.note ? pdfText(tx(m.note)) : '',
       ]),
       styles: { fontSize: 8, font },
       headStyles: { fillColor: [92, 61, 28] },
@@ -190,8 +210,8 @@ export async function exportCutListPdf(
     startY: afterStatics + 13,
     head: [[t('Item'), t('Spec'), t('Qty'), t('Note')]],
     body: [
-      ...connections.hardware.map((h) => [nameCell(h.name, h.nameDe), tx(h.spec), h.quantity, h.note ? tx(h.note) : '']),
-      ...connections.joinery.map((j) => [nameCell(j.name, j.nameDe), t('joint'), j.quantity, j.note ? tx(j.note) : '']),
+      ...connections.hardware.map((h) => [nameCell(h.name, h.nameDe), tx(h.spec), h.quantity, h.note ? pdfText(tx(h.note)) : '']),
+      ...connections.joinery.map((j) => [nameCell(j.name, j.nameDe), t('joint'), j.quantity, j.note ? pdfText(tx(j.note)) : '']),
     ],
     styles: { fontSize: 8, font },
     headStyles: { fillColor: [92, 61, 28] },
