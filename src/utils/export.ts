@@ -1,7 +1,7 @@
 import { getLang, t, tx } from '@/i18n';
 import { roundMm } from '@/engine/geometry';
 import { embedUnicodeFont, UNICODE_FONT } from '@/utils/pdfFont';
-import type { BomResult, ConnectionsResult, CutListItem, ProjectState, StaticsResult } from '@/types';
+import type { BomResult, ConnectionsResult, CutListItem, PricingLine, PricingResult, ProjectState, StaticsResult } from '@/types';
 
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -218,4 +218,73 @@ export async function exportCutListPdf(
   });
 
   doc.save(`${safeName(project.name)}_cutlist_${lang}.pdf`);
+}
+
+export async function exportPriceListPdf(project: ProjectState, pricing: PricingResult): Promise<void> {
+  const [{ jsPDF }, autoTableModule] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
+  const autoTable = autoTableModule.default;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const lang = getLang();
+  const font = lang === 'uk' || lang === 'pl' ? UNICODE_FONT : 'helvetica';
+  if (font === UNICODE_FONT) await embedUnicodeFont(doc);
+  const p = project.params;
+  const eur = (n: number): string => `${n.toFixed(2)} €`;
+
+  doc.setFontSize(16);
+  doc.text(t('{name} – Price list', { name: project.name }), 14, 14);
+  doc.setFontSize(9);
+  doc.text(
+    t('Structure {length} × {width} mm, H1 {frontHeight} / H2 {rearHeight} mm · {strengthClass} · generated {date}', {
+      length: p.length,
+      width: p.width,
+      frontHeight: p.frontHeight,
+      rearHeight: p.rearHeight,
+      strengthClass: p.timber.strengthClass,
+      date: new Date().toLocaleDateString(),
+    }),
+    14,
+    20,
+  );
+
+  const sectionHeadStyle = { fontStyle: 'bold' as const, fillColor: [238, 228, 214] as [number, number, number] };
+  const totalStyle = { fontStyle: 'bold' as const };
+  const row = (l: PricingLine) => [
+    lang === 'de' && l.labelDe ? l.labelDe : l.labelDe ? `${tx(l.label)} (${l.labelDe})` : tx(l.label),
+    l.unit === '%' ? eur(l.quantity) : `${l.quantity.toFixed(l.unit === 'pcs' ? 0 : 2)} ${t(l.unit)}`,
+    l.unit === '%' ? `${l.unitPrice.toFixed(2)} %` : l.unit === 'pcs' ? eur(l.unitPrice) : `${eur(l.unitPrice)}/${t(l.unit)}`,
+    { content: eur(l.lineTotal), styles: { halign: 'right' as const } },
+  ];
+  const sections: [string, PricingLine[], string, number][] = [
+    [t('Timber, boards & roofing'), pricing.timberLines, t('Timber subtotal'), pricing.timberLines.reduce((s, l) => s + l.lineTotal, 0)],
+    [t('Other materials'), pricing.otherLines, t('Other materials subtotal'), pricing.otherLines.reduce((s, l) => s + l.lineTotal, 0)],
+    [t('Doors & windows'), pricing.fixtureLines, t('Doors & windows subtotal'), pricing.fixtureTotal],
+    [t('Hardware & fixings'), pricing.hardwareLines, t('Hardware subtotal'), pricing.hardwareTotal],
+    [t('Delivery & surcharges'), pricing.deliveryLines, t('Delivery subtotal'), pricing.deliveryTotal],
+  ];
+  autoTable(doc, {
+    startY: 25,
+    head: [[t('Item'), t('Qty'), t('Unit price'), { content: t('Total'), styles: { halign: 'right' } }]],
+    body: [
+      ...sections
+        .filter(([, lines]) => lines.length > 0)
+        .flatMap(([title, lines, subtotalLabel, subtotal]) => [
+          [{ content: title, colSpan: 4, styles: sectionHeadStyle }],
+          ...lines.map(row),
+          [{ content: subtotalLabel, colSpan: 3, styles: totalStyle }, { content: eur(subtotal), styles: { ...totalStyle, halign: 'right' as const } }],
+        ]),
+      [
+        { content: t('Grand total'), colSpan: 3, styles: { ...totalStyle, fontSize: 10 } },
+        { content: eur(pricing.grandTotal), styles: { ...totalStyle, fontSize: 10, halign: 'right' as const } },
+      ],
+    ],
+    columnStyles: { 1: { halign: 'right', cellWidth: 24 }, 2: { halign: 'right', cellWidth: 26 }, 3: { cellWidth: 24 } },
+    styles: { fontSize: 8, font },
+    headStyles: { fillColor: [92, 61, 28] },
+  });
+
+  const after = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  doc.setFontSize(8);
+  doc.text(doc.splitTextToSize(t('Prices in EUR incl. 19 % VAT. Estimate only — check current prices with your suppliers.'), 182), 14, after + 8);
+
+  doc.save(`${safeName(project.name)}_pricelist_${lang}.pdf`);
 }

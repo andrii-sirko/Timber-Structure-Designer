@@ -1,9 +1,10 @@
 import { useEffect, useId, useState } from "react";
-import { RotateCcw } from "lucide-react";
-import { computePricing, createDefaultPrices, timberM3RateFromPerMeter, timberPricePerMeter } from "@/engine/pricing";
+import { FileText, RotateCcw } from "lucide-react";
+import { computePricing, createDefaultPrices, glulamPricePerMeter, timberM3RateFromPerMeter, timberPricePerMeter } from "@/engine/pricing";
 import { useT } from "@/i18n";
 import { usePriceStore, useProjectStore } from "@/store";
 import type { DerivedModel, PriceFieldRef, PricingLine } from "@/types";
+import { exportPriceListPdf } from "@/utils/export";
 import { Button, cx } from "./primitives";
 
 const defaultPrices = createDefaultPrices();
@@ -19,11 +20,13 @@ function PriceInput({
   onChange,
   onReset,
   isDefault,
+  suffix = "€",
 }: {
   value: number;
   onChange: (v: number) => void;
   onReset: () => void;
   isDefault: boolean;
+  suffix?: string;
 }) {
   const { t } = useT();
   const id = useId();
@@ -68,7 +71,7 @@ function PriceInput({
           }}
         />
         <span className="shrink-0 border-l border-slate-800 px-1 text-[10px] text-slate-500">
-          €
+          {suffix}
         </span>
       </span>
       <button
@@ -136,7 +139,7 @@ function PriceTable({
                   )}
                 </td>
                 <td className={cx(td, mono, "text-right whitespace-nowrap")}>
-                  {l.quantity.toFixed(l.unit === "pcs" ? 0 : 2)} {t(l.unit)}
+                  {l.unit === "%" ? `€${l.quantity.toFixed(2)}` : `${l.quantity.toFixed(l.unit === "pcs" ? 0 : 2)} ${t(l.unit)}`}
                 </td>
                 <td className={cx(td, "text-right")}>
                   <PriceInput
@@ -144,6 +147,7 @@ function PriceTable({
                     onChange={(v) => onChange(l.priceRef, v)}
                     onReset={() => onChange(l.priceRef, defaultFor(l.priceRef))}
                     isDefault={l.unitPrice === defaultFor(l.priceRef)}
+                    suffix={l.unit === "%" ? "%" : "€"}
                   />
                 </td>
                 <td className={cx(td, mono, "text-right font-semibold")}>
@@ -173,6 +177,10 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
   const roofCovering = useProjectStore((s) => s.project.params.loads.roofCovering);
   const prices = usePriceStore((s) => s.prices);
   const setTimberPrice = usePriceStore((s) => s.setTimberPrice);
+  const setGlulamPrice = usePriceStore((s) => s.setGlulamPrice);
+  const setDeliveryPrice = usePriceStore((s) => s.setDeliveryPrice);
+  const setEnergySurchargePct = usePriceStore((s) => s.setEnergySurchargePct);
+  const project = useProjectStore((s) => s.project);
   const setCladdingBoardPrice = usePriceStore((s) => s.setCladdingBoardPrice);
   const setRoofDeckPrice = usePriceStore((s) => s.setRoofDeckPrice);
   const setRoofingPrice = usePriceStore((s) => s.setRoofingPrice);
@@ -190,6 +198,9 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
     // `value` is always what's shown in the input — EUR/lfm for timber — so timber
     // converts back to the stored EUR/m³ rate before writing it to the price store.
     if (ref.kind === "timber") setTimberPrice(ref.category, timberM3RateFromPerMeter(ref.section, value));
+    else if (ref.kind === "glulam") setGlulamPrice(timberM3RateFromPerMeter(ref.section, value));
+    else if (ref.kind === "delivery") setDeliveryPrice(value);
+    else if (ref.kind === "energySurcharge") setEnergySurchargePct(value);
     else if (ref.kind === "claddingBoard") setCladdingBoardPrice(value);
     else if (ref.kind === "roofDeck") setRoofDeckPrice(value);
     else if (ref.kind === "roofing") setRoofingPrice(ref.covering, value);
@@ -202,6 +213,9 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
   const defaultFor = (ref: PriceFieldRef): number => {
     const d = defaultPrices;
     if (ref.kind === "timber") return timberPricePerMeter(ref.category, ref.section, d);
+    if (ref.kind === "glulam") return glulamPricePerMeter(ref.section, d);
+    if (ref.kind === "delivery") return d.deliveryFlat;
+    if (ref.kind === "energySurcharge") return d.energySurchargePct;
     if (ref.kind === "claddingBoard") return d.claddingBoardPerM2;
     if (ref.kind === "roofDeck") return d.roofDeckPerM2;
     if (ref.kind === "roofing") return d.roofingPerM2[ref.covering];
@@ -219,6 +233,9 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
             "Default unit prices are EUR, Berlin/Potsdam-area estimates — timber is priced per running metre (lfm), boards, roofing and floor decks per m², doors and windows per piece. Edit any price to match your own.",
           )}
         </p>
+        <Button size="sm" icon={FileText} onClick={() => void exportPriceListPdf(project, pricing)} title={t("Export the price list as PDF")}>
+          PDF
+        </Button>
         <Button size="sm" icon={RotateCcw} onClick={() => resetPrices()}>
           {t("Reset all")}
         </Button>
@@ -260,6 +277,14 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
         onChange={applyChange}
         defaultFor={defaultFor}
       />
+      <PriceTable
+        title={t("Delivery & surcharges")}
+        lines={pricing.deliveryLines}
+        subtotalLabel={t("Delivery subtotal")}
+        subtotal={pricing.deliveryTotal}
+        onChange={applyChange}
+        defaultFor={defaultFor}
+      />
 
       <div className="m-2 flex items-center justify-between rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2">
         <span className="text-sm font-medium text-slate-100">
@@ -271,7 +296,7 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
       </div>
       <p className="px-2 pb-3 text-[11px] leading-snug text-slate-500">
         {t(
-          "Materials, doors & windows and hardware only — excludes delivery, cutting waste beyond what the BOM already allows for, concrete for the post foundations, and labour. Traditional joints themselves are technique, not purchased material; only their oak pegs are priced.",
+          "Materials, doors & windows, hardware and timber delivery — excludes other suppliers' delivery, cutting waste beyond what the BOM already allows for, concrete for the post foundations, and labour. Traditional joints themselves are technique, not purchased material; only their oak pegs are priced.",
         )}
       </p>
     </div>

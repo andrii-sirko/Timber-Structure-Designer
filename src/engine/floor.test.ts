@@ -89,7 +89,7 @@ test('pricing covers the floor, doors & windows, fitting kits and roof accessori
   const all = [...pricing.timberLines, ...pricing.otherLines, ...pricing.fixtureLines, ...pricing.hardwareLines];
   const unpriced = all.filter((l) => l.unitPrice <= 0).map((l) => l.id);
   assert.deepEqual(unpriced, []);
-  assert.equal(pricing.grandTotal, Math.round((pricing.materialTotal + pricing.fixtureTotal + pricing.hardwareTotal) * 100) / 100);
+  assert.equal(pricing.grandTotal, Math.round((pricing.materialTotal + pricing.fixtureTotal + pricing.hardwareTotal + pricing.deliveryTotal) * 100) / 100);
 });
 
 test('every hardware item and material a project can produce has a default price', () => {

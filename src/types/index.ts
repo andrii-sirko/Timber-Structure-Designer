@@ -766,8 +766,14 @@ export interface ConnectionsResult {
  * current section (matching how timber yards actually quote — EUR/lfm, not EUR/m³).
  */
 export interface MaterialPrices {
-  /** Sawn/glulam timber, EUR per m³, keyed by member category (post, beam, rafter, …) */
+  /** Solid/KVH timber, EUR per m³, keyed by member category (post, beam, rafter, …) */
   timberPerM3: Record<MemberCategory, number>;
+  /** Glulam (BSH), EUR per m³ — used for any section larger than stock KVH, whatever the member category */
+  glulamPerM3: number;
+  /** Timber-yard delivery incl. logistics fee, EUR per order */
+  deliveryFlat: number;
+  /** Timber-yard energy surcharge, % on the yard's timber & boards plus delivery */
+  energySurchargePct: number;
   /** Wall cladding boards, EUR per m² of coverage */
   claddingBoardPerM2: number;
   /** Roof deck boarding (OSB) under heavy coverings, EUR per m² of coverage */
@@ -790,7 +796,8 @@ export interface PricingLine {
   label: string;
   labelDe?: string;
   quantity: number;
-  unit: 'm' | 'm²' | 'pcs';
+  /** '%' lines: quantity is the EUR base amount and unitPrice the percentage */
+  unit: 'm' | 'm²' | 'pcs' | '%';
   unitPrice: number;
   lineTotal: number;
   /** How to look up / write back the editable price for this line */
@@ -800,6 +807,9 @@ export interface PricingLine {
 /** Points at one field inside MaterialPrices so the UI can read/write it generically. */
 export type PriceFieldRef =
   | { kind: 'timber'; category: MemberCategory; section: TimberSection }
+  | { kind: 'glulam'; section: TimberSection }
+  | { kind: 'delivery' }
+  | { kind: 'energySurcharge' }
   | { kind: 'claddingBoard' }
   | { kind: 'roofDeck' }
   | { kind: 'roofing'; covering: RoofCovering }
@@ -816,10 +826,13 @@ export interface PricingResult {
   /** Doors and windows */
   fixtureLines: PricingLine[];
   hardwareLines: PricingLine[];
+  /** Timber-yard delivery and energy surcharge */
+  deliveryLines: PricingLine[];
   /** Timber + other materials */
   materialTotal: number;
   fixtureTotal: number;
   hardwareTotal: number;
+  deliveryTotal: number;
   grandTotal: number;
 }
 

@@ -3,16 +3,16 @@ import test from 'node:test';
 import type { BomResult, PricingLine } from '../types/index.ts';
 import { PROJECT_TEMPLATES } from '../store/defaults.ts';
 import { buildModel } from './index.ts';
-import { computePricing, createDefaultPrices, normalizePrices, timberM3RateFromPerMeter, timberPricePerMeter } from './pricing/index.ts';
+import { computePricing, createDefaultPrices, glulamPricePerMeter, isGlulamSection, normalizePrices, timberM3RateFromPerMeter, timberPricePerMeter } from './pricing/index.ts';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const sum = (lines: PricingLine[]) => round2(lines.reduce((s, l) => s + l.lineTotal, 0));
 
-test('timber is quoted per running metre from the EUR/m³ rate (120×120 post at 915 €/m³ ≈ 13.18 €/m)', () => {
+test('timber is quoted per running metre from the EUR/m³ rate (140×140 post at 835 €/m³ ≈ 16.37 €/m)', () => {
   const prices = createDefaultPrices();
-  assert.equal(timberPricePerMeter('post', { width: 120, height: 120 }, prices), 13.18);
-  const rate = timberM3RateFromPerMeter({ width: 120, height: 120 }, 13.176);
-  assert.ok(Math.abs(rate - 915) < 1e-9);
+  assert.equal(timberPricePerMeter('post', { width: 140, height: 140 }, prices), 16.37);
+  const rate = timberM3RateFromPerMeter({ width: 140, height: 140 }, 16.366);
+  assert.ok(Math.abs(rate - 835) < 1e-9);
   assert.equal(timberM3RateFromPerMeter({ width: 0, height: 120 }, 10), 0);
 });
 
@@ -31,7 +31,8 @@ for (const tpl of PROJECT_TEMPLATES) {
     assert.equal(p.materialTotal, round2(sum(p.timberLines) + sum(p.otherLines)));
     assert.equal(p.fixtureTotal, sum(p.fixtureLines));
     assert.equal(p.hardwareTotal, sum(p.hardwareLines));
-    assert.equal(p.grandTotal, round2(p.materialTotal + p.fixtureTotal + p.hardwareTotal));
+    assert.equal(p.deliveryTotal, sum(p.deliveryLines));
+    assert.equal(p.grandTotal, round2(p.materialTotal + p.fixtureTotal + p.hardwareTotal + p.deliveryTotal));
     assert.ok(p.grandTotal > 0);
   });
 
@@ -85,4 +86,41 @@ test('saved prices are merged onto current defaults; junk falls back to defaults
   assert.equal(merged.claddingBoardPerM2, defaults.claddingBoardPerM2);
   assert.equal(merged.roofDeckPerM2, 20);
   assert.deepEqual(merged.hardwarePerUnit, defaults.hardwarePerUnit);
+});
+
+test('sections deeper than stock KVH are priced as glulam, the rest per category', () => {
+  assert.equal(isGlulamSection({ width: 120, height: 240 }), false);
+  assert.equal(isGlulamSection({ width: 120, height: 320 }), true);
+  const project = PROJECT_TEMPLATES[0].build();
+  project.params.timber.beam = { width: 120, height: 320 };
+  const model = buildModel(project);
+  const prices = createDefaultPrices();
+  const p = computePricing(model.bom, model.connections, prices, project.params.loads.roofCovering);
+  const glulam = p.timberLines.filter((l) => l.priceRef.kind === 'glulam');
+  assert.ok(glulam.length > 0);
+  for (const l of glulam) assert.equal(l.unitPrice, glulamPricePerMeter({ width: 120, height: 320 }, prices));
+  const posts = p.timberLines.find((l) => l.priceRef.kind === 'timber' && l.priceRef.category === 'post')!;
+  assert.equal(posts.unitPrice, timberPricePerMeter('post', project.params.timber.post, prices));
+});
+
+test('delivery is a flat line and the energy surcharge a % of the yard goods plus delivery', () => {
+  const project = PROJECT_TEMPLATES[0].build();
+  const model = buildModel(project);
+  const prices = { ...createDefaultPrices(), deliveryFlat: 100, energySurchargePct: 10 };
+  const p = computePricing(model.bom, model.connections, prices, project.params.loads.roofCovering);
+  const [delivery, surcharge] = p.deliveryLines;
+  assert.equal(delivery.lineTotal, 100);
+  const yard = sum(p.timberLines.filter((l) => l.priceRef.kind !== 'roofing'));
+  assert.equal(surcharge.quantity, round2(yard + 100));
+  assert.equal(surcharge.lineTotal, round2((yard + 100) * 0.1));
+  const empty = computePricing({ ...model.bom, lines: [] }, model.connections, prices, project.params.loads.roofCovering);
+  assert.deepEqual(empty.deliveryLines, []);
+});
+
+test('saved prices from before glulam/delivery existed get their defaults', () => {
+  const defaults = createDefaultPrices();
+  const merged = normalizePrices({ timberPerM3: { beam: 1000 } });
+  assert.equal(merged.glulamPerM3, defaults.glulamPerM3);
+  assert.equal(merged.deliveryFlat, defaults.deliveryFlat);
+  assert.equal(merged.energySurchargePct, defaults.energySurchargePct);
 });

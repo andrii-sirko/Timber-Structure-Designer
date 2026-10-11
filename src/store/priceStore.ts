@@ -8,6 +8,9 @@ const STORAGE_KEY = 'timber-structure-designer-prices-v1';
 export interface PriceStore {
   prices: MaterialPrices;
   setTimberPrice: (category: MemberCategory, value: number) => void;
+  setGlulamPrice: (value: number) => void;
+  setDeliveryPrice: (value: number) => void;
+  setEnergySurchargePct: (value: number) => void;
   setCladdingBoardPrice: (value: number) => void;
   setRoofDeckPrice: (value: number) => void;
   setRoofingPrice: (covering: RoofCovering, value: number) => void;
@@ -24,6 +27,9 @@ export const usePriceStore = create<PriceStore>()(
       prices: createDefaultPrices(),
       setTimberPrice: (category, value) =>
         set((s) => ({ prices: { ...s.prices, timberPerM3: { ...s.prices.timberPerM3, [category]: value } } })),
+      setGlulamPrice: (value) => set((s) => ({ prices: { ...s.prices, glulamPerM3: value } })),
+      setDeliveryPrice: (value) => set((s) => ({ prices: { ...s.prices, deliveryFlat: value } })),
+      setEnergySurchargePct: (value) => set((s) => ({ prices: { ...s.prices, energySurchargePct: value } })),
       setCladdingBoardPrice: (value) => set((s) => ({ prices: { ...s.prices, claddingBoardPerM2: value } })),
       setRoofDeckPrice: (value) => set((s) => ({ prices: { ...s.prices, roofDeckPerM2: value } })),
       setRoofingPrice: (covering, value) =>

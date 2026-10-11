@@ -2,32 +2,48 @@ import type { BomResult, ConnectionsResult, FloorDecking, MaterialPrices, Member
 import { findPreset } from '../framing/openingCatalog';
 
 /**
- * Default unit prices (EUR, incl. VAT) for the Berlin/Potsdam region, checked against
- * Holz Possling (KVH C24 / sawn C24 timber) and BENZ24 (roofing sheet) list prices,
- * plus typical Hornbach/Bauhaus fastener pricing. All values are a starting point —
- * every price is editable in the Pricing tab and persisted per browser.
+ * Default unit prices (EUR, incl. VAT) for the Berlin/Potsdam region. Timber, OSB and
+ * cladding come from the Holz-Service-24 offers N20260847/N20260848 (01.10.2026): net
+ * prices + 19 % VAT. The yard's delivery and 2.8 % energy surcharge are separate lines
+ * (DEFAULT_DELIVERY_FLAT, DEFAULT_ENERGY_SURCHARGE_PCT). The rest is checked against
+ * BENZ24 (roofing sheet) list prices and typical Hornbach/Bauhaus fastener pricing. All
+ * values are a starting point — every price is editable in the Pricing tab and persisted
+ * per browser.
  *
  * Timber is stored as EUR/m³ per category (stays correct if a section's dimensions
  * change) but shown and edited in the UI as EUR per running metre for the project's
- * current section — e.g. 915 €/m³ × 0.12 × 0.12 m ≈ 13.18 €/lfm for a 120×120mm post,
- * matching how timber yards actually quote (Possling: 120×120mm KVH C24 @ €13.25/lfm).
+ * current section — e.g. 835 €/m³ × 0.14 × 0.14 m ≈ 16.37 €/lfm for a 140×140mm post.
+ * Sections larger than stock KVH are glulam (BSH) and use DEFAULT_GLULAM_PRICE_PER_M3.
  */
 export const DEFAULT_TIMBER_PRICE_PER_M3: Record<MemberCategory, number> = {
-  post: 915, // KVH C24, planed – e.g. 120×120mm @ €13.25/lfm
-  beam: 915, // Purlins/rails, KVH C24 – e.g. 120×200mm @ €21.95/lfm
-  rafter: 730, // Rough-sawn C24 (deep rafter sections are rarely stock KVH) – e.g. 80×240mm @ €13.95/lfm
-  brace: 900, // KVH C24 – e.g. 80×100mm @ €7.20/lfm
-  stud: 930, // Smaller KVH C24 cross-sections
-  plate: 900, // Bottom plate, sawn C24
-  header: 915,
-  sill: 915,
+  post: 835, // KVH C24 140×140mm @ 702 €/m³ net
+  beam: 820, // Purlins/rails, KVH C24 120×180mm @ 689 €/m³ net
+  rafter: 773.5, // KVH C24 40×160mm @ 650 €/m³ net
+  brace: 773.5, // KVH C24 40×60 / 60×80mm @ 650 €/m³ net
+  stud: 773.5, // KVH C24 40×60 / 60×80mm @ 650 €/m³ net
+  plate: 789, // KVH C24 80×100 / 80×160mm @ 663 €/m³ net
+  header: 789, // KVH C24 80×100 / 80×160mm @ 663 €/m³ net
+  sill: 789, // KVH C24 80×100 / 80×160mm @ 663 €/m³ net
   bearer: 780, // Pressure-impregnated (KDI) C24 on foundations – e.g. 100×100mm @ €7.80/lfm
-  joist: 900, // KVH C24 – e.g. 60×120mm @ €6.50/lfm
+  joist: 773.5, // KVH C24 60×180mm @ 650 €/m³ net
 };
+
+/** Glulam GL24c 140×320mm, planed, chamfered @ 975 €/m³ net. */
+export const DEFAULT_GLULAM_PRICE_PER_M3 = 1160;
+
+/** Stock KVH is made up to 240mm deep; anything larger is ordered as glulam (BSH). */
+export const KVH_MAX_SECTION_MM = 240;
+
+export const isGlulamSection = (section: TimberSection): boolean => Math.max(section.width, section.height) > KVH_MAX_SECTION_MM;
+
+/** Truck delivery Potsdam area (129 €) + logistics fee (27.50 €), net. */
+export const DEFAULT_DELIVERY_FLAT = 186.24;
+/** Energy surcharge on the yard's goods and delivery — a percentage, so applying it to gross prices equals surcharge-then-VAT. */
+export const DEFAULT_ENERGY_SURCHARGE_PCT = 2.8;
 
 export const DEFAULT_FLOORING_PRICE_PER_M2: Record<FloorDecking, number> = {
   'spruce-boards': 24, // Spruce T&G floorboards 28mm (Fichte Dielen)
-  osb: 15, // OSB/3 T&G flooring panels 22mm
+  osb: 16.17, // Swiss Krono OSB/3 22mm T&G @ 13.59 €/m² net
   'larch-decking': 48, // Siberian larch deck boards 27×145mm
 };
 
@@ -68,8 +84,8 @@ export const DEFAULT_FIXTURE_PRICE: Record<string, number> = {
   'custom-window': 290,
 };
 
-export const DEFAULT_CLADDING_BOARD_PER_M2 = 17; // Spruce Rauspund/facade boards, ~20mm
-export const DEFAULT_ROOF_DECK_PER_M2 = 12; // OSB/3 roof decking, ≈ 22mm
+export const DEFAULT_CLADDING_BOARD_PER_M2 = 18.73; // Douglas fir rhombus profile 27×96mm @ ≈1.51 €/m net, per m² of board face
+export const DEFAULT_ROOF_DECK_PER_M2 = 16.17; // Swiss Krono OSB/3 22mm roof panel @ 13.59 €/m² net
 
 export const DEFAULT_ROOFING_PRICE_PER_M2: Record<RoofCovering, number> = {
   'trapezoidal-sheet': 18.87, // Luxmetall D-20/138 steel, lightest profile
@@ -115,6 +131,9 @@ export const DEFAULT_HARDWARE_PRICE_PER_UNIT: Record<string, number> = {
 export function createDefaultPrices(): MaterialPrices {
   return {
     timberPerM3: { ...DEFAULT_TIMBER_PRICE_PER_M3 },
+    glulamPerM3: DEFAULT_GLULAM_PRICE_PER_M3,
+    deliveryFlat: DEFAULT_DELIVERY_FLAT,
+    energySurchargePct: DEFAULT_ENERGY_SURCHARGE_PCT,
     claddingBoardPerM2: DEFAULT_CLADDING_BOARD_PER_M2,
     roofDeckPerM2: DEFAULT_ROOF_DECK_PER_M2,
     roofingPerM2: { ...DEFAULT_ROOFING_PRICE_PER_M2 },
@@ -130,10 +149,14 @@ export function normalizePrices(input: unknown): MaterialPrices {
   const base = createDefaultPrices();
   if (!input || typeof input !== 'object') return base;
   const src = input as Partial<MaterialPrices>;
+  const num = (v: unknown, fallback: number): number => (typeof v === 'number' ? v : fallback);
   return {
     timberPerM3: { ...base.timberPerM3, ...(src.timberPerM3 ?? {}) },
-    claddingBoardPerM2: typeof src.claddingBoardPerM2 === 'number' ? src.claddingBoardPerM2 : base.claddingBoardPerM2,
-    roofDeckPerM2: typeof src.roofDeckPerM2 === 'number' ? src.roofDeckPerM2 : base.roofDeckPerM2,
+    glulamPerM3: num(src.glulamPerM3, base.glulamPerM3),
+    deliveryFlat: num(src.deliveryFlat, base.deliveryFlat),
+    energySurchargePct: num(src.energySurchargePct, base.energySurchargePct),
+    claddingBoardPerM2: num(src.claddingBoardPerM2, base.claddingBoardPerM2),
+    roofDeckPerM2: num(src.roofDeckPerM2, base.roofDeckPerM2),
     roofingPerM2: { ...base.roofingPerM2, ...(src.roofingPerM2 ?? {}) },
     hardwarePerUnit: { ...base.hardwarePerUnit, ...(src.hardwarePerUnit ?? {}) },
     flooringPerM2: { ...base.flooringPerM2, ...(src.flooringPerM2 ?? {}) },
@@ -149,6 +172,11 @@ const sectionAreaM2 = (section: TimberSection): number => (section.width / 1000)
 /** EUR per running metre for a category's current section, derived from the stored EUR/m³ rate. */
 export function timberPricePerMeter(category: MemberCategory, section: TimberSection, prices: MaterialPrices): number {
   return round2((prices.timberPerM3[category] ?? 0) * sectionAreaM2(section));
+}
+
+/** EUR per running metre of a glulam section. */
+export function glulamPricePerMeter(section: TimberSection, prices: MaterialPrices): number {
+  return round2(prices.glulamPerM3 * sectionAreaM2(section));
 }
 
 /** Inverse of timberPricePerMeter — converts an edited EUR/lfm value back to the stored EUR/m³ rate. */
@@ -220,19 +248,21 @@ export function computePricing(bom: BomResult, connections: ConnectionsResult, p
       });
       continue;
     }
-    // Timber member categories (post/beam/rafter/brace/stud/plate/header/sill) — priced per running metre.
+    // Timber member categories (post/beam/rafter/brace/stud/plate/header/sill) — priced per running metre,
+    // as KVH per category or, for sections beyond stock KVH, as glulam.
     const category = line.category as MemberCategory;
     const section = line.section;
-    const unitPrice = section ? timberPricePerMeter(category, section, prices) : 0;
+    const glulam = !!section && isGlulamSection(section);
+    const unitPrice = !section ? 0 : glulam ? glulamPricePerMeter(section, prices) : timberPricePerMeter(category, section, prices);
     timberLines.push({
       id: `timber-${category}-${section?.width}x${section?.height}`,
-      label: `${line.label}${section ? ` (${section.width}×${section.height} mm)` : ''}`,
-      labelDe: line.labelDe,
+      label: `${line.label}${section ? ` (${section.width}×${section.height} mm${glulam ? ', glulam' : ''})` : ''}`,
+      labelDe: glulam ? `${line.labelDe} (BSH)` : line.labelDe,
       quantity: round2(line.totalLengthM),
       unit: 'm',
       unitPrice,
       lineTotal: round2(line.totalLengthM * unitPrice),
-      priceRef: section ? { kind: 'timber', category, section } : { kind: 'timber', category, section: { width: 0, height: 0 } },
+      priceRef: glulam ? { kind: 'glulam', section } : { kind: 'timber', category, section: section ?? { width: 0, height: 0 } },
     });
   }
 
@@ -297,14 +327,44 @@ export function computePricing(bom: BomResult, connections: ConnectionsResult, p
   const fixtureTotal = sum(fixtureLines);
   const hardwareTotal = sum(hardwareLines);
 
+  // The timber yard delivers its timber and boards; roof coverings, doors, windows and hardware come from elsewhere.
+  const yardGoods = sum(timberLines.filter((l) => l.priceRef.kind !== 'roofing'));
+  const deliveryLines: PricingLine[] = [];
+  if (yardGoods > 0) {
+    deliveryLines.push({
+      id: 'delivery',
+      label: 'Timber delivery incl. logistics fee',
+      labelDe: 'Holzlieferung inkl. Logistikpauschale',
+      quantity: 1,
+      unit: 'pcs',
+      unitPrice: prices.deliveryFlat,
+      lineTotal: round2(prices.deliveryFlat),
+      priceRef: { kind: 'delivery' },
+    });
+    const base = round2(yardGoods + prices.deliveryFlat);
+    deliveryLines.push({
+      id: 'energy-surcharge',
+      label: 'Energy surcharge on timber & delivery',
+      labelDe: 'Energiekostenpauschale',
+      quantity: base,
+      unit: '%',
+      unitPrice: prices.energySurchargePct,
+      lineTotal: round2((base * prices.energySurchargePct) / 100),
+      priceRef: { kind: 'energySurcharge' },
+    });
+  }
+  const deliveryTotal = sum(deliveryLines);
+
   return {
     timberLines,
     otherLines,
     fixtureLines,
     hardwareLines,
+    deliveryLines,
     materialTotal,
     fixtureTotal,
     hardwareTotal,
-    grandTotal: round2(materialTotal + fixtureTotal + hardwareTotal),
+    deliveryTotal,
+    grandTotal: round2(materialTotal + fixtureTotal + hardwareTotal + deliveryTotal),
   };
 }
