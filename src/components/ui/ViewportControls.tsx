@@ -51,6 +51,7 @@ const LAYERS: { id: keyof LayerVisibility; label: string; icon: typeof Home }[] 
   { id: 'vehicles', label: 'Vehicles', icon: Car },
   { id: 'paving', label: 'Paved floors', icon: BrickWall },
   { id: 'floor', label: 'Timber floor deck', icon: Rows3 },
+  { id: 'insulation', label: 'Insulation', icon: Layers },
 ];
 
 const HIGHLIGHTS: { id: HighlightMode; label: string; icon: typeof Home }[] = [

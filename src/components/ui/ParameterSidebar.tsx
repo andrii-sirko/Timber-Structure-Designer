@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Cable, CloudSnow, Lock, LockOpen, MapPin, MapPinned, Plus, Rows3, Ruler, Settings2, Trash2, TreePine, Triangle } from 'lucide-react';
-import type { BraceDirection, DerivedModel, FloorDecking, FloorSupport, RoofCovering, RoofDirection, RoofScheme, StructureParams, TimberKey, TimberSection, WallId } from '@/types';
-import { DECKING, FLOOR_LOAD_PRESETS, gridPostCount, MIN_PLAN_DIM, minWallHeight } from '@/engine/framing';
+import { Cable, CloudSnow, Layers, Lock, LockOpen, MapPin, MapPinned, Plus, Rows3, Ruler, Settings2, Trash2, TreePine, Triangle } from 'lucide-react';
+import type { BraceDirection, DerivedModel, FloorDecking, FloorSupport, InsulatedElement, InsulationLayer, InsulationMaterial, RoofCovering, RoofDirection, RoofScheme, StructureParams, TimberKey, TimberSection, WallId } from '@/types';
+import { DECKING, FLOOR_LOAD_PRESETS, gridPostCount, INSULATION, MAX_INSULATION_THICKNESS, MIN_PLAN_DIM, minWallHeight } from '@/engine/framing';
 import { midPurlinBounds } from '@/engine/framing/roofLines';
 import { freePostBounds, freePostMemberId } from '@/engine/freePosts';
 import { worldWall } from '@/engine/orientation';
@@ -120,6 +120,70 @@ function FloorEditor({ model, params }: { model: DerivedModel; params: Structure
           ) : (
             <p className="text-[11px] text-amber-300">{t('The post frame is too small for a floor.')}</p>
           )}
+        </>
+      )}
+    </Section>
+  );
+}
+
+const INSULATED_LABELS: Record<InsulatedElement, string> = { walls: 'Walls (between studs)', roof: 'Roof (between rafters)', floor: 'Floor (between joists)' };
+
+/** Thermal insulation of the closed walls, the roof and the timber floor: material and thickness per element, with R and U. */
+function InsulationEditor({ model, params }: { model: DerivedModel; params: StructureParams }) {
+  const { t, tx } = useT();
+  const setInsulation = useProjectStore((s) => s.setInsulation);
+  const insulation = params.insulation;
+  const results = model.framing.insulation?.elements ?? [];
+  const hasClosedWall = model.framing.panels.some((p) => p.kind === 'cladding' && p.wallId);
+  const available: Record<InsulatedElement, string | null> = {
+    walls: hasClosedWall ? null : t('No closed walls to insulate.'),
+    roof: null,
+    floor: model.framing.floor ? null : t('Turn on the timber floor to insulate it.'),
+  };
+  const materialOptions = (Object.keys(INSULATION) as InsulationMaterial[]).map((k) => ({ value: k, label: `${tx(INSULATION[k].label)} (λ ${INSULATION[k].lambda.toFixed(3)})` }));
+  return (
+    <Section title={t('Insulation (Wärmedämmung)')} icon={Layers} defaultOpen={insulation.enabled} focusKey="insulation">
+      <Toggle label={t('Insulation')} description={t('Walls, roof and floor, with vapour barrier and wind membrane')} checked={insulation.enabled} onChange={(enabled) => setInsulation({ enabled })} />
+      {insulation.enabled && (
+        <>
+          {(['walls', 'roof', 'floor'] as const).map((element) => {
+            const layer = insulation[element];
+            const patch = (p: Partial<InsulationLayer>) => setInsulation({ [element]: { ...layer, ...p } });
+            const result = results.find((r) => r.part === element);
+            const note = available[element];
+            return (
+              <div key={element} className="space-y-2 rounded-md border border-slate-800 p-2">
+                <div className="text-[11px] font-medium tracking-wide text-slate-400 uppercase">{t(INSULATED_LABELS[element])}</div>
+                {note ? (
+                  <p className="text-[11px] text-slate-500">{note}</p>
+                ) : (
+                  <>
+                    <SelectField<InsulationMaterial> label={t('Material')} value={layer.material} onChange={(material) => patch({ material })} options={materialOptions} />
+                    <NumberField label={t('Thickness')} value={layer.thickness} min={0} max={MAX_INSULATION_THICKNESS} step={10} unit="mm" hint={layer.thickness === 0 ? t('0 = not insulated') : undefined} onChange={(thickness) => patch({ thickness })} />
+                    {result && (
+                      <dl className="grid grid-cols-3 gap-2 text-[11px]">
+                        <div>
+                          <dt className="text-slate-500">R</dt>
+                          <dd className="font-mono text-slate-200">{result.rTotal.toFixed(2)} m²K/W</dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-500">U</dt>
+                          <dd className="font-mono text-slate-200">{result.uValue.toFixed(2)} W/m²K</dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-500">{t('Area')}</dt>
+                          <dd className="font-mono text-slate-200">{result.areaM2.toFixed(1)} m²</dd>
+                        </div>
+                      </dl>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
+          <p className="text-[11px] text-slate-500">
+            {t('R includes the timber bridging and surface resistances. Heated all year: aim for R ≥ 3.5 in walls and floor and R ≥ 5 in the roof.')}
+          </p>
         </>
       )}
     </Section>
@@ -395,6 +459,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
         </Section>
 
         <FloorEditor model={model} params={params} />
+        <InsulationEditor model={model} params={params} />
 
         <Section title={t('Framing rules')} icon={Settings2} defaultOpen={false} focusKey="framing">
           <NumberField label={t('Max stud spacing')} value={params.maxStudSpacing} min={300} max={1000} step={25} onChange={(v) => setParam('maxStudSpacing', v)} />

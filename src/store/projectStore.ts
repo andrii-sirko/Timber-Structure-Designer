@@ -6,6 +6,7 @@ import type {
   HighlightMode,
   LayerVisibility,
   FloorSettings,
+  InsulationSettings,
   LoadSettings,
   Measurement,
   Opening,
@@ -117,6 +118,8 @@ interface ProjectStoreBase {
   setLoad: <K extends keyof LoadSettings>(key: K, value: LoadSettings[K]) => void;
   /** Patch the timber floor settings */
   setFloor: (patch: Partial<FloorSettings>) => void;
+  /** Patch the insulation settings */
+  setInsulation: (patch: Partial<InsulationSettings>) => void;
 
   setWallClosed: (id: WallId, closed: boolean) => void;
   /** Shorten a closed outer wall: closed stretch along the wall (mm from its start corner) */
@@ -298,6 +301,9 @@ export const useProjectStore = create<ProjectStore>()(
 
       setFloor: (patch) =>
         set((s) => ({ project: { ...s.project, params: { ...s.project.params, floor: { ...s.project.params.floor, ...patch } } } })),
+
+      setInsulation: (patch) =>
+        set((s) => ({ project: { ...s.project, params: { ...s.project.params, insulation: { ...s.project.params.insulation, ...patch } } } })),
 
       setWallClosed: (id, closed) =>
         set((s) => ({

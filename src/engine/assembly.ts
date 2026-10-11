@@ -5,7 +5,7 @@ import { freePostIdOf } from './freePosts';
 /**
  * Assembly sequence: the generated members and panels grouped into build steps, in the order a
  * post-and-purlin structure goes up (posts → purlins → braces → rafters → roof → infill walls →
- * floor → cladding → doors / windows).
+ * floor → cladding → insulation → doors / windows).
  *
  * Step keys are built from stable names (wall ids, purlin row keys, partition ids), never from member
  * ids: those are counters that renumber whenever a parameter changes, so a saved custom order must
@@ -25,6 +25,7 @@ export type AssemblyStage =
   | 'floor-joists'
   | 'floor-deck'
   | 'cladding'
+  | 'insulation'
   | 'fixtures'
   | 'other';
 
@@ -127,6 +128,11 @@ const STAGES: Record<AssemblyStage, StageInfo> = {
     title: 'Cladding – {where}',
     instruction: 'Clad the wall from the bottom up and cut the boards around the openings. Keep the cladding clear of the ground.',
     hardwareIds: ['cladding-screws'],
+  },
+  insulation: {
+    title: 'Insulation',
+    instruction: 'Fill the cavities with insulation without gaps or compression, then fix the vapour barrier on the warm side and tape every joint.',
+    hardwareIds: [],
   },
   fixtures: {
     title: 'Doors and windows',
@@ -249,6 +255,8 @@ export function buildAssemblySteps(model: DerivedModel, project: ProjectState): 
     const hostKey = panel.wallId ?? panel.partitionId ?? panel.id;
     push(`cladding:${hostKey}`, 'cladding', partition ? partition.label : panel.wallId ? `${panel.wallId} wall` : undefined, [], [panel.id]);
   }
+
+  push('insulation', 'insulation', undefined, [], panels.filter((p) => p.kind === 'insulation').map((p) => p.id));
 
   const hosts = [...WALL_IDS.filter((id) => project.walls[id].closed).map((id) => project.walls[id]), ...project.partitions];
   push('fixtures', 'fixtures', undefined, [], [], hosts.some((h) => h.openings.some((o) => o.type !== 'passage')));

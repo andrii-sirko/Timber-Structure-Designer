@@ -280,4 +280,41 @@ export default {
     de: 'Die Trennwand "{name}" wurde innerhalb des Pfostenrahmens begrenzt.',
     pl: 'Ściana działowa „{name}” została ograniczona do wnętrza ramy słupów.',
   },
+
+  // ── Insulation (framing/insulation.ts, bom/index.ts collectMaterials) ──────────────────────
+  'Mineral wool batts WLS 035': { uk: 'Мінеральна вата в матах WLS 035', de: 'Mineralwolle-Klemmfilz WLS 035', pl: 'Wełna mineralna w matach WLS 035' },
+  'Wood fibre batts WLS 038': { uk: 'Деревоволокнисті мати WLS 038', de: 'Holzfaser-Dämmmatte WLS 038', pl: 'Maty z włókna drzewnego WLS 038' },
+  'Cellulose, blown in WLS 039': { uk: 'Целюлоза (ековата), задувна WLS 039', de: 'Zellulose, eingeblasen WLS 039', pl: 'Celuloza wdmuchiwana WLS 039' },
+  'EPS boards WLS 035': { uk: 'Плити EPS (пінопласт) WLS 035', de: 'EPS-Dämmplatten WLS 035', pl: 'Płyty EPS (styropian) WLS 035' },
+  'XPS boards WLS 034': { uk: 'Плити XPS (екструдований пінополістирол) WLS 034', de: 'XPS-Dämmplatten WLS 034', pl: 'Płyty XPS (polistyren ekstrudowany) WLS 034' },
+  'PIR boards WLS 023, foil-faced': { uk: 'Плити PIR WLS 023, з фольгою', de: 'PIR-Dämmplatten WLS 023, alukaschiert', pl: 'Płyty PIR WLS 023, z okładziną z folii' },
+  'Wall insulation: {label}': { uk: 'Утеплення стін: {label}', de: 'Wanddämmung: {label}', pl: 'Izolacja ścian: {label}' },
+  'Roof insulation: {label}': { uk: 'Утеплення даху: {label}', de: 'Dachdämmung: {label}', pl: 'Izolacja dachu: {label}' },
+  'Floor insulation: {label}': { uk: 'Утеплення підлоги: {label}', de: 'Fußbodendämmung: {label}', pl: 'Izolacja podłogi: {label}' },
+  'Vapour barrier on the warm side': { uk: 'Пароізоляція з теплого боку', de: 'Dampfbremse raumseitig', pl: 'Paroizolacja od strony ciepłej' },
+  'sd ≥ 2 m, joints taped': { uk: 'sd ≥ 2 м, шви проклеєні', de: 'sd ≥ 2 m, Stöße verklebt', pl: 'sd ≥ 2 m, łączenia klejone' },
+  'Airtightness tape for the vapour barrier': { uk: 'Стрічка для проклеювання пароізоляції', de: 'Klebeband für die Dampfbremse', pl: 'Taśma do klejenia paroizolacji' },
+  '≈ 1.5 m per m²': { uk: '≈ 1,5 м на м²', de: '≈ 1,5 m pro m²', pl: '≈ 1,5 m na m²' },
+  'Breathable wind membrane outside the insulation': { uk: 'Паропроникна вітрозахисна мембрана ззовні утеплювача', de: 'Diffusionsoffene Winddichtungsbahn außen auf der Dämmung', pl: 'Paroprzepuszczalna membrana wiatroizolacyjna na zewnątrz izolacji' },
+  'Breathable roof underlay over the insulation': { uk: 'Паропроникна покрівельна мембрана над утеплювачем', de: 'Diffusionsoffene Unterspannbahn über der Dämmung', pl: 'Paroprzepuszczalna membrana dachowa nad izolacją' },
+  'Wall insulation {d} mm is deeper than the {depth} mm studs – add an inner batten layer for the rest.': {
+    uk: 'Утеплення стін {d} мм товще за стійки {depth} мм – для решти додайте внутрішній шар брусків.',
+    de: 'Wanddämmung {d} mm ist dicker als die Ständer mit {depth} mm – für die übrige Dicke eine innere Lattungsebene vorsehen.',
+    pl: 'Izolacja ścian {d} mm jest grubsza niż słupki {depth} mm – na resztę dodaj wewnętrzną warstwę łat.',
+  },
+  'Roof insulation {d} mm is deeper than the {depth} mm rafters – add a batten layer under the rafters for the rest.': {
+    uk: 'Утеплення даху {d} мм товще за крокви {depth} мм – для решти додайте шар брусків під кроквами.',
+    de: 'Dachdämmung {d} mm ist dicker als die Sparren mit {depth} mm – für die übrige Dicke eine Lattung unter den Sparren vorsehen.',
+    pl: 'Izolacja dachu {d} mm jest grubsza niż krokwie {depth} mm – na resztę dodaj warstwę łat pod krokwiami.',
+  },
+  'Floor insulation {d} mm is deeper than the {depth} mm floor joists – use deeper joists or a second layer.': {
+    uk: 'Утеплення підлоги {d} мм товще за лаги {depth} мм – візьміть вищі лаги або другий шар.',
+    de: 'Fußbodendämmung {d} mm ist dicker als die Fußbodenbalken mit {depth} mm – höhere Balken oder eine zweite Lage vorsehen.',
+    pl: 'Izolacja podłogi {d} mm jest grubsza niż legary {depth} mm – użyj wyższych legarów lub drugiej warstwy.',
+  },
+  'Rigid insulation boards between timbers leave gaps as the wood shrinks – foam the joints, or use fibre insulation that fills the cavity.': {
+    uk: 'Жорсткі плити утеплювача між брусами залишають щілини, коли деревина всихає, – запініть шви або візьміть волокнистий утеплювач, що заповнює порожнину.',
+    de: 'Starre Dämmplatten zwischen Hölzern hinterlassen Fugen, wenn das Holz schwindet – Fugen ausschäumen oder Faserdämmung verwenden, die das Gefach füllt.',
+    pl: 'Sztywne płyty izolacyjne między drewnem zostawiają szczeliny, gdy drewno się kurczy – wypełnij szczeliny pianką lub użyj izolacji włóknistej, która wypełnia przestrzeń.',
+  },
 } satisfies Dict;

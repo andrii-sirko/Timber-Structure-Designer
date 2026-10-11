@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { FloorDecking, MemberCategory, RoofCovering } from '@/types';
+import type { FloorDecking, InsulationMaterial, MemberCategory, RoofCovering } from '@/types';
 
 /** Scene scale: 1 unit = 1 m; engine works in mm. */
 export const MM = 0.001;
@@ -270,6 +270,21 @@ export function getFloorMaterial(finish: { decking: FloorDecking; boardsAlong: '
     const base = decking === 'larch-decking' ? '#b0714a' : '#d2ab78';
     return new THREE.MeshStandardMaterial({ map: createBoardTexture(base, 0.145, along === 'u'), roughness: 0.85, side: THREE.DoubleSide });
   });
+}
+
+const INSULATION_COLOR: Record<InsulationMaterial, string> = {
+  'mineral-wool': '#e5c453',
+  'wood-fibre': '#a9825a',
+  cellulose: '#b9b4a8',
+  eps: '#f1f1ec',
+  xps: '#8ec3e6',
+  pir: '#d8d2c0',
+};
+
+/** Insulation layer, coloured by material */
+export function getInsulationMaterial(material: InsulationMaterial | undefined): THREE.MeshStandardMaterial {
+  const key = material ?? 'mineral-wool';
+  return cached(`insulation-${key}`, () => new THREE.MeshStandardMaterial({ color: INSULATION_COLOR[key], roughness: 1, side: THREE.DoubleSide }));
 }
 
 export function getRoofMaterial(covering: RoofCovering): THREE.Material {

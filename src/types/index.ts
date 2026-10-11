@@ -310,6 +310,26 @@ export interface FloorSettings {
   liveLoad: number;
 }
 
+export type InsulationMaterial = 'mineral-wool' | 'wood-fibre' | 'cellulose' | 'eps' | 'xps' | 'pir';
+export const INSULATION_MATERIALS: readonly InsulationMaterial[] = ['mineral-wool', 'wood-fibre', 'cellulose', 'eps', 'xps', 'pir'] as const;
+
+export type InsulatedElement = 'walls' | 'roof' | 'floor';
+export const INSULATED_ELEMENTS: readonly InsulatedElement[] = ['walls', 'roof', 'floor'] as const;
+
+/** One insulated element: material and thickness; thickness 0 leaves the element uninsulated. */
+export interface InsulationLayer {
+  material: InsulationMaterial;
+  thickness: Millimeters;
+}
+
+/** Thermal insulation (Wärmedämmung) of the closed outer walls, the roof over the footprint and the timber floor. */
+export interface InsulationSettings {
+  enabled: boolean;
+  walls: InsulationLayer;
+  roof: InsulationLayer;
+  floor: InsulationLayer;
+}
+
 export interface StructureParams {
   length: Millimeters;
   width: Millimeters;
@@ -351,6 +371,7 @@ export interface StructureParams {
   lockedSections: TimberKey[];
   loads: LoadSettings;
   floor: FloorSettings;
+  insulation: InsulationSettings;
 }
 
 export interface ProjectState {
@@ -458,7 +479,7 @@ export interface Member {
 /** Flat sheet-like element (cladding panel, roof deck) — rendered as an oriented slab. */
 export interface Panel {
   id: string;
-  kind: 'cladding' | 'roof' | 'floor';
+  kind: 'cladding' | 'roof' | 'floor' | 'insulation';
   wallId?: WallId;
   partitionId?: string;
   /** Box centre when `size` is used; outline origin when `outline` is used (mm) */
@@ -477,6 +498,8 @@ export interface Panel {
   areaM2: number;
   /** Floor decks: deck material and the local axis the boards run along */
   floorFinish?: { decking: FloorDecking; boardsAlong: 'u' | 'v' };
+  /** Insulation panels: the insulated element and its material */
+  insulation?: { part: InsulatedElement; material: InsulationMaterial };
 }
 
 export interface RoofGeometry {
@@ -582,6 +605,29 @@ export interface FloorGeometry {
   bedLengthM: number;
 }
 
+/** Thermal result of one insulated element. */
+export interface InsulationElementResult {
+  part: InsulatedElement;
+  material: InsulationMaterial;
+  thickness: Millimeters;
+  /** Insulated area in m² (openings and cut-outs subtracted) */
+  areaM2: number;
+  /** Depth of the timber the insulation sits between (studs, rafters, joists) */
+  cavityDepth: Millimeters;
+  /** Share of the area bridged by that timber (width / centre spacing) */
+  timberFraction: number;
+  /** Thermal resistance of the insulation layer alone, d / λ (m²K/W) */
+  rInsulation: number;
+  /** Total resistance incl. surface resistances and the timber bridging (m²K/W) */
+  rTotal: number;
+  /** Thermal transmittance U = 1 / R_total (W/m²K) */
+  uValue: number;
+}
+
+export interface InsulationResult {
+  elements: InsulationElementResult[];
+}
+
 export interface FramingResult {
   members: Member[];
   panels: Panel[];
@@ -590,6 +636,8 @@ export interface FramingResult {
   warnings: FramingWarning[];
   /** Present when the timber floor is enabled */
   floor?: FloorGeometry;
+  /** Present when insulation is enabled and at least one element is insulated */
+  insulation?: InsulationResult;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -701,7 +749,7 @@ export interface MaterialItem {
   nameDe: string;
   spec: string;
   quantity: number;
-  unit: 'm' | 'm²' | 'pcs';
+  unit: 'm' | 'm²' | 'm³' | 'pcs';
   note?: string;
 }
 
@@ -797,7 +845,7 @@ export interface PricingLine {
   labelDe?: string;
   quantity: number;
   /** '%' lines: quantity is the EUR base amount and unitPrice the percentage */
-  unit: 'm' | 'm²' | 'pcs' | '%';
+  unit: 'm' | 'm²' | 'm³' | 'pcs' | '%';
   unitPrice: number;
   lineTotal: number;
   /** How to look up / write back the editable price for this line */
@@ -862,6 +910,7 @@ export interface LayerVisibility {
   vehicles: boolean;
   paving: boolean;
   floor: boolean;
+  insulation: boolean;
 }
 
 export interface ViewSettings {

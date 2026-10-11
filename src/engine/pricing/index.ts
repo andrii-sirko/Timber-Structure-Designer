@@ -60,6 +60,15 @@ export const DEFAULT_MATERIAL_PRICE_PER_UNIT: Record<string, number> = {
   'paving-base': 9, // Crushed gravel 0/32, 20cm per m²
   'paving-bedding': 2.5, // Bedding grit 2/5, 4cm per m²
   'paving-joint-sand': 0.8, // Jointing sand per m²
+  'insulation-mineral-wool': 65, // Mineral wool batts WLS 035 per m³ (≈ 6.50 €/m² at 100mm)
+  'insulation-wood-fibre': 170, // Flexible wood fibre batts WLS 038 per m³
+  'insulation-cellulose': 120, // Blown cellulose per m³, incl. blowing by a contractor
+  'insulation-eps': 75, // EPS 035 boards per m³
+  'insulation-xps': 200, // XPS 300 kPa boards per m³
+  'insulation-pir': 260, // Foil-faced PIR boards per m³
+  'vapour-barrier': 2.5, // Vapour retarder sd ≥ 2 m per m²
+  'vapour-tape': 0.6, // Airtightness tape 60mm per m
+  'wind-membrane': 2, // Breathable wind membrane per m²
 };
 
 /** Doors & windows, EUR per piece by preset id; custom sizes in EUR per m² of frame outer size. */

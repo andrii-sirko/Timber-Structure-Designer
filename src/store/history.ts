@@ -99,6 +99,7 @@ const LABELS: Record<string, (...args: never[]) => string> = {
   updateFreePost: () => t('Move post'),
   removeFreePost: () => t('Remove post'),
   setAssemblyOrder: (order: string[] | null) => (order ? t('Reorder assembly steps') : t('Reset assembly order')),
+  setInsulation: () => t('Change insulation'),
   addPavedArea: () => t('Add paved floor'),
   updatePavedArea: () => t('Edit paved floor'),
   removePavedArea: () => t('Remove paved floor'),

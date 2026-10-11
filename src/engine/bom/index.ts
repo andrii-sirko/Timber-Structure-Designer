@@ -1,5 +1,6 @@
 import type { BomLine, BomResult, CutListItem, FixtureLine, FramingResult, MaterialItem, Member, MemberCategory, Opening, ProjectState } from '@/types';
 import { DECKING } from '../framing/floor';
+import { INSULATION } from '../framing/insulation';
 import { findPreset, frameSizeFor, openingMaterials, presetMatches } from '../framing/openingCatalog';
 import { summarizePavedArea } from '../paving';
 import { memberVolumeM3 } from '../geometry';
@@ -21,6 +22,7 @@ const CATEGORY_META: Record<MemberCategory, { label: string; labelDe: string; or
 const BOARD_THICKNESS_M = 0.02;
 const BOARD_DENSITY = 500;
 const WASTE_FACTOR = 1.1;
+const INSULATION_WASTE = 1.05;
 
 export function computeBom(project: ProjectState, framing: FramingResult): { bom: BomResult; cutList: CutListItem[] } {
   const density = MATERIALS[project.params.timber.strengthClass].density;
@@ -119,7 +121,7 @@ export function computeBom(project: ProjectState, framing: FramingResult): { bom
 export function collectMaterials(project: ProjectState, framing: FramingResult): MaterialItem[] {
   const out: MaterialItem[] = [];
   const add = (item: Omit<MaterialItem, 'quantity'> & { quantity: number }): void => {
-    const quantity = item.unit === 'pcs' ? Math.ceil(item.quantity) : Math.round(item.quantity * 100) / 100;
+    const quantity = item.unit === 'pcs' ? Math.ceil(item.quantity) : Math.round(item.quantity * (item.unit === 'm³' ? 1000 : 100)) / (item.unit === 'm³' ? 1000 : 100);
     if (quantity <= 0) return;
     const existing = out.find((m) => m.id === item.id);
     if (existing) existing.quantity = Math.round((existing.quantity + quantity) * 100) / 100;
@@ -146,6 +148,29 @@ export function collectMaterials(project: ProjectState, framing: FramingResult):
   // ── Timber floor ──────────────────────────────────────────────────────
   if (framing.floor && framing.floor.bedLengthM > 0) {
     add({ id: 'floor-dpc', priceKey: 'dpc-strip', name: 'Bitumen DPC strip under floor timber', nameDe: 'Bitumen-Sperrbahn unter Lagerhölzern', spec: `${framing.floor.support === 'bearers' ? project.params.floor.bearer.width : project.params.floor.joist.width} mm wide`, quantity: framing.floor.bedLengthM * WASTE_FACTOR, unit: 'm' });
+  }
+
+  // ── Insulation ────────────────────────────────────────────────────────
+  // Priced per m³ so the price holds when the thickness changes; membranes per m² incl. laps
+  const insulated = framing.insulation?.elements ?? [];
+  for (const e of insulated) {
+    const spec = INSULATION[e.material];
+    const name = e.part === 'walls' ? 'Wall insulation' : e.part === 'roof' ? 'Roof insulation' : 'Floor insulation';
+    add({ id: `insulation-${e.material}-${e.part}`, priceKey: `insulation-${e.material}`, name: `${name}: ${spec.label}`, nameDe: spec.labelDe, spec: `${e.thickness} mm · ${e.areaM2.toFixed(1)} m²`, quantity: e.areaM2 * (e.thickness / 1000) * INSULATION_WASTE, unit: 'm³', note: '+5 % cutting waste' });
+  }
+  const insulatedArea = insulated.reduce((s, e) => s + e.areaM2, 0);
+  if (insulatedArea > 0) {
+    add({ id: 'vapour-barrier', priceKey: 'vapour-barrier', name: 'Vapour barrier on the warm side', nameDe: 'Dampfbremse raumseitig', spec: 'sd ≥ 2 m, joints taped', quantity: insulatedArea * WASTE_FACTOR, unit: 'm²', note: '+10 % laps' });
+    add({ id: 'vapour-tape', priceKey: 'vapour-tape', name: 'Airtightness tape for the vapour barrier', nameDe: 'Klebeband für Dampfbremse', spec: '60 mm', quantity: insulatedArea * 1.5, unit: 'm', note: '≈ 1.5 m per m²' });
+  }
+  const windArea = insulated.reduce((s, e) => s + (e.part === 'walls' || (e.part === 'floor' && framing.floor?.support === 'bearers') ? e.areaM2 : 0), 0);
+  if (windArea > 0) {
+    add({ id: 'wind-membrane', priceKey: 'wind-membrane', name: 'Breathable wind membrane outside the insulation', nameDe: 'Winddichtungsbahn diffusionsoffen', spec: 'sd ≤ 0.1 m', quantity: windArea * WASTE_FACTOR, unit: 'm²', note: '+10 % laps' });
+  }
+  const roofInsulation = insulated.find((e) => e.part === 'roof');
+  const covering = project.params.loads.roofCovering;
+  if (roofInsulation && ROOF_COVERING_LOAD[covering].load < 0.3 && covering !== 'roof-tiles') {
+    add({ id: 'insulation-roof-membrane', priceKey: 'underlay-breathable', name: 'Breathable roof underlay over the insulation', nameDe: 'Unterspannbahn diffusionsoffen', spec: 'sd ≤ 0.05 m', quantity: roofInsulation.areaM2 * WASTE_FACTOR, unit: 'm²', note: '+10 % laps' });
   }
 
   // ── Paving ────────────────────────────────────────────────────────────

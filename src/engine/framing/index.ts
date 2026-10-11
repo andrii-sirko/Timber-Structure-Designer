@@ -7,7 +7,8 @@ import { computePostGrid, generateBraces, generatePosts, generatePurlins } from 
 import { clampPartition } from './partitions';
 import { computePartitionFrame, computeWallFrame, wallFrameToWorld, type WallFrame } from './wallFrame';
 import { generateWallFraming } from './walls';
-import { generateFloor } from './floor';
+import { floorLayout, generateFloor } from './floor';
+import { generateInsulation } from './insulation';
 import { generateFreePosts } from '../freePosts';
 import { canonicalizeProject, canonicalToWorldMap, canonicalWall, framingToWorld, partitionFlipped, relabelFraming, wallFlipped } from '../orientation';
 
@@ -24,6 +25,8 @@ export type { OpeningEdge } from './openingResize';
 export { CLADDING_THICKNESS } from './walls';
 export { DECKING, FLOOR_DEFAULTS, FLOOR_LOAD_PRESETS, floorLayout, sanitizeFloor } from './floor';
 export type { DeckingSpec, FloorLayout } from './floor';
+export { INSULATION, INSULATION_DEFAULTS, MAX_INSULATION_THICKNESS, insulationThermal, sanitizeInsulation } from './insulation';
+export type { InsulationSpec } from './insulation';
 
 /** Guard against geometrically impossible input without mutating the store. */
 /** Smallest plan dimension (mm) the post grid can still frame: two posts plus a bay. */
@@ -121,8 +124,10 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
   members.push(...roofBuild.rafters);
   panels.push(roofBuild.panel);
 
+  const closedFrames: { frame: WallFrame; wall: Wall }[] = [];
   for (const id of WALL_IDS) {
     const frame = computeWallFrame(id, params, walls[id], roof, grid);
+    if (walls[id].closed) closedFrames.push({ frame, wall: walls[id] });
     const build = generateWallFraming(frame, walls[id], walls, params, roof);
     members.push(...build.members);
     if (build.panel) panels.push(build.panel);
@@ -166,6 +171,11 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
   if (floor.panel) panels.push(floor.panel);
   warnings.push(...floor.warnings);
 
+  const layout = floorLayout(params);
+  const insulation = generateInsulation(params, roof, roofBuild.geometry.rafterSpacing, closedFrames, layout && floor.panel ? { layout, panel: floor.panel } : null);
+  panels.push(...insulation.panels);
+  warnings.push(...insulation.warnings);
+
   // Global sanity warnings
   if (params.postsPerRow !== null && grid.postSpacing > params.maxPostSpacing + 1) {
     warnings.push({
@@ -194,5 +204,5 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
     warnings.push({ level: 'warning', message: 'Purlin overhang above 1.5 m – cantilevered purlin tails should be verified separately.' });
   }
 
-  return { members, panels, roof: roofBuild.geometry, grid, warnings, ...(floor.geometry ? { floor: floor.geometry } : {}) };
+  return { members, panels, roof: roofBuild.geometry, grid, warnings, ...(floor.geometry ? { floor: floor.geometry } : {}), ...(insulation.result ? { insulation: insulation.result } : {}) };
 }

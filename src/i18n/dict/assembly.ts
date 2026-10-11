@@ -198,4 +198,10 @@ export default {
     de: 'Diese Anleitung beruht auf einem vereinfachten Modell. Konstruktion und Fundamente von einem Zimmerer oder Statiker prüfen lassen und die örtlichen Bauvorschriften beachten.',
     pl: 'Ta instrukcja opiera się na uproszczonym modelu. Zleć sprawdzenie konstrukcji i fundamentów wykwalifikowanemu cieśli lub konstruktorowi i przestrzegaj lokalnych przepisów budowlanych.',
   },
+  'Insulation': { uk: 'Утеплення', de: 'Dämmung', pl: 'Izolacja' },
+  'Fill the cavities with insulation without gaps or compression, then fix the vapour barrier on the warm side and tape every joint.': {
+    uk: 'Заповніть порожнини утеплювачем без щілин і без стискання, потім закріпіть пароізоляцію з теплого боку й проклейте кожен шов.',
+    de: 'Die Gefache lückenlos und ohne Stauchen dämmen, dann die Dampfbremse raumseitig befestigen und jeden Stoß verkleben.',
+    pl: 'Wypełnij przestrzenie izolacją bez szczelin i bez ściskania, potem zamocuj paroizolację od strony ciepłej i zaklej każde łączenie.',
+  },
 } satisfies Dict;

@@ -2,7 +2,7 @@ import { memo, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { Panel, RoofCovering } from '@/types';
-import { getAssemblyCurrentMaterial, getAssemblyGhostMaterial, getCladdingMaterial, getFloorMaterial, getRoofMaterial, getWireframeMaterial, MM, noRaycast } from './materials';
+import { getAssemblyCurrentMaterial, getAssemblyGhostMaterial, getCladdingMaterial, getFloorMaterial, getInsulationMaterial, getRoofMaterial, getWireframeMaterial, MM, noRaycast } from './materials';
 import { basisQuaternion } from './TimberMember';
 import { outlineKey, useKeyedGeometry } from './useKeyedGeometry';
 
@@ -57,7 +57,9 @@ export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, o
           ? getRoofMaterial(covering)
           : panel.kind === 'floor'
             ? getFloorMaterial(panel.floorFinish)
-            : getCladdingMaterial();
+            : panel.kind === 'insulation'
+              ? getInsulationMaterial(panel.insulation?.material)
+              : getCladdingMaterial();
 
   return (
     <mesh

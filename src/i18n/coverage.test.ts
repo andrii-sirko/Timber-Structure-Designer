@@ -58,6 +58,12 @@ function variants(): ProjectState[] {
         { id: 'd', x: L / 2 + 150, z: W / 3 },
       ];
       out.push(free);
+      // insulated, with every element deeper than its timber and rigid boards in the walls
+      const warm = tpl.build();
+      warm.params.roofDirection = dir;
+      warm.params.floor = { ...warm.params.floor, enabled: true };
+      warm.params.insulation = { enabled: true, walls: { material: 'pir', thickness: 400 }, roof: { material: 'wood-fibre', thickness: 400 }, floor: { material: 'xps', thickness: 400 } };
+      out.push(warm);
     }
   }
   return out;
