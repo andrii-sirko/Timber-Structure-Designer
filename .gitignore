@@ -8,3 +8,4 @@ dist-ssr
 .vercel
 .env*
 *.tsbuildinfo
+brag-output/

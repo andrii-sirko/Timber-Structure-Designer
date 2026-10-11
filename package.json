@@ -1,8 +1,9 @@
 {
   "name": "timber-structure-designer",
   "private": true,
-  "version": "0.1.28",
+  "version": "0.1.29",
   "type": "module",
+  "packageManager": "pnpm@12.4.2",
   "description": "Client-side 3D parametric timber structure designer (carports, garden sheds, Überdachungen)",
   "scripts": {
     "dev": "vite",

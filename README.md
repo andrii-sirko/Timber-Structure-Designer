@@ -48,11 +48,11 @@ and a cost estimate are all computed live and auto-saved to IndexedDB.
 | Build / deploy | Vite 8 (three.js and PDF code split into separate chunks), Vercel |
 
 ```bash
-npm install        # also points git at scripts/git-hooks
-npm run dev        # http://localhost:5173 (or the port Vite picks)
-npm test           # engine, i18n and UI-helper unit tests
-npm run typecheck  # tsc -b
-npm run build      # type-check + production bundle in dist/
+pnpm install       # also points git at scripts/git-hooks
+pnpm dev           # http://localhost:5173 (or the port Vite picks)
+pnpm test          # engine, i18n and UI-helper unit tests
+pnpm typecheck     # tsc -b
+pnpm build         # type-check + production bundle in dist/
 ```
 
 The `pre-commit` hook bumps the patch version on every commit. The app shows this version in the

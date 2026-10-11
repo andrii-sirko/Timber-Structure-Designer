@@ -1,0 +1,3 @@
+allowBuilds:
+  # only prints a funding banner on install
+  core-js: false
