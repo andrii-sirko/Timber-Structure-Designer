@@ -2,6 +2,7 @@ import type { FramingResult, PostRow, ProjectState, StaticsCheck, StaticsResult,
 import { DECKING, floorLayout, sanitizeParams, wallExtent } from '../framing';
 import { braceLayout, rowPostTop, type BracePlacement } from '../framing/structure';
 import { computeRoofLines, type RoofLines } from '../framing/roofLines';
+import { clampFreePost, freePostRow, freePostTop } from '../freePosts';
 import { sectionLabel } from '../geometry';
 import {
   canopyForceCoefficients,
@@ -241,6 +242,19 @@ export function bracedPurlinSpan(
   return best;
 }
 
+/**
+ * Length of a beam (mm) carried by an intermediate support at `at` among `supports`, the beam
+ * running from `start` to `end`: 1.25 × half of each adjacent bay (inner support of a continuous
+ * beam), or the full overhang where no further support follows.
+ */
+export function freePostTributary(at: number, supports: number[], start: number, end: number): number {
+  const before = supports.filter((p) => p < at - 1);
+  const after = supports.filter((p) => p > at + 1);
+  const side = (others: number[], edge: number, nearest: (xs: number[]) => number) =>
+    others.length > 0 ? 0.625 * Math.abs(at - nearest(others)) : Math.max(0, Math.abs(edge - at));
+  return side(before, start, (xs) => Math.max(...xs)) + side(after, end, (xs) => Math.min(...xs));
+}
+
 type Axis = 'x' | 'z';
 const OTHER: Record<Axis, Axis> = { x: 'z', z: 'x' };
 const AXIS_LABEL: Record<Axis, string> = { x: 'along the length (X)', z: 'across (Z)' };
@@ -255,6 +269,20 @@ interface LateralSystem {
   /** Closed (boarded) outer walls in the plane of this axis */
   shearWalls: WallId[];
   kind: 'braces' | 'wall' | 'sway';
+}
+
+interface FreePostSupport {
+  id: string;
+  /** 1-based number, as in the member name "Free post n" */
+  n: number;
+  /** Canonical plan position of the post axis */
+  x: number;
+  z: number;
+  /** Purlin row the post stands under; undefined when it carries the rafters */
+  row?: PostRow;
+  /** Position along `row` (same coordinate as `row.positions`) */
+  along: number;
+  height: number;
 }
 
 interface Context {
@@ -281,6 +309,7 @@ interface Context {
   /** Plumb height of the exposed roof edge band (mm) */
   edgeBand: number;
   totalPosts: number;
+  freePosts: FreePostSupport[];
   /** Face areas (m²) of every outer wall, plumb */
   faceArea: Record<WallId, number>;
   canopy: { down: number; up: number };
@@ -343,7 +372,13 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
     left: ((params.width * avgHeight) / 1e6) * closedShare('left', params.width),
     right: ((params.width * avgHeight) / 1e6) * closedShare('right', params.width),
   };
-  const totalPosts = grid.rows.reduce((n, r) => n + r.positions.length, 0) + Object.values(grid.wallPosts).reduce((n, w) => n + (w?.positions.length ?? 0), 0);
+  const freePosts: FreePostSupport[] = project.freePosts.map((post, i) => {
+    const p = clampFreePost(post, params, 'canonical');
+    const row = freePostRow(p, params, grid);
+    return { id: post.id, n: i + 1, x: p.x, z: p.z, row, along: row?.axis === 'z' ? p.z : p.x, height: freePostTop(p, params, roofLines, grid).centreHeight };
+  });
+  const totalPosts =
+    grid.rows.reduce((n, r) => n + r.positions.length, 0) + Object.values(grid.wallPosts).reduce((n, w) => n + (w?.positions.length ?? 0), 0) + freePosts.length;
 
   return {
     project,
@@ -367,6 +402,7 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
     planArea: lengthM * widthM,
     edgeBand: roofLines.rafterPlumbHeight + covering.thickness + timber.beam.height,
     totalPosts: Math.max(totalPosts, 1),
+    freePosts,
     faceArea,
     canopy: canopyForceCoefficients(roof.pitchDeg),
   };
@@ -445,19 +481,25 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
   const last = rowOffsets.length - 1;
   const eaveOverhang = (wallId: string | undefined): number =>
     wallId === 'front' ? overhangs.front : wallId === 'rear' ? overhangs.rear : wallId === 'left' ? overhangs.left : wallId === 'right' ? overhangs.right : 0;
-  const purlinRows = grid.rows.map((row, idx) => ({
-    id: rowIds[idx],
-    label: row.name,
-    labelDe: row.nameDe,
-    trib: (idx > 0 ? half(idx - 1, idx) : 0) + (idx < last ? half(idx, idx + 1) : 0) + eaveOverhang(row.wallId),
-    supports: purlinSupports(row.positions, purlinStart, purlinEnd),
-    braced: bracedPurlinSpan(
-      row.positions,
-      ctx.braces.filter((b) => b.rowKey === row.key),
-      ctx.braceLeg,
-    ),
-    row,
-  }));
+  const purlinRows = grid.rows.map((row, idx) => {
+    // free posts under the purlin support it like grid posts; they carry no knee braces, so the
+    // brace indices (into row.positions) stay valid when they are appended
+    const positions = [...row.positions, ...ctx.freePosts.filter((f) => f.row?.key === row.key).map((f) => f.along)];
+    return {
+      id: rowIds[idx],
+      label: row.name,
+      labelDe: row.nameDe,
+      trib: (idx > 0 ? half(idx - 1, idx) : 0) + (idx < last ? half(idx, idx + 1) : 0) + eaveOverhang(row.wallId),
+      positions,
+      supports: purlinSupports(positions, purlinStart, purlinEnd),
+      braced: bracedPurlinSpan(
+        positions,
+        ctx.braces.filter((b) => b.rowKey === row.key),
+        ctx.braceLeg,
+      ),
+      row,
+    };
+  });
   const spanFactor = slopedPurlins ? 1 / cos : 1;
   const loadFactor = slopedPurlins ? cos * cos : 1;
   const purlinLoads = purlinRows.map((row) => {
@@ -555,14 +597,25 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     x: { util: 0, detail: '', element: '' },
     z: { util: 0, detail: '', element: '' },
   };
-  for (const row of postRows) {
-    const { span: gap, cantilever: gapCantilever } = row.load.row.supports;
-    const spanM = (gap + gapCantilever) / 1000;
-    const { qvG, qvS, qvW } = row.load;
-    const Nsnow = (GAMMA_G * qvG + GAMMA_Q * qvS) * spanM;
-    const Nk = (qvG + qvS) * spanM;
-    const Lrow = bucklingLength(row.rowAxis, row.height, row.rowAxis, row.rowBraced);
-    const Lperp = bucklingLength(OTHER[row.rowAxis], row.height, row.rowAxis, row.rowBraced);
+  /**
+   * Post as a strut under its characteristic axial loads (kN): buckling under G + S, plus the
+   * wind moment of every sway direction (the post shares the horizontal load with all others).
+   */
+  const checkPost = (post: {
+    id: string;
+    label: string;
+    labelDe: string;
+    height: number;
+    Lrow: number;
+    Lperp: number;
+    N: { G: number; S: number; W: number };
+    /** Sentence leading the detail (what the post carries) */
+    lead?: string;
+  }): StaticsCheck => {
+    const { G, S, W } = post.N;
+    const Nsnow = GAMMA_G * G + GAMMA_Q * S;
+    const Nk = G + S;
+    const { Lrow, Lperp } = post;
     const Lef = Math.max(Lrow, Lperp);
     const col = columnCurve(timber.post, Lef, mat, k.medium);
     const sigma = (Nsnow * 1000) / Apost;
@@ -576,12 +629,12 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       const colShort = columnCurve(timber.post, Lef, mat, kmodShort);
       const fmdShort = (kmodShort * mat.fmk) / mat.gammaM;
       const cases = [
-        { label: 'G + W + ψ₀S', N: (GAMMA_G * qvG + GAMMA_Q * qvW + GAMMA_Q * PSI0_SNOW * qvS) * spanM, Hd: H[axis].windLead },
-        { label: 'G + S + ψ₀W', N: (GAMMA_G * qvG + GAMMA_Q * qvS + GAMMA_Q * PSI0_WIND * qvW) * spanM, Hd: H[axis].snowLead },
+        { label: 'G + W + ψ₀S', N: GAMMA_G * G + GAMMA_Q * W + GAMMA_Q * PSI0_SNOW * S, Hd: H[axis].windLead },
+        { label: 'G + S + ψ₀W', N: GAMMA_G * G + GAMMA_Q * S + GAMMA_Q * PSI0_WIND * W, Hd: H[axis].snowLead },
       ];
       for (const c of cases) {
         const Hpost = c.Hd / ctx.totalPosts;
-        const Md = Hpost * row.height; // kN·mm
+        const Md = Hpost * post.height; // kN·mm
         const sigmaC = (c.N * 1000) / Apost;
         const sigmaM = (Md * 1000) / Wpost;
         const util = sigmaC / (colShort.kc * colShort.fcd) + sigmaM / fmdShort;
@@ -592,8 +645,8 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
         if (util > swayUtil[axis].util) {
           swayUtil[axis] = {
             util,
-            element: row.label,
-            detail: `${row.label}: H_d = ${kn(Hpost)} per post (${ctx.totalPosts} posts share ${kn(c.Hd)} incl. ${Math.round(NOTIONAL_SWAY * 100)} % notional sway), M_d = ${fmt(Md / 1000, 2)} kNm at the base, N_d = ${kn(c.N)}. σ_c/(k_c·f_c,0,d) + σ_m/f_m,d = ${fmt(sigmaC / (colShort.kc * colShort.fcd), 2)} + ${fmt(sigmaM / fmdShort, 2)} = ${pct(util)} (${c.label}, k_mod ${kmodShort}).`,
+            element: post.label,
+            detail: `${post.label}: H_d = ${kn(Hpost)} per post (${ctx.totalPosts} posts share ${kn(c.Hd)} incl. ${Math.round(NOTIONAL_SWAY * 100)} % notional sway), M_d = ${fmt(Md / 1000, 2)} kNm at the base, N_d = ${kn(c.N)}. σ_c/(k_c·f_c,0,d) + σ_m/f_m,d = ${fmt(sigmaC / (colShort.kc * colShort.fcd), 2)} + ${fmt(sigmaM / fmdShort, 2)} = ${pct(util)} (${c.label}, k_mod ${kmodShort}).`,
           };
         }
         combined.push(`${c.label}: ${pct(util)}`);
@@ -613,11 +666,11 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       recommendation = better ? `Use ${better}×${better} mm posts or add posts to reduce the load per post.` : 'Add posts to reduce the load per post.';
       if (sway.length > 0) recommendation += ` Bracing ${sway.map((a) => AXIS_LABEL[a]).join(' and ')} (knee braces / a boarded wall) halves the buckling length and removes the wind moment.`;
     }
-    checks.push({
-      id: row.id,
+    return {
+      id: post.id,
       kind: 'vertical',
-      element: row.label,
-      elementDe: row.labelDe,
+      element: post.label,
+      elementDe: post.labelDe,
       section: timber.post,
       span: Math.round(Lef),
       loadUls: Nsnow,
@@ -629,8 +682,97 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       utilisation,
       status,
       recommendation,
-      detail: `N_d = ${kn(Nsnow)} (G + S), buckling length ${Math.round(Lef)} mm (in row ${Math.round(Lrow)} / across ${Math.round(Lperp)} mm; λ = ${fmt(col.lambda, 0)}, k_c = ${fmt(col.kc, 2)}). σ_c,0,d = ${fmt(sigma, 2)} ≤ k_c·f_c,0,d = ${fmt(col.kc * col.fcd, 2)} N/mm² (${pct(sigma / (col.kc * col.fcd))}).${combined.length ? ` With wind moment ${combined.join(', ')}.` : ''} Governing ${governing}.`,
-    });
+      detail: `${post.lead ? `${post.lead} ` : ''}N_d = ${kn(Nsnow)} (G + S), buckling length ${Math.round(Lef)} mm (in row ${Math.round(Lrow)} / across ${Math.round(Lperp)} mm; λ = ${fmt(col.lambda, 0)}, k_c = ${fmt(col.kc, 2)}). σ_c,0,d = ${fmt(sigma, 2)} ≤ k_c·f_c,0,d = ${fmt(col.kc * col.fcd, 2)} N/mm² (${pct(sigma / (col.kc * col.fcd))}).${combined.length ? ` With wind moment ${combined.join(', ')}.` : ''} Governing ${governing}.`,
+    };
+  };
+
+  for (const row of postRows) {
+    const { span: gap, cantilever: gapCantilever } = row.load.row.supports;
+    const spanM = (gap + gapCantilever) / 1000;
+    const { qvG, qvS, qvW } = row.load;
+    checks.push(
+      checkPost({
+        id: row.id,
+        label: row.label,
+        labelDe: row.labelDe,
+        height: row.height,
+        Lrow: bucklingLength(row.rowAxis, row.height, row.rowAxis, row.rowBraced),
+        Lperp: bucklingLength(OTHER[row.rowAxis], row.height, row.rowAxis, row.rowBraced),
+        N: { G: qvG * spanM, S: qvS * spanM, W: qvW * spanM },
+      }),
+    );
+  }
+
+  // ── Free posts: under a purlin they take its reaction, otherwise a rafter's ──
+  const rafterAxis: Axis = slopedPurlins ? 'x' : 'z'; // direction the rafters run in plan
+  const rafters = framing.members.filter((m) => m.category === 'rafter');
+  const roofStart = slopedPurlins ? -overhangs.left : -overhangs.front;
+  const roofEnd = slopedPurlins ? params.length + overhangs.right : params.width + overhangs.rear;
+  for (const free of ctx.freePosts) {
+    const label = `Free post ${free.n}`;
+    const labelDe = `Freier Pfosten ${free.n}`;
+    // a free post has no knee braces of its own
+    const Lrow = bucklingLength(free.row?.axis ?? 'x', free.height, free.row?.axis ?? 'x', false);
+    const Lperp = bucklingLength(OTHER[free.row?.axis ?? 'x'], free.height, free.row?.axis ?? 'x', false);
+    if (free.row) {
+      const load = purlinLoads.find((l) => l.row.row.key === free.row!.key)!;
+      const L = freePostTributary(free.along, load.row.positions, purlinStart, purlinEnd);
+      const lm = L / 1000;
+      checks.push(
+        checkPost({
+          id: `post-free-${free.id}`,
+          label,
+          labelDe,
+          height: free.height,
+          Lrow,
+          Lperp,
+          N: { G: load.qvG * lm, S: load.qvS * lm, W: load.qvW * lm },
+          lead: `Supports ${load.row.label}: carries ${fmt(lm, 2)} m of purlin (1.25 × half of each adjacent bay, the full overhang at a purlin end).`,
+        }),
+      );
+      continue;
+    }
+    const across = rafterAxis === 'z' ? free.x : free.z; // plan coordinate across the rafters
+    const along = rafterAxis === 'z' ? free.z : free.x;
+    const lateralOf = (m: (typeof rafters)[number]) => (Math.abs(m.direction.x) > 0.5 ? m.start.z : m.start.x);
+    const nearest = rafters.reduce((d, m) => Math.min(d, Math.abs(lateralOf(m) - across)), Infinity);
+    if (!(nearest <= pw / 2)) {
+      checks.push({
+        id: `free-post-${free.id}`,
+        kind: 'vertical',
+        element: label,
+        elementDe: labelDe,
+        section: timber.post,
+        span: Math.round(free.height),
+        loadUls: 0,
+        loadSls: 0,
+        stressUtil: 0,
+        deflectionUtil: 0,
+        deflection: 0,
+        deflectionLimit: 0,
+        utilisation: 0,
+        status: 'warning',
+        recommendation: 'Move the post under a rafter or a purlin row, or add a header between the two rafters.',
+        detail: Number.isFinite(nearest)
+          ? `No rafter bears on this post (nearest rafter axis ${Math.round(nearest)} mm away) – it carries no roof load.`
+          : 'No rafter bears on this post – it carries no roof load.',
+      });
+      continue;
+    }
+    const L = freePostTributary(along, rowOffsets, roofStart, roofEnd);
+    const areaM2 = (L / 1000) * spacingM;
+    checks.push(
+      checkPost({
+        id: `post-free-${free.id}`,
+        label,
+        labelDe,
+        height: free.height,
+        Lrow,
+        Lperp,
+        N: { G: deadLoad * areaM2, S: snowLoadRoof * areaM2, W: windDown * areaM2 },
+        lead: `Supports a rafter: carries ${fmt(areaM2, 2)} m² of roof (${roof.rafterSpacing} mm rafter spacing × ${fmt(L / 1000, 2)} m: 1.25 × half of each adjacent rafter bay, the full overhang at an eave).`,
+      }),
+    );
   }
 
   // ── Bracing per direction ────────────────────────────────────────────────

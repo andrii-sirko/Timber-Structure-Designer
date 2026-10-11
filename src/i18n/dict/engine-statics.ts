@@ -132,6 +132,32 @@ export default {
     de: 'Fügen Sie Pfosten hinzu, um die Last je Pfosten zu verringern.',
     pl: 'Dodaj słupy, aby zmniejszyć obciążenie na słup.',
   },
+  // ── Free posts ────────────────────────────────────────────────────────────────────────
+  'Supports {row}: carries {L} m of purlin (1.25 × half of each adjacent bay, the full overhang at a purlin end).': {
+    uk: 'Підпирає {row}: несе {L} m прогону (1,25 × половина кожного сусіднього прольоту, повний виліт на кінці прогону).',
+    de: 'Stützt {row}: trägt {L} m Pfette (1,25 × halbes angrenzendes Feld je Seite, der volle Überstand am Pfettenende).',
+    pl: 'Podpiera {row}: przenosi {L} m płatwi (1,25 × połowa każdego sąsiedniego przęsła, pełny wysięg na końcu płatwi).',
+  },
+  'Supports a rafter: carries {A} m² of roof ({s} mm rafter spacing × {L} m: 1.25 × half of each adjacent rafter bay, the full overhang at an eave).': {
+    uk: 'Підпирає крокву: несе {A} m² даху (крок крокв {s} mm × {L} m: 1,25 × половина кожного сусіднього прольоту крокви, повний виліт біля карниза).',
+    de: 'Stützt einen Sparren: trägt {A} m² Dach ({s} mm Sparrenabstand × {L} m: 1,25 × halbes angrenzendes Sparrenfeld je Seite, der volle Überstand an der Traufe).',
+    pl: 'Podpiera krokiew: przenosi {A} m² dachu (rozstaw krokwi {s} mm × {L} m: 1,25 × połowa każdego sąsiedniego przęsła krokwi, pełny wysięg przy okapie).',
+  },
+  'No rafter bears on this post (nearest rafter axis {d} mm away) – it carries no roof load.': {
+    uk: 'На цей стовп не спирається жодна кроква (найближча вісь крокви за {d} mm) – він не несе навантаження від даху.',
+    de: 'Auf diesem Pfosten liegt kein Sparren auf (nächste Sparrenachse {d} mm entfernt) – er trägt keine Dachlast.',
+    pl: 'Na tym słupie nie opiera się żadna krokiew (najbliższa oś krokwi w odległości {d} mm) – nie przenosi obciążenia z dachu.',
+  },
+  'No rafter bears on this post – it carries no roof load.': {
+    uk: 'На цей стовп не спирається жодна кроква – він не несе навантаження від даху.',
+    de: 'Auf diesem Pfosten liegt kein Sparren auf – er trägt keine Dachlast.',
+    pl: 'Na tym słupie nie opiera się żadna krokiew – nie przenosi obciążenia z dachu.',
+  },
+  'Move the post under a rafter or a purlin row, or add a header between the two rafters.': {
+    uk: 'Перемістіть стовп під крокву або ряд прогону, або додайте ригель між двома кроквами.',
+    de: 'Setzen Sie den Pfosten unter einen Sparren oder eine Pfettenreihe, oder ergänzen Sie einen Wechsel zwischen den beiden Sparren.',
+    pl: 'Przesuń słup pod krokiew lub rząd płatwi albo dodaj wymian między dwiema krokwiami.',
+  },
   'Bracing {axis} (knee braces / a boarded wall) halves the buckling length and removes the wind moment.': {
     uk: 'Розкосини {axis} (підкоси / обшита стіна) зменшують розрахункову довжину вдвічі та усувають вітровий момент.',
     de: 'Eine Aussteifung {axis} (Kopfbänder / eine beplankte Wand) halbiert die Knicklänge und beseitigt das Windmoment.',

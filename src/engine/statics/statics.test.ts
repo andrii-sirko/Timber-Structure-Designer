@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createDefaultProject } from '../../store/defaults.ts';
 import { buildFraming } from '../index.ts';
 import { autoFixStatics } from './autofix.ts';
-import { bracedPurlinSpan, computeStatics } from './index.ts';
+import { bracedPurlinSpan, computeStatics, freePostTributary } from './index.ts';
 import { gustSpeedToPressure, pressureToGustSpeed } from './materials.ts';
 import type { ProjectState, StructureParams } from '../../types/index.ts';
 
@@ -108,4 +108,49 @@ test('auto-fix can resolve a failing knee brace check', () => {
   const fixed = autoFixStatics(p);
   assert.equal(fixed.status, 'ok', fixed.unresolved.join(', '));
   assert.ok(fixed.changes.some((c) => c.label.startsWith('Knee braces')));
+});
+
+// Default carport: purlin rows at z = 60 / 2940 with posts at x = 60, 3000, 5940; rafters every 790 mm, one at x = 3000.
+function withFreePosts(...points: [number, number][]): ProjectState {
+  const p = project({ braces: false }); // no knee brace credit: spans are the raw post distances
+  p.freePosts = points.map(([x, z], i) => ({ id: `f${i}`, x, z }));
+  return p;
+}
+
+test('free posts under a purlin shorten its span and carry part of it', () => {
+  const bare = byId(project({ braces: false }), 'purlin-front');
+  const p = withFreePosts([1530, 60], [4470, 60]);
+  const s = statics(p);
+  const purlin = s.checks.find((c) => c.id === 'purlin-front')!;
+  assert.equal(bare.span, 2940);
+  assert.equal(purlin.span, 1470);
+  assert.ok(purlin.utilisation < bare.utilisation);
+  const post = s.checks.find((c) => c.id === 'post-free-f0')!;
+  assert.equal(post.element, 'Free post 1');
+  assert.ok(post.loadUls > 0);
+  assert.match(post.detail, /carries 1\.84 m of purlin/); // 0.625 × (1470 + 1470)
+  // the rear purlin is untouched
+  assert.equal(s.checks.find((c) => c.id === 'purlin-rear')!.span, 2940);
+});
+
+test('a free post under a rafter is checked for the rafter reaction', () => {
+  const s = statics(withFreePosts([3000, 1500]));
+  const post = s.checks.find((c) => c.id === 'post-free-f0')!;
+  assert.ok(post.loadUls > 0);
+  assert.match(post.detail, /carries 1\.42 m² of roof/); // 0.79 m × 0.625 × (1440 + 1440)
+  // it shares the sway load: one more post than the six of the grid
+  assert.match(s.checks.find((c) => c.id === 'bracing-z')!.detail, /7 posts share/);
+});
+
+test('a free post between two rafters carries nothing and is flagged', () => {
+  const s = statics(withFreePosts([3400, 1500]));
+  assert.equal(s.checks.find((c) => c.id === 'post-free-f0'), undefined);
+  const flag = s.checks.find((c) => c.id === 'free-post-f0')!;
+  assert.equal(flag.status, 'warning');
+  assert.match(flag.detail, /nearest rafter axis \d+ mm away/);
+});
+
+test('freePostTributary: continuous-beam share inside, full overhang at the ends', () => {
+  assert.equal(freePostTributary(1000, [0, 1000, 3000], -500, 3500), 0.625 * 1000 + 0.625 * 2000);
+  assert.equal(freePostTributary(3000, [0, 3000], -500, 3500), 0.625 * 3000 + 500);
 });

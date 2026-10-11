@@ -47,6 +47,17 @@ function variants(): ProjectState[] {
       weak.params.loads = { ...weak.params.loads, snowLoad: 2.5, windLoad: 1.2 };
       weak.params.timber = { ...weak.params.timber, post: { width: 80, height: 80 }, beam: { width: 80, height: 120 }, rafter: { width: 50, height: 100 } };
       out.push(weak);
+      // free posts under a purlin, under / between the rafters
+      const free = tpl.build();
+      free.params.roofDirection = dir;
+      const { length: L, width: W } = free.params;
+      free.freePosts = [
+        { id: 'a', x: L / 4, z: free.params.timber.post.width / 2 },
+        { id: 'b', x: L / 2, z: W / 2 },
+        { id: 'c', x: L / 2 + 300, z: W / 2 },
+        { id: 'd', x: L / 2 + 150, z: W / 3 },
+      ];
+      out.push(free);
     }
   }
   return out;

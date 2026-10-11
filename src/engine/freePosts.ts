@@ -1,4 +1,4 @@
-import type { FreePost, Member, PostGrid, StructureParams } from '@/types';
+import type { FreePost, Member, PostGrid, PostRow, StructureParams } from '@/types';
 import { cutProfile, rectProfile, Y_AXIS, Z_AXIS } from './geometry';
 import type { RoofLines } from './framing/roofLines';
 
@@ -32,6 +32,12 @@ export function clampFreePost(point: { x: number; z: number }, params: RoofExten
   return { x: clamp(point.x, b.minX, b.maxX), z: clamp(point.z, b.minZ, b.maxZ) };
 }
 
+/** Purlin row a free post at canonical (x, z) stands under (within the purlin's width of its axis), if any. */
+export function freePostRow(point: { x: number; z: number }, params: Pick<StructureParams, 'timber'>, grid: PostGrid): PostRow | undefined {
+  const across = grid.scheme === 'sloped-purlins' ? point.x : point.z;
+  return grid.rows.find((row) => Math.abs(row.offset - across) <= params.timber.beam.width / 2);
+}
+
 /**
  * What a free post at canonical (x, z) carries: the underside of the purlin when it stands
  * within the purlin's width of a row axis, otherwise the underside of the rafters.
@@ -42,10 +48,8 @@ export function freePostTop(
   roof: RoofLines,
   grid: PostGrid,
 ): { centreHeight: number; sloped: boolean; underPurlin: boolean } {
-  const bw = params.timber.beam.width;
   const bh = params.timber.beam.height;
-  const across = grid.scheme === 'sloped-purlins' ? point.x : point.z;
-  const underPurlin = grid.rows.some((row) => Math.abs(row.offset - across) <= bw / 2);
+  const underPurlin = freePostRow(point, params, grid) !== undefined;
   if (grid.scheme === 'sloped-purlins') {
     // purlin underside and rafter underside both follow the slope
     return { centreHeight: underPurlin ? roof.railBottomAt(point.z) : roof.bottomAt(point.z), sloped: true, underPurlin };
