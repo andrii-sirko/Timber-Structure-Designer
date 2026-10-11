@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import type { FramingResult, Opening, Vec3 } from '@/types';
+import type { DerivedModel, FramingResult, Opening, ProjectState, Vec3 } from '@/types';
+import { WALL_IDS } from '@/types';
 import type { WallFrames } from '@/engine/framing';
+import { computeAllWallFrames } from '@/engine';
 import { basisQuaternion } from '@/components/3d/TimberMember';
 import { MM } from '@/components/3d/materials';
 
@@ -203,4 +205,32 @@ export function createAssemblyDrawer(framing: FramingResult, frames: WallFrames,
   };
 
   return { draw, aspect: WIDTH / HEIGHT, dispose };
+}
+
+/** Doors and windows of the closed walls and partitions, keyed by the wall or partition they sit in */
+export function projectOpenings(project: ProjectState): { hostKey: string; opening: Opening }[] {
+  return [
+    ...WALL_IDS.filter((id) => project.walls[id].closed).flatMap((id) => project.walls[id].openings.map((opening) => ({ hostKey: id as string, opening }))),
+    ...project.partitions.flatMap((p) => p.openings.map((opening) => ({ hostKey: p.id, opening }))),
+  ];
+}
+
+export function createProjectDrawer(project: ProjectState, model: DerivedModel): AssemblyDrawer {
+  return createAssemblyDrawer(model.framing, computeAllWallFrames(project), projectOpenings(project));
+}
+
+/** Everything built, doors and windows fitted, drawn in full ink: the guide's cover drawing */
+export function drawFinished(drawer: AssemblyDrawer, model: DerivedModel): string {
+  const everything = new Set([...model.framing.members.map((m) => m.id), ...model.framing.panels.map((q) => q.id)]);
+  return drawer.draw({ installed: everything, current: new Set(), fixtures: 'installed', bold: true });
+}
+
+/** PNG of the finished structure for documents that need only the one picture */
+export function renderFinished(project: ProjectState, model: DerivedModel): { image: string; aspect: number } {
+  const drawer = createProjectDrawer(project, model);
+  try {
+    return { image: drawFinished(drawer, model), aspect: drawer.aspect };
+  } finally {
+    drawer.dispose();
+  }
 }

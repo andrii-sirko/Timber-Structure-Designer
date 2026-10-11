@@ -131,7 +131,7 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
       <Button size="sm" icon={FileText} onClick={() => exportCutListCsv(project, model.cutList)} title={t('Export cutting list as CSV')}>
         CSV
       </Button>
-      <Button size="sm" icon={FileText} onClick={() => void exportCutListPdf(project, model.cutList, model.bom, model.statics, model.connections)} title={t('Export cutting list, BOM & statics as PDF')}>
+      <Button size="sm" icon={FileText} onClick={() => void exportCutListPdf(project, model)} title={t('Export cutting list, BOM & statics as PDF')}>
         PDF
       </Button>
       <Button

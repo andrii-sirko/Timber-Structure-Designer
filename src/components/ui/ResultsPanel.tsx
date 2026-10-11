@@ -290,15 +290,7 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
               <Button
                 size="sm"
                 icon={FileText}
-                onClick={() =>
-                  void exportCutListPdf(
-                    project,
-                    cutList,
-                    bom,
-                    statics,
-                    connections,
-                  )
-                }
+                onClick={() => void exportCutListPdf(project, model)}
               >
                 PDF
               </Button>

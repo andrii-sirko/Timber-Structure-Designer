@@ -233,7 +233,7 @@ export function PricingPanel({ model }: { model: DerivedModel }) {
             "Default unit prices are EUR, Berlin/Potsdam-area estimates — timber is priced per running metre (lfm), boards, roofing and floor decks per m², doors and windows per piece. Edit any price to match your own.",
           )}
         </p>
-        <Button size="sm" icon={FileText} onClick={() => void exportPriceListPdf(project, pricing)} title={t("Export the price list as PDF")}>
+        <Button size="sm" icon={FileText} onClick={() => void exportPriceListPdf(project, model, pricing)} title={t("Export the price list as PDF")}>
           PDF
         </Button>
         <Button size="sm" icon={RotateCcw} onClick={() => resetPrices()}>

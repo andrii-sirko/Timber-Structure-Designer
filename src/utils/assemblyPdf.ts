@@ -1,13 +1,11 @@
 import type { jsPDF } from 'jspdf';
 import type { CellHookData } from 'jspdf-autotable';
-import type { DerivedModel, Opening, ProjectState } from '@/types';
-import { WALL_IDS } from '@/types';
-import { computeAllWallFrames } from '@/engine';
+import type { DerivedModel, ProjectState } from '@/types';
 import { roundMm, sectionLabel } from '@/engine/geometry';
 import { applyStepOrder, assemblyProgress, buildAssemblyFrames, buildAssemblySteps, stepHardwareShares, type AssemblyStep } from '@/engine/assembly';
 import { getLang, t as translate, tx as translateText, type Lang } from '@/i18n';
 import { embedUnicodeFont, UNICODE_FONT } from './pdfFont';
-import { createAssemblyDrawer } from './assemblyRender';
+import { createProjectDrawer, drawFinished, projectOpenings } from './assemblyRender';
 
 /**
  * Printable assembly guide in the style of flat-pack furniture instructions: cover drawing, what
@@ -109,11 +107,8 @@ export async function buildAssemblyPdf(project: ProjectState, model: DerivedMode
   for (const item of model.cutList) for (const id of item.memberIds) posOfMember.set(id, item.pos);
   const membersById = new Map(model.framing.members.map((m) => [m.id, m]));
 
-  const openings: { hostKey: string; opening: Opening }[] = [
-    ...WALL_IDS.filter((id) => project.walls[id].closed).flatMap((id) => project.walls[id].openings.map((opening) => ({ hostKey: id as string, opening }))),
-    ...project.partitions.flatMap((p) => p.openings.map((opening) => ({ hostKey: p.id, opening }))),
-  ];
-  const drawer = createAssemblyDrawer(model.framing, computeAllWallFrames(project), openings);
+  const openings = projectOpenings(project);
+  const drawer = createProjectDrawer(project, model);
 
   try {
     // ── Cover ────────────────────────────────────────────────────────────────
@@ -122,9 +117,8 @@ export async function buildAssemblyPdf(project: ProjectState, model: DerivedMode
     text(t('Assembly guide'), MARGIN, 40, 14, 'normal', GREY);
     if (!german) text(de('Assembly guide'), MARGIN + doc.getTextWidth(t('Assembly guide')) + 4, 40, 10, 'normal', GREY);
     rule(45, 0.8, INK);
-    const everything = new Set([...model.framing.members.map((m) => m.id), ...model.framing.panels.map((q) => q.id)]);
     const coverH = CONTENT_W / drawer.aspect;
-    doc.addImage(drawer.draw({ installed: everything, current: new Set(), fixtures: 'installed', bold: true }), 'PNG', MARGIN, 58, CONTENT_W, coverH, undefined, 'FAST');
+    doc.addImage(drawFinished(drawer, model), 'PNG', MARGIN, 58, CONTENT_W, coverH, undefined, 'FAST');
     const facts: [string, string][] = [
       ['Length × width', `${p.length} × ${p.width} mm`],
       ['Eave heights', `${p.frontHeight} / ${p.rearHeight} mm`],

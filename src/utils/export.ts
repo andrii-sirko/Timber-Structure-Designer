@@ -1,7 +1,9 @@
+import type { jsPDF } from 'jspdf';
 import { getLang, t, tx } from '@/i18n';
 import { roundMm } from '@/engine/geometry';
 import { embedUnicodeFont, UNICODE_FONT } from '@/utils/pdfFont';
-import type { BomResult, ConnectionsResult, CutListItem, PricingLine, PricingResult, ProjectState, StaticsResult } from '@/types';
+import type { CutListItem, DerivedModel, PricingLine, PricingResult, ProjectState } from '@/types';
+import { renderFinished } from '@/utils/assemblyRender';
 
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -16,6 +18,15 @@ function downloadBlob(blob: Blob, filename: string): void {
 
 function safeName(name: string): string {
   return name.replace(/[^\w\d-]+/g, '_').replace(/^_+|_+$/g, '') || 'project';
+}
+
+/** The finished structure, as on the assembly guide's cover, centred in the box; returns the y below it */
+function addFinishedRender(doc: jsPDF, project: ProjectState, model: DerivedModel, x: number, y: number, boxW: number, boxH: number): number {
+  const render = renderFinished(project, model);
+  const imageW = Math.min(boxW, boxH * render.aspect);
+  const imageH = imageW / render.aspect;
+  doc.addImage(render.image, 'PNG', x + (boxW - imageW) / 2, y + (boxH - imageH) / 2, imageW, imageH, undefined, 'FAST');
+  return y + (boxH + imageH) / 2;
 }
 
 export function exportProjectJson(project: ProjectState): void {
@@ -69,13 +80,8 @@ export function exportCutListCsv(project: ProjectState, cutList: CutListItem[]):
   downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), `${safeName(project.name)}_cutlist.csv`);
 }
 
-export async function exportCutListPdf(
-  project: ProjectState,
-  cutList: CutListItem[],
-  bom: BomResult,
-  statics: StaticsResult,
-  connections: ConnectionsResult,
-): Promise<void> {
+export async function exportCutListPdf(project: ProjectState, model: DerivedModel): Promise<void> {
+  const { cutList, bom, statics, connections } = model;
   const [{ jsPDF }, autoTableModule] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   const autoTable = autoTableModule.default;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -106,6 +112,10 @@ export async function exportCutListPdf(
     20,
   );
 
+  // The finished structure on its own page below the title
+  addFinishedRender(doc, project, model, 14, 25, 297 - 28, 210 - 25 - 14);
+  doc.addPage();
+
   // One block per group and section (e.g. all 140×140 posts), headed by its piece count and total length
   const sectionOf = (c: CutListItem): string => `${roundMm(c.section.width)}×${roundMm(c.section.height)}`;
   const cutGroups = new Map<string, CutListItem[]>();
@@ -115,7 +125,7 @@ export async function exportCutListPdf(
   }
   const groupHeadStyle = { fontStyle: 'bold' as const, fillColor: [238, 228, 214] as [number, number, number] };
   autoTable(doc, {
-    startY: 25,
+    startY: 14,
     head: [[t('Pos'), t('Name'), t('Section'), t('Length'), t('Cut start °'), t('Cut end °'), t('Qty'), t('Notes')]],
     body: [...cutGroups.values()].flatMap((items) => {
       const pieces = items.reduce((s, c) => s + c.quantity, 0);
@@ -220,7 +230,7 @@ export async function exportCutListPdf(
   doc.save(`${safeName(project.name)}_cutlist_${lang}.pdf`);
 }
 
-export async function exportPriceListPdf(project: ProjectState, pricing: PricingResult): Promise<void> {
+export async function exportPriceListPdf(project: ProjectState, model: DerivedModel, pricing: PricingResult): Promise<void> {
   const [{ jsPDF }, autoTableModule] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
   const autoTable = autoTableModule.default;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -246,6 +256,9 @@ export async function exportPriceListPdf(project: ProjectState, pricing: Pricing
     20,
   );
 
+  // The finished structure above the prices, the table continuing below it
+  const tableY = addFinishedRender(doc, project, model, 14, 25, 210 - 28, 110) + 6;
+
   const sectionHeadStyle = { fontStyle: 'bold' as const, fillColor: [238, 228, 214] as [number, number, number] };
   const totalStyle = { fontStyle: 'bold' as const };
   const row = (l: PricingLine) => [
@@ -262,7 +275,7 @@ export async function exportPriceListPdf(project: ProjectState, pricing: Pricing
     [t('Delivery & surcharges'), pricing.deliveryLines, t('Delivery subtotal'), pricing.deliveryTotal],
   ];
   autoTable(doc, {
-    startY: 25,
+    startY: tableY,
     head: [[t('Item'), t('Qty'), t('Unit price'), { content: t('Total'), styles: { halign: 'right' } }]],
     body: [
       ...sections
