@@ -68,7 +68,7 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
             aria-selected={tab === tabDef.id}
             onClick={() => setTab(tabDef.id)}
             className={cx(
-              "relative flex-1 px-2 py-2.5 text-xs font-medium transition-colors",
+              "relative min-w-0 flex-1 px-1 py-2.5 text-xs leading-tight font-medium hyphens-auto transition-colors",
               tab === tabDef.id
                 ? "text-sky-200 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:bg-sky-400"
                 : "text-slate-400 hover:text-slate-200",

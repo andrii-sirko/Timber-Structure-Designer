@@ -223,6 +223,7 @@ export default {
   'Export cutting list as CSV': { uk: 'Експортувати список розкрою як CSV', de: 'Zuschnittliste als CSV exportieren', pl: 'Eksportuj listę cięć jako CSV' },
   'Export cutting list, BOM & statics as PDF': { uk: 'Експортувати список розкрою, специфікацію та статику як PDF', de: 'Zuschnittliste, Stückliste & Statik als PDF exportieren', pl: 'Eksportuj listę cięć, zestawienie i statykę jako PDF' },
   'Reset project': { uk: 'Скинути проєкт', de: 'Projekt zurücksetzen', pl: 'Resetuj projekt' },
+  'Project': { uk: 'Проєкт', de: 'Projekt', pl: 'Projekt' },
   'Reset to the default carport? Unsaved changes are lost.': {
     uk: 'Скинути до типового карпорта? Незбережені зміни буде втрачено.',
     de: 'Auf den Standard-Carport zurücksetzen? Nicht gespeicherte Änderungen gehen verloren.',

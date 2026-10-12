@@ -24,10 +24,35 @@ export const LANGS: { id: Lang; short: string; name: string }[] = [
 
 const STORAGE_KEY = 'timber-lang';
 
+const isLang = (v: string | undefined): v is Lang => LANGS.some((l) => l.id === v);
+
+/** Language named by the first URL path segment (`/de`, `/pl/…`); `ua` is accepted as an alias of `uk`. */
+export function langFromPath(pathname: string): Lang | undefined {
+  const seg = pathname.split('/')[1]?.toLowerCase();
+  const id = seg === 'ua' ? 'uk' : seg;
+  return isLang(id) ? id : undefined;
+}
+
+/** `pathname` with its language segment set to `lang` (replacing an existing one, or prepended). */
+export function pathWithLang(pathname: string, lang: Lang): string {
+  const rest = langFromPath(pathname) ? pathname.replace(/^\/[^/]*/, '') : pathname;
+  return `/${lang}${rest === '/' ? '' : rest}`;
+}
+
+/** Keeps the address bar's language segment in sync without adding a history entry. */
+function syncUrl(lang: Lang): void {
+  const loc = globalThis.location;
+  if (!loc || !globalThis.history) return;
+  const path = pathWithLang(loc.pathname, lang);
+  if (path !== loc.pathname) globalThis.history.replaceState(globalThis.history.state, '', path + loc.search + loc.hash);
+}
+
 function initialLang(): Lang {
   try {
+    const fromUrl = langFromPath(globalThis.location?.pathname ?? '');
+    if (fromUrl) return fromUrl;
     const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
-    if (stored && LANGS.some((l) => l.id === stored)) return stored as Lang;
+    if (stored && isLang(stored)) return stored;
     const nav = globalThis.navigator?.language?.slice(0, 2);
     if (nav === 'uk' || nav === 'de' || nav === 'pl') return nav;
   } catch {
@@ -37,6 +62,7 @@ function initialLang(): Lang {
 }
 
 export const langStore = createStore<{ lang: Lang }>(() => ({ lang: initialLang() }));
+syncUrl(langStore.getState().lang);
 
 export const getLang = (): Lang => langStore.getState().lang;
 
@@ -47,6 +73,7 @@ export function setLang(lang: Lang): void {
   } catch {
     // ignore
   }
+  syncUrl(lang);
   if (typeof document !== 'undefined') document.documentElement.lang = lang;
 }
 

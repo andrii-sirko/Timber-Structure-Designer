@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FolderOpen, Save, Upload, Download, FileText, LayoutTemplate, Trash2, RotateCcw, Hammer } from 'lucide-react';
+import { FolderOpen, Save, Upload, Download, FileText, LayoutTemplate, Trash2, RotateCcw, Hammer, Menu } from 'lucide-react';
 import type { DerivedModel } from '@/types';
 import { PROJECT_TEMPLATES, useProjectStore } from '@/store';
 import { exportCutListCsv, exportCutListPdf, exportProjectJson, readProjectFile } from '@/utils/export';
@@ -18,40 +18,42 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
   const loadTemplate = useProjectStore((s) => s.loadTemplate);
   const importProject = useProjectStore((s) => s.importProject);
   const resetProject = useProjectStore((s) => s.resetProject);
-  const [open, setOpen] = useState<null | 'templates' | 'saved'>(null);
+  const [open, setOpen] = useState<null | 'templates' | 'saved' | 'menu'>(null);
   const [error, setError] = useState<string | null>(null);
   const [guideBusy, setGuideBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
-  // Button labels collapse to icons when they would make the header scroll (longer UK / DE texts)
-  const [compact, setCompact] = useState(false);
-  const fullWidth = useRef(0);
+  // Collapses step by step while the header would overflow: 0 = labelled buttons, 1 = icons only, 2 = one menu button
+  const [level, setLevel] = useState(0);
+  const compact = level >= 1;
+  const collapsed = level >= 2;
+  // Header content width measured at each level before stepping down, to know when the next level up fits again
+  const widths = useRef<number[]>([]);
 
-  useLayoutEffect(() => setCompact(false), [lang, savedProjects.length]);
+  useLayoutEffect(() => setLevel(0), [lang, savedProjects.length]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-measures after every render; `compact` stops the loop
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-measures after every render; the level cap stops the loop
   useLayoutEffect(() => {
     const header = wrapper.current?.closest('header');
-    if (!header || compact || header.scrollWidth <= header.clientWidth + 1) return;
-    fullWidth.current = header.scrollWidth;
-    setCompact(true);
+    if (!header || level >= 2 || header.scrollWidth <= header.clientWidth + 1) return;
+    widths.current[level] = header.scrollWidth;
+    setLevel(level + 1);
   });
 
   useEffect(() => {
     const header = wrapper.current?.closest('header');
     if (!header) return;
     const ro = new ResizeObserver(() => {
-      if (!compact) {
-        if (header.scrollWidth <= header.clientWidth + 1) return;
-        fullWidth.current = header.scrollWidth;
-        setCompact(true);
-      } else if (header.clientWidth >= fullWidth.current) setCompact(false);
+      if (level < 2 && header.scrollWidth > header.clientWidth + 1) {
+        widths.current[level] = header.scrollWidth;
+        setLevel(level + 1);
+      } else if (level > 0 && header.clientWidth >= widths.current[level - 1]) setLevel(level - 1);
     });
     ro.observe(header);
     return () => ro.disconnect();
-  }, [compact]);
+  }, [level]);
 
   useEffect(() => {
     if (!open) return;
@@ -63,7 +65,7 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
     const close = (): void => setOpen(null);
     document.addEventListener('mousedown', onDown);
     window.addEventListener('resize', close);
-    // The header scrolls horizontally on narrow screens; a fixed popover would detach from its button
+    // On very narrow screens the header still scrolls; a fixed popover would detach from its button
     const header = wrapper.current?.closest('header');
     header?.addEventListener('scroll', close);
     return () => {
@@ -98,9 +100,27 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
 
   const popover = 'fixed z-50 w-80 max-w-[calc(100vw-1rem)] rounded-lg border border-slate-700 bg-slate-950 p-2 shadow-2xl';
   const popoverStyle = anchor ? { top: anchor.top, right: anchor.right } : undefined;
+  const menuRow = 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-100 hover:bg-slate-800 disabled:opacity-40 pointer-coarse:py-2.5';
+
+  const exportGuide = (): void => {
+    setGuideBusy(true);
+    void exportAssemblyPdf(project, model).finally(() => setGuideBusy(false));
+  };
+  const confirmReset = (): void => {
+    if (window.confirm(t('Reset to the default carport? Unsaved changes are lost.'))) resetProject();
+  };
+  // Runs a menu action and closes the menu first, so native dialogs (prompt / confirm / file picker) open over a clean header
+  const fromMenu = (action: () => void) => () => {
+    setOpen(null);
+    action();
+  };
 
   return (
     <div ref={wrapper} className="relative flex items-center gap-1.5">
+      {collapsed ? (
+        <Button size="sm" icon={Menu} onClick={() => setOpen(open === 'menu' ? null : 'menu')} aria-expanded={open === 'menu'} title={t('Project')} aria-label={t('Project')} />
+      ) : (
+        <>
       <Button size="sm" icon={LayoutTemplate} onClick={() => setOpen(open === 'templates' ? null : 'templates')} aria-expanded={open === 'templates'} title={compact ? t('Templates') : undefined}>
         {label(t('Templates'))}
       </Button>
@@ -117,6 +137,26 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
       <Button size="sm" icon={Upload} onClick={() => fileInput.current?.click()} title={t('Import a JSON configuration')}>
         {label(t('Import'))}
       </Button>
+      <Button size="sm" icon={FileText} onClick={() => exportCutListCsv(project, model.cutList)} title={t('Export cutting list as CSV')}>
+        CSV
+      </Button>
+      <Button size="sm" icon={FileText} onClick={() => void exportCutListPdf(project, model)} title={t('Export cutting list, BOM & statics as PDF')}>
+        PDF
+      </Button>
+      <Button
+        size="sm"
+        icon={Hammer}
+        disabled={guideBusy}
+        onClick={exportGuide}
+        title={guideBusy ? t('Preparing the assembly guide…') : t('Export the illustrated assembly guide as PDF (parts list and step-by-step drawings)')}
+      >
+        {label(t('Guide'))}
+      </Button>
+      <Button size="sm" variant="ghost" icon={RotateCcw} onClick={confirmReset} title={t('Reset project')}>
+        {label(t('Reset'))}
+      </Button>
+        </>
+      )}
       <input
         ref={fileInput}
         type="file"
@@ -128,28 +168,42 @@ export function ProjectMenu({ model }: { model: DerivedModel }) {
           e.target.value = '';
         }}
       />
-      <Button size="sm" icon={FileText} onClick={() => exportCutListCsv(project, model.cutList)} title={t('Export cutting list as CSV')}>
-        CSV
-      </Button>
-      <Button size="sm" icon={FileText} onClick={() => void exportCutListPdf(project, model)} title={t('Export cutting list, BOM & statics as PDF')}>
-        PDF
-      </Button>
-      <Button
-        size="sm"
-        icon={Hammer}
-        disabled={guideBusy}
-        onClick={() => {
-          setGuideBusy(true);
-          void exportAssemblyPdf(project, model).finally(() => setGuideBusy(false));
-        }}
-        title={guideBusy ? t('Preparing the assembly guide…') : t('Export the illustrated assembly guide as PDF (parts list and step-by-step drawings)')}
-      >
-        {label(t('Guide'))}
-      </Button>
-      <Button size="sm" variant="ghost" icon={RotateCcw} onClick={() => window.confirm(t('Reset to the default carport? Unsaved changes are lost.')) && resetProject()} title={t('Reset project')}>
-        {label(t('Reset'))}
-      </Button>
       {error && <span className="text-[11px] text-rose-300">{error}</span>}
+
+      {open === 'menu' && anchor && createPortal(
+        <div ref={popoverRef} className={cx(popover, 'w-64')} style={popoverStyle}>
+          <button type="button" className={menuRow} onClick={() => setOpen('templates')}>
+            <LayoutTemplate className="h-4 w-4 text-slate-400" /> {t('Templates')}
+          </button>
+          <button type="button" className={menuRow} onClick={fromMenu(savePreset)}>
+            <Save className="h-4 w-4 text-slate-400" /> {t('Save preset')}
+          </button>
+          <button type="button" className={menuRow} onClick={() => setOpen('saved')}>
+            <FolderOpen className="h-4 w-4 text-slate-400" /> {t('Saved ({n})', { n: savedProjects.length })}
+          </button>
+          <div className="my-1 h-px bg-slate-800" />
+          <button type="button" className={menuRow} onClick={fromMenu(() => exportProjectJson(project))}>
+            <Download className="h-4 w-4 text-slate-400" /> {t('Export configuration as JSON')}
+          </button>
+          <button type="button" className={menuRow} onClick={fromMenu(() => fileInput.current?.click())}>
+            <Upload className="h-4 w-4 text-slate-400" /> {t('Import a JSON configuration')}
+          </button>
+          <button type="button" className={menuRow} onClick={fromMenu(() => exportCutListCsv(project, model.cutList))}>
+            <FileText className="h-4 w-4 text-slate-400" /> {t('Export cutting list as CSV')}
+          </button>
+          <button type="button" className={menuRow} onClick={fromMenu(() => void exportCutListPdf(project, model))}>
+            <FileText className="h-4 w-4 text-slate-400" /> {t('Export cutting list, BOM & statics as PDF')}
+          </button>
+          <button type="button" className={menuRow} disabled={guideBusy} onClick={fromMenu(exportGuide)}>
+            <Hammer className="h-4 w-4 text-slate-400" /> {guideBusy ? t('Preparing the assembly guide…') : t('Guide')}
+          </button>
+          <div className="my-1 h-px bg-slate-800" />
+          <button type="button" className={menuRow} onClick={fromMenu(confirmReset)}>
+            <RotateCcw className="h-4 w-4 text-slate-400" /> {t('Reset project')}
+          </button>
+        </div>,
+        document.body,
+      )}
 
       {open === 'templates' && anchor && createPortal(
         <div ref={popoverRef} className={popover} style={popoverStyle}>
