@@ -1,6 +1,7 @@
 import type { BomLine, BomResult, CutListItem, FixtureLine, FramingResult, MaterialItem, Member, MemberCategory, Opening, ProjectState } from '@/types';
 import { DECKING } from '../framing/floor';
 import { INSULATION } from '../framing/insulation';
+import { hasWallPosts } from '../framing/wallFrame';
 import { findPreset, frameSizeFor, openingMaterials, presetMatches } from '../framing/openingCatalog';
 import { summarizePavedArea } from '../paving';
 import { memberVolumeM3 } from '../geometry';
@@ -216,7 +217,7 @@ function fixtureLine(wall: string, o: Opening): FixtureLine {
 export function collectFixtures(project: ProjectState): FixtureLine[] {
   const out: FixtureLine[] = [];
   for (const wall of Object.values(project.walls)) {
-    if (!wall.closed) continue;
+    if (!hasWallPosts(wall)) continue;
     for (const o of wall.openings) if (o.type !== 'passage') out.push(fixtureLine(WALL_NAME[wall.id] ?? wall.id, o));
   }
   for (const p of project.partitions) for (const o of p.openings) if (o.type !== 'passage') out.push(fixtureLine(p.label || 'Partition', o));

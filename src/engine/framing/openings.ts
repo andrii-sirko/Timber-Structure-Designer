@@ -1,6 +1,7 @@
 import type { FramingWarning, Opening, OpeningHost, OpeningType, StructureParams } from '@/types';
 import { clamp, roundTo } from '../geometry';
-import { wallBays, type WallBay, type WallFrame } from './wallFrame';
+import { SCREEN_BATTEN_WIDTH } from './cladding';
+import { hasWallPosts, wallBays, type WallBay, type WallFrame } from './wallFrame';
 
 export const OPENING_DEFAULTS: Record<
   OpeningType,
@@ -55,13 +56,14 @@ export interface OpeningLimits {
 export function openingLimits(frame: WallFrame, opening: Opening, params: StructureParams): OpeningLimits {
   const sw = params.timber.stud.width;
   const bay = bayForOpening(frame, opening);
-  const margin = 2 * sw;
+  // Stud wall: king + jack stud each side and a header (Sturz); slat screen: a batten jamb and rail
+  const margin = frame.screen ? SCREEN_BATTEN_WIDTH : 2 * sw;
   return {
     bay,
     minX: bay.start + margin,
     maxRight: bay.end - margin,
     minY: opening.type === 'window' ? sw + 100 : 0,
-    maxTop: (width, right) => frame.studTopAt(right) - headerHeight(width) - 20,
+    maxTop: (width, right) => frame.studTopAt(right) - (frame.screen ? SCREEN_BATTEN_WIDTH : headerHeight(width)) - 20,
   };
 }
 
@@ -86,7 +88,7 @@ export function clampOpening(frame: WallFrame, opening: Opening, params: Structu
 export function validateOpenings(frame: WallFrame, wall: OpeningHost, params: StructureParams): FramingWarning[] {
   const warnings: FramingWarning[] = [];
   const ref = { wallId: frame.wallId, partitionId: frame.partitionId };
-  if (!wall.closed) {
+  if (!hasWallPosts(wall)) {
     if (wall.openings.length > 0) {
       warnings.push({
         level: 'info',

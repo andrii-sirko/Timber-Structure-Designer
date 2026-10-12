@@ -1,6 +1,7 @@
 import type { DerivedModel, HardwareItem, Member, ProjectState, Vec3 } from '@/types';
 import { WALL_IDS } from '@/types';
 import { freePostIdOf } from './freePosts';
+import { hasWallPosts } from './framing/wallFrame';
 
 /**
  * Assembly sequence: the generated members and panels grouped into build steps, in the order a
@@ -258,7 +259,7 @@ export function buildAssemblySteps(model: DerivedModel, project: ProjectState): 
 
   push('insulation', 'insulation', undefined, [], panels.filter((p) => p.kind === 'insulation').map((p) => p.id));
 
-  const hosts = [...WALL_IDS.filter((id) => project.walls[id].closed).map((id) => project.walls[id]), ...project.partitions];
+  const hosts = [...WALL_IDS.filter((id) => hasWallPosts(project.walls[id])).map((id) => project.walls[id]), ...project.partitions];
   push('fixtures', 'fixtures', undefined, [], [], hosts.some((h) => h.openings.some((o) => o.type !== 'passage')));
 
   push('other', 'other', undefined, members.filter((m) => !taken.has(m.id)));

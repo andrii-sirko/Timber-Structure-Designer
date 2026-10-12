@@ -5,7 +5,7 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import type { DerivedModel, FramingResult, Opening, ProjectState, Vec3 } from '@/types';
 import { WALL_IDS } from '@/types';
 import type { WallFrames } from '@/engine/framing';
-import { computeAllWallFrames } from '@/engine';
+import { computeAllWallFrames, hasWallPosts } from '@/engine';
 import { basisQuaternion } from '@/components/3d/TimberMember';
 import { MM } from '@/components/3d/materials';
 import { panelGeometry } from '@/components/3d/panelShapes';
@@ -202,7 +202,7 @@ export function createAssemblyDrawer(framing: FramingResult, frames: WallFrames,
 /** Doors and windows of the closed walls and partitions, keyed by the wall or partition they sit in */
 export function projectOpenings(project: ProjectState): { hostKey: string; opening: Opening }[] {
   return [
-    ...WALL_IDS.filter((id) => project.walls[id].closed).flatMap((id) => project.walls[id].openings.map((opening) => ({ hostKey: id as string, opening }))),
+    ...WALL_IDS.filter((id) => hasWallPosts(project.walls[id])).flatMap((id) => project.walls[id].openings.map((opening) => ({ hostKey: id as string, opening }))),
     ...project.partitions.flatMap((p) => p.openings.map((opening) => ({ hostKey: p.id, opening }))),
   ];
 }

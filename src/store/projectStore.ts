@@ -30,7 +30,7 @@ import type {
   WallCladding,
 } from '@/types';
 import { isOuterWall } from '@/types';
-import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, MIN_WALL_LENGTH, openingFromPreset, OPENING_DEFAULTS, resolveCladding, resolveScreenCladding, sizeChanged, wallExtent } from '@/engine';
+import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, MIN_WALL_LENGTH, openingFromPreset, OPENING_DEFAULTS, hasWallPosts, resolveCladding, resolveScreenCladding, sizeChanged, wallExtent } from '@/engine';
 import { defaultObjectSize, findVehicleSpot, getVehicleModel, VEHICLE_COLORS } from '@/engine/vehicles';
 import { defaultPavedArea, insertVertex, PAVING_COLORS, resizePolygon, translatePolygon } from '@/engine/paving';
 import { clampFreePost, freePostMemberId } from '@/engine/freePosts';
@@ -211,18 +211,18 @@ function clampAllOpenings(input: ProjectState): ProjectState {
   const walls = { ...project.walls };
   for (const id of Object.keys(walls) as WallId[]) {
     const wall = walls[id];
-    if (!wall.closed || wall.openings.length === 0) continue;
+    if (!hasWallPosts(wall) || wall.openings.length === 0) continue;
     walls[id] = { ...wall, openings: wall.openings.map((o) => clampOpening(frames[id], o, project.params)) };
   }
   const partitions = project.partitions.map((p) => (p.openings.length === 0 ? p : { ...p, openings: p.openings.map((o) => clampOpening(frames[p.id], o, project.params)) }));
   return { ...project, walls, partitions };
 }
 
-/** Apply `fn` to the openings of the outer wall or partition addressed by `key`. Adding closes an open outer wall. */
+/** Apply `fn` to the openings of the outer wall or partition addressed by `key`. Adding closes an open outer wall (a slat screen stays one). */
 function mapOpenings(project: ProjectState, key: WallKey, fn: (openings: Opening[]) => Opening[], close = false): ProjectState {
   if (isOuterWall(key)) {
     const wall = project.walls[key];
-    return { ...project, walls: { ...project.walls, [key]: { ...wall, closed: close || wall.closed, openings: fn(wall.openings) } } };
+    return { ...project, walls: { ...project.walls, [key]: { ...wall, closed: (close && !wall.screen) || wall.closed, openings: fn(wall.openings) } } };
   }
   return { ...project, partitions: project.partitions.map((p) => (p.id === key ? { ...p, openings: fn(p.openings) } : p)) };
 }

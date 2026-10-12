@@ -140,3 +140,31 @@ test('screen texts are translated', () => {
   const texts = new Set([...model.bom.lines.map((l) => l.label), ...model.framing.members.filter((m) => m.category === 'batten').map((m) => m.group)]);
   for (const text of texts) for (const lang of ['uk', 'de', 'pl'] as const) assert.ok(hasTranslation(text, lang), `${text} → ${lang}`);
 });
+
+test('a door in a slat screen is cut out of the slats and framed with jambs and a header rail', () => {
+  for (const orientation of ['horizontal', 'vertical'] as const) {
+    const p = withScreen('left', { orientation, boardWidth: 70, gap: 20 });
+    const door = { id: 'd', type: 'door' as const, x: 1000, y: 0, width: 900, height: 2000, hinge: 'left' as const, swing: 'out' as const };
+    p.walls.left = { ...p.walls.left, openings: [door] };
+    const model = buildModel(p);
+    const panel = model.framing.panels.find((q) => q.kind === 'cladding' && q.wallId === 'left')!;
+    for (const b of panel.boards!) {
+      const inside = b.every((q) => q.u >= door.x - 0.1 && q.u <= door.x + door.width + 0.1 && q.v <= door.height + 0.1);
+      assert.ok(!inside, `${orientation}: no slat across the door`);
+    }
+    const battens = model.framing.members.filter((m) => m.wallId === 'left' && m.category === 'batten');
+    // world Z of a member along the left wall = its u
+    const at = (u: number) => battens.filter((m) => m.direction.y === 1 && Math.abs(m.start.z - u) < 1);
+    assert.equal(at(door.x - 30).length, 1, `${orientation}: jamb left of the door`);
+    assert.equal(at(door.x + door.width + 30).length, 1, `${orientation}: jamb right of the door`);
+    const rails = battens.filter((m) => m.direction.y === 0);
+    assert.ok(rails.some((m) => Math.abs(m.start.y - (door.height + 30)) < 1), `${orientation}: header rail`);
+    const bottom = rails.filter((m) => m.group.startsWith('Screen bottom rail'));
+    for (const m of bottom) {
+      const [a, b] = [m.start.z, m.start.z + m.direction.z * m.length].sort((x, y) => x - y);
+      assert.ok(b <= door.x + 0.5 || a >= door.x + door.width - 0.5, `${orientation}: bottom rail open at the door`);
+    }
+    assert.ok(model.bom.fixtures.length === 1, 'the door is on the shopping list');
+    assert.deepEqual(model.framing.warnings.filter((w) => w.wallId === 'left').map((w) => w.message), [], `${orientation}: the door fits the screen`);
+  }
+});

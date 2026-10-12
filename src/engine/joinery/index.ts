@@ -1,5 +1,6 @@
 import type { ConnectionsResult, FramingResult, HardwareItem, JoineryItem, ProjectState } from '@/types';
 import { endStudBrackets, plateAnchors } from './anchors';
+import { hasWallPosts } from '../framing/wallFrame';
 
 /**
  * Derives connector quantities (hardware mode) or traditional carpentry joints
@@ -115,7 +116,7 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   }
 
   // Door & window fitting kits (closed walls and partitions)
-  const openings = [...Object.values(project.walls).filter((w) => w.closed).flatMap((w) => w.openings), ...project.partitions.flatMap((p) => p.openings)];
+  const openings = [...Object.values(project.walls).filter(hasWallPosts).flatMap((w) => w.openings), ...project.partitions.flatMap((p) => p.openings)];
   hw('door-fitting-kit', 'Door fitting kit', 'Türmontage-Set', 'Compression tape, PU foam, frame screws, threshold, drip cap', openings.filter((o) => o.type === 'door').length, '1 per door');
   hw('window-fitting-kit', 'Window fitting kit', 'Fenstermontage-Set', 'Compression tape, PU foam, frame screws, sills, drip cap, cover strips', openings.filter((o) => o.type === 'window').length, '1 per window');
 

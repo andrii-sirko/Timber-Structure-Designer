@@ -104,7 +104,7 @@ export function generateWallFraming(
     });
   };
 
-  if (screen) members.push(...screenBattens(frame, resolveScreenCladding(wall.cladding), roof));
+  if (screen) members.push(...screenBattens(frame, resolveScreenCladding(wall.cladding), wall.openings, roof));
   else {
     // Partition end studs (against the outer wall / post) and its top plate
     if (isPartition) {
@@ -311,8 +311,7 @@ export function generateWallFraming(
     { u: uEnd, v: frame.claddingTopAt(uEnd) - 5 },
     { u: uStart, v: frame.claddingTopAt(uStart) - 5 },
   ];
-  // A screen has no framed openings: it simply stops where it is shortened
-  const holes: ProfilePoint[][] = (screen ? [] : wall.openings).map((o) => [
+  const holes: ProfilePoint[][] = wall.openings.map((o) => [
     { u: o.x, v: o.y },
     { u: o.x + o.width, v: o.y },
     { u: o.x + o.width, v: o.y + o.height },

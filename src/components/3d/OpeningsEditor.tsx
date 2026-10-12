@@ -4,7 +4,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import type { Opening } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
-import { CLADDING_THICKNESS, edgeHandleCentre, openingHost, resizableEdges, resizeOpening, type OpeningEdge } from '@/engine/framing';
+import { CLADDING_THICKNESS, edgeHandleCentre, hasWallPosts, openingHost, resizableEdges, resizeOpening, type OpeningEdge } from '@/engine/framing';
 import { getOpeningEdgeMaterial, getOpeningHandleMaterial, getWallPlaneMaterial, MM } from './materials';
 import { basisQuaternion } from './TimberMember';
 import { useT } from '@/i18n';
@@ -132,7 +132,7 @@ export function OpeningsEditor() {
         <planeGeometry args={[frame.length * MM, planeInfo.height * MM]} />
       </mesh>
 
-      {wall.closed &&
+      {hasWallPosts(wall) &&
         wall.openings.map((o) => {
           const c = frame.toWorld(o.x + o.width / 2, o.y + o.height / 2, HANDLE_OFFSET / 2);
           const selected = o.id === selectedOpeningId;

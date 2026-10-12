@@ -60,6 +60,8 @@ export interface WallFrame {
   extent: WallExtent;
   /** Width of an end stud along u */
   studWidth: number;
+  /** Open outer wall carrying a slat screen: openings are framed with battens, not studs and a header */
+  screen: boolean;
   /** Underside of the top member (purlin, side rail or top plate) at u → top of the studs */
   studTopAt: (u: number) => number;
   /** Underside of the rafters on the outer face at u → top of the cladding */
@@ -167,6 +169,7 @@ export function computeWallFrame(
     bayInset: pw / 2,
     extent: wallExtent(wall, length),
     studWidth: timber.stud.width,
+    screen: !wall.closed && Boolean(wall.screen),
     studTopAt,
     claddingTopAt,
     toWorld: makeToWorld(origin, u, v, normal, axisInset),
@@ -228,6 +231,7 @@ export function computePartitionFrame(partition: Partition, params: StructurePar
     bayInset: sw / 2,
     extent: { start: 0, end: length },
     studWidth: sw,
+    screen: false,
     studTopAt,
     claddingTopAt,
     toWorld: makeToWorld(origin, u, v, normal, axisInset),

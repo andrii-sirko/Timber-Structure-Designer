@@ -1,4 +1,4 @@
-import type { Member, ProfilePoint, WallCladding } from '@/types';
+import type { Member, Opening, ProfilePoint, WallCladding } from '@/types';
 import { cutProfile, nextId, profileArea, rectProfile, Y_AXIS } from '../geometry';
 import type { RoofLines } from './roofLines';
 import { wallBays, type WallFrame } from './wallFrame';
@@ -14,6 +14,8 @@ export const SCREEN_GROUND_GAP = 50;
 
 /** Screen battens and rails, 40 mm deep behind the slats × 60 mm */
 const BATTEN = { depth: 40, width: 60 } as const;
+/** Width of a screen jamb or header rail – what an opening in a slat screen needs around it (mm) */
+export const SCREEN_BATTEN_WIDTH = BATTEN.width;
 /** Largest free span of a 20 mm slat between its supports (mm) */
 const MAX_SLAT_SPAN = 800;
 /** Largest vertical distance between the rails carrying vertical slats (mm) */
@@ -50,14 +52,14 @@ export function resolveScreenCladding(cladding: Partial<WallCladding> | undefine
 
 /**
  * Sub-frame of a slat screen in an open bay (no studs, no plate): a bottom rail between the posts
- * SCREEN_GROUND_GAP above the ground, then
+ * SCREEN_GROUND_GAP above the ground (open at doors), a batten frame around every opening, then
  *  - horizontal slats: vertical battens so no slat spans more than MAX_SLAT_SPAN, plus one at
  *    each end of a screen that stops inside a bay;
  *  - vertical slats: further rails up to the purlin / side rail so the rails are ≤ MAX_RAIL_SPACING apart.
  * The slats are screwed to the posts, the battens and the purlin or side rail above.
  * Battens sit flush with the outer post face, the slats in front of them.
  */
-export function screenBattens(frame: WallFrame, cladding: WallCladding, roof: RoofLines): Member[] {
+export function screenBattens(frame: WallFrame, cladding: WallCladding, openings: Opening[], roof: RoofLines): Member[] {
   const members: Member[] = [];
   const ref = { wallId: frame.wallId, partitionId: frame.partitionId };
   const n = -BATTEN.depth / 2;
@@ -104,10 +106,38 @@ export function screenBattens(frame: WallFrame, cladding: WallCladding, roof: Ro
     });
   };
 
+  // A rail run from uA to uB with the stretches in `cuts` left out
+  const railAround = (uA: number, uB: number, vCentre: number, name: string, cuts: [number, number][]): void => {
+    let cursor = uA;
+    for (const [a, b] of [...cuts].sort((x, y) => x[0] - y[0])) {
+      rail(cursor, Math.min(a, uB), vCentre, name);
+      cursor = Math.max(cursor, b);
+    }
+    rail(cursor, uB, vCentre, name);
+  };
+
   for (const bay of wallBays(frame)) {
     const start = bay.startStud ? bay.start - frame.studWidth : bay.start;
     const end = bay.endStud ? bay.end + frame.studWidth : bay.end;
-    rail(start, end, SCREEN_GROUND_GAP + BATTEN.width / 2, 'Screen bottom rail');
+    const inBay = openings.filter((o) => {
+      const c = o.x + o.width / 2;
+      return c >= bay.start && c <= bay.end;
+    });
+    // Outside edges of the jambs either side of an opening
+    const span = (o: Opening): [number, number] => [o.x - BATTEN.width, o.x + o.width + BATTEN.width];
+
+    // Bottom rail: open at doors and passages; the jambs stand on its ends
+    railAround(start, end, SCREEN_GROUND_GAP + BATTEN.width / 2, 'Screen bottom rail', inBay.filter((o) => o.y < railTop).map((o) => [o.x, o.x + o.width]));
+
+    // Opening frame: full-height jambs, a header rail and, under windows, a sill rail
+    for (const o of inBay) {
+      const top = o.y + o.height;
+      if (o.x - BATTEN.width >= start - 0.5) batten(o.x - BATTEN.width / 2);
+      if (o.x + o.width + BATTEN.width <= end + 0.5) batten(o.x + o.width + BATTEN.width / 2);
+      if (top + BATTEN.width <= Math.min(frame.studTopAt(o.x), frame.studTopAt(o.x + o.width))) rail(o.x, o.x + o.width, top + BATTEN.width / 2, 'Screen rail');
+      if (o.y - BATTEN.width >= railTop) rail(o.x, o.x + o.width, o.y - BATTEN.width / 2, 'Screen rail');
+    }
+
     if (cladding.orientation === 'horizontal') {
       // A screen ending inside a bay gets an end batten; otherwise the post carries the slat ends
       if (bay.startStud) batten(start + BATTEN.width / 2);
@@ -115,11 +145,19 @@ export function screenBattens(frame: WallFrame, cladding: WallCladding, roof: Ro
       const from = bay.startStud ? start + BATTEN.width : start;
       const to = bay.endStud ? end - BATTEN.width : end;
       const k = Math.ceil((to - from) / MAX_SLAT_SPAN);
-      for (let i = 1; i < k; i++) batten(from + ((to - from) * i) / k);
+      for (let i = 1; i < k; i++) {
+        const u = from + ((to - from) * i) / k;
+        // the jambs already carry the slats around an opening
+        if (!inBay.some((o) => u > span(o)[0] - BATTEN.width && u < span(o)[1] + BATTEN.width)) batten(u);
+      }
     } else {
       const top = Math.min(frame.studTopAt(start), frame.studTopAt(end));
       const k = Math.ceil((top - railTop) / MAX_RAIL_SPACING);
-      for (let i = 1; i < k; i++) rail(start, end, railTop + ((top - railTop) * i) / k - BATTEN.width / 2, 'Screen rail');
+      for (let i = 1; i < k; i++) {
+        const v = railTop + ((top - railTop) * i) / k - BATTEN.width / 2;
+        const cuts = inBay.filter((o) => v + BATTEN.width / 2 > o.y && v - BATTEN.width / 2 < o.y + o.height).map(span);
+        railAround(start, end, v, 'Screen rail', cuts);
+      }
     }
   }
   return members;

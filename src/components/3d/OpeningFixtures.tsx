@@ -4,7 +4,7 @@ import type { Opening } from '@/types';
 import { WALL_IDS } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
 import type { WallFrame } from '@/engine/framing';
-import { findPreset } from '@/engine/framing';
+import { findPreset, hasWallPosts } from '@/engine/framing';
 import { getDoorLeafMaterial, getFrameMaterial, getGlassMaterial, getHardwareMaterial, getSashMaterial, MM } from './materials';
 import { basisQuaternion } from './TimberMember';
 import { openObjectSettings } from './openObjectSettings';
@@ -155,7 +155,7 @@ export function OpeningFixtures() {
   const frames = useWallFrames();
   const hosts = useMemo(() => {
     const out: { key: string; openings: Opening[] }[] = [];
-    for (const id of WALL_IDS) if (project.walls[id].closed) out.push({ key: id, openings: project.walls[id].openings });
+    for (const id of WALL_IDS) if (hasWallPosts(project.walls[id])) out.push({ key: id, openings: project.walls[id].openings });
     for (const p of project.partitions) out.push({ key: p.id, openings: p.openings });
     return out;
   }, [project.walls, project.partitions]);

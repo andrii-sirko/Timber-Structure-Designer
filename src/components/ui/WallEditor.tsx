@@ -293,7 +293,7 @@ export function WallEditor() {
               {t('2D view')}
             </Button>
           </div>
-          {!wall.closed && wall.openings.length > 0 && <p className="text-[11px] text-amber-300">{t('Wall is open – close it to frame the openings.')}</p>}
+          {!hasWallPosts(wall) && wall.openings.length > 0 && <p className="text-[11px] text-amber-300">{t('Wall is open – close it to frame the openings.')}</p>}
           {wall.openings.length === 0 && <p className="text-[11px] text-slate-500">{t('No openings on {wall} yet. Pick a standard size above or add a custom one.', { wall: wallTitle })}</p>}
           {wall.openings.length > 0 && <p className="text-[11px] text-slate-500">{t('In the 3D view: drag an opening to move it, drag its edge bars to resize it (10 mm steps).')}</p>}
 
