@@ -13,8 +13,9 @@ import { generateFreePosts } from '../freePosts';
 import { canonicalizeProject, canonicalToWorldMap, canonicalWall, framingToWorld, partitionFlipped, relabelFraming, wallFlipped } from '../orientation';
 
 export { computeRoofLines } from './roofLines';
+export { claddingBoards, resolveCladding, resolveScreenCladding, CLADDING_LIMITS, DEFAULT_WALL_CLADDING } from './cladding';
 export { computePostGrid, gridPostCount, rowPoint, rowPostTop } from './structure';
-export { computeWallFrame, computePartitionFrame, wallBays, wallExtent, MIN_WALL_LENGTH, PARTITION_TOP_GAP } from './wallFrame';
+export { computeWallFrame, computePartitionFrame, hasWallPosts, wallBays, wallExtent, MIN_WALL_LENGTH, PARTITION_TOP_GAP } from './wallFrame';
 export { clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH } from './partitions';
 export type { WallFrame, WallBay } from './wallFrame';
 export { clampOpening, openingLimits, headerHeight, OPENING_DEFAULTS, MIN_OPENING_SIZE, OPENING_SNAP } from './openings';

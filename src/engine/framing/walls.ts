@@ -1,9 +1,10 @@
 import type { FramingWarning, Member, MemberCategory, Opening, OpeningHost, Panel, ProfilePoint, StructureParams, Wall, WallId } from '@/types';
 import { cutProfile, nextId, profileArea, rectProfile, Y_AXIS } from '../geometry';
+import { boardsArea, claddingBoards, resolveCladding, resolveScreenCladding, screenBattens, SCREEN_GROUND_GAP } from './cladding';
 import { floorLayout } from './floor';
 import { headerHeight, validateOpenings } from './openings';
 import type { RoofLines } from './roofLines';
-import { wallBays, type WallFrame } from './wallFrame';
+import { hasWallPosts, wallBays, type WallFrame } from './wallFrame';
 
 export const CLADDING_THICKNESS = 20;
 const MIN_CRIPPLE = 80;
@@ -28,7 +29,8 @@ export function generateWallFraming(
   roof: RoofLines,
 ): WallBuild {
   const warnings = validateOpenings(frame, wall, params);
-  if (!wall.closed) return { members: [], warnings };
+  const screen = !wall.closed && Boolean(wall.screen);
+  if (!wall.closed && !screen) return { members: [], warnings };
 
   const { timber } = params;
   const sw = timber.stud.width; // along the wall
@@ -102,83 +104,86 @@ export function generateWallFraming(
     });
   };
 
-  // Partition end studs (against the outer wall / post) and its top plate
-  if (isPartition) {
-    stud(sw / 2, sillTop, frame.studTopAt(sw / 2), `End stud ${wallLabel}`, 'Eckständer', 'End stud (Eckständer)');
-    stud(frame.length - sw / 2, sillTop, frame.studTopAt(frame.length - sw / 2), `End stud ${wallLabel}`, 'Eckständer', 'End stud (Eckständer)');
-    if (!frame.sloped) {
-      horizontal(0, frame.length, frame.studTopAt(0) + sw / 2, sw, 'plate', `Top plate ${wallLabel}`, 'Rähm', 'Top plate (Rähm)', 'Under the rafters');
-    } else {
-      const axisLength = frame.length / roof.cos;
-      members.push({
-        id: nextId('plate'),
-        category: 'plate',
-        name: `Top plate ${wallLabel}`,
-        nameDe: 'Rähm',
-        group: 'Top plate (Rähm)',
-        section: { width: sd, height: sw },
-        length: Math.round(axisLength),
-        start: frame.toWorld(0, frame.studTopAt(0) + sw / 2 / roof.cos),
-        direction: { x: 0, y: -roof.sin, z: roof.cos },
-        up: { x: 0, y: roof.cos, z: roof.sin },
-        cuts: { start: round1(pitch), end: round1(pitch) },
-        profile: cutProfile(axisLength, sw, pitch, -pitch),
-        ...ref,
-        notes: 'Sloped under the rafters',
-      });
-    }
-  }
-
-  const floor = floorLayout(params);
-  const bays = wallBays(frame);
-  for (const bay of bays) {
-    const span = bay.end - bay.start;
-    // End studs where a shortened outer wall stops inside a bay
-    if (bay.startStud) stud(bay.start - sw / 2, sillTop, frame.studTopAt(bay.start - sw / 2), `End stud ${wallLabel}`, 'Eckständer', 'End stud (Eckständer)');
-    if (bay.endStud) stud(bay.end + sw / 2, sillTop, frame.studTopAt(bay.end + sw / 2), `End stud ${wallLabel}`, 'Eckständer', 'End stud (Eckständer)');
-    if (span < sw) continue;
-    const openings = wall.openings
-      .filter((o) => {
-        const c = o.x + o.width / 2;
-        return c >= bay.start && c <= bay.end;
-      })
-      .sort((a, b) => a.x - b.x);
-
-    // Bottom plate – interrupted at doors / passages; runs under the end studs so they (and the anchors) sit on it
-    const plateStart = bay.startStud || (isPartition && bay.index === 0) ? bay.start - sw : bay.start;
-    const plateEnd = bay.endStud || (isPartition && bay.index === frame.postU.length - 2) ? bay.end + sw : bay.end;
-    const cuts = openings.filter((o) => o.type !== 'window').map((o) => [o.x, o.x + o.width] as const);
-    let cursor = plateStart;
-    for (const [a, b] of cuts) {
-      horizontal(cursor, Math.min(a, plateEnd), sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
-      cursor = Math.max(cursor, b);
-    }
-    horizontal(cursor, plateEnd, sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
-    // With a timber floor the plate gap would leave a hole through the wall: fill it up to the finished floor
-    if (floor) {
-      const top = Math.round(floor.deckTop);
-      for (const [a, b] of cuts) {
-        horizontal(Math.max(a, bay.start), Math.min(b, bay.end), top / 2, top, 'plate', `Door threshold ${wallLabel}`, 'Türschwelle', 'Door threshold (Türschwelle)', 'Top flush with the finished floor');
+  if (screen) members.push(...screenBattens(frame, resolveScreenCladding(wall.cladding), roof));
+  else {
+    // Partition end studs (against the outer wall / post) and its top plate
+    if (isPartition) {
+      stud(sw / 2, sillTop, frame.studTopAt(sw / 2), `End stud ${wallLabel}`, 'Eckständer', 'End stud (Eckständer)');
+      stud(frame.length - sw / 2, sillTop, frame.studTopAt(frame.length - sw / 2), `End stud ${wallLabel}`, 'Eckständer', 'End stud (Eckständer)');
+      if (!frame.sloped) {
+        horizontal(0, frame.length, frame.studTopAt(0) + sw / 2, sw, 'plate', `Top plate ${wallLabel}`, 'Rähm', 'Top plate (Rähm)', 'Under the rafters');
+      } else {
+        const axisLength = frame.length / roof.cos;
+        members.push({
+          id: nextId('plate'),
+          category: 'plate',
+          name: `Top plate ${wallLabel}`,
+          nameDe: 'Rähm',
+          group: 'Top plate (Rähm)',
+          section: { width: sd, height: sw },
+          length: Math.round(axisLength),
+          start: frame.toWorld(0, frame.studTopAt(0) + sw / 2 / roof.cos),
+          direction: { x: 0, y: -roof.sin, z: roof.cos },
+          up: { x: 0, y: roof.cos, z: roof.sin },
+          cuts: { start: round1(pitch), end: round1(pitch) },
+          profile: cutProfile(axisLength, sw, pitch, -pitch),
+          ...ref,
+          notes: 'Sloped under the rafters',
+        });
       }
     }
 
-    // Regular stud grid
-    const n = Math.max(1, Math.ceil(span / Math.max(params.maxStudSpacing, 200)));
-    const spacing = span / n;
-    const grid: number[] = [];
-    for (let k = 1; k < n; k++) grid.push(bay.start + k * spacing);
+    const floor = floorLayout(params);
+    const bays = wallBays(frame);
+    for (const bay of bays) {
+      const span = bay.end - bay.start;
+      // End studs where a shortened outer wall stops inside a bay
+      if (bay.startStud) stud(bay.start - sw / 2, sillTop, frame.studTopAt(bay.start - sw / 2), `End stud ${wallLabel}`, 'Eckständer', 'End stud (Eckständer)');
+      if (bay.endStud) stud(bay.end + sw / 2, sillTop, frame.studTopAt(bay.end + sw / 2), `End stud ${wallLabel}`, 'Eckständer', 'End stud (Eckständer)');
+      if (span < sw) continue;
+      const openings = wall.openings
+        .filter((o) => {
+          const c = o.x + o.width / 2;
+          return c >= bay.start && c <= bay.end;
+        })
+        .sort((a, b) => a.x - b.x);
 
-    const blocked = (u: number): boolean =>
-      openings.some((o) => u > o.x - 2 * sw - sw / 2 && u < o.x + o.width + 2 * sw + sw / 2);
+      // Bottom plate – interrupted at doors / passages; runs under the end studs so they (and the anchors) sit on it
+      const plateStart = bay.startStud || (isPartition && bay.index === 0) ? bay.start - sw : bay.start;
+      const plateEnd = bay.endStud || (isPartition && bay.index === frame.postU.length - 2) ? bay.end + sw : bay.end;
+      const cuts = openings.filter((o) => o.type !== 'window').map((o) => [o.x, o.x + o.width] as const);
+      let cursor = plateStart;
+      for (const [a, b] of cuts) {
+        horizontal(cursor, Math.min(a, plateEnd), sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
+        cursor = Math.max(cursor, b);
+      }
+      horizontal(cursor, plateEnd, sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
+      // With a timber floor the plate gap would leave a hole through the wall: fill it up to the finished floor
+      if (floor) {
+        const top = Math.round(floor.deckTop);
+        for (const [a, b] of cuts) {
+          horizontal(Math.max(a, bay.start), Math.min(b, bay.end), top / 2, top, 'plate', `Door threshold ${wallLabel}`, 'Türschwelle', 'Door threshold (Türschwelle)', 'Top flush with the finished floor');
+        }
+      }
 
-    for (const u of grid) {
-      if (blocked(u)) continue;
-      stud(u, sillTop, frame.studTopAt(u), `Stud ${wallLabel}`, 'Ständer', 'Stud (Ständer)');
-    }
+      // Regular stud grid
+      const n = Math.max(1, Math.ceil(span / Math.max(params.maxStudSpacing, 200)));
+      const spacing = span / n;
+      const grid: number[] = [];
+      for (let k = 1; k < n; k++) grid.push(bay.start + k * spacing);
 
-    // Opening framing
-    for (const o of openings) {
-      frameOpening(o, bay, grid);
+      const blocked = (u: number): boolean =>
+        openings.some((o) => u > o.x - 2 * sw - sw / 2 && u < o.x + o.width + 2 * sw + sw / 2);
+
+      for (const u of grid) {
+        if (blocked(u)) continue;
+        stud(u, sillTop, frame.studTopAt(u), `Stud ${wallLabel}`, 'Ständer', 'Stud (Ständer)');
+      }
+
+      // Opening framing
+      for (const o of openings) {
+        frameOpening(o, bay, grid);
+      }
     }
   }
 
@@ -295,17 +300,19 @@ export function generateWallFraming(
   if (frame.sloped && !isPartition) {
     // Side cladding wraps the corner only where the front / rear wall actually reaches it
     const cornerU = frame.wallId === 'left' ? 0 : params.length;
-    const reaches = (w: Wall): boolean => w.closed && (cornerU === 0 ? (w.start ?? 0) <= 0.5 : w.end === undefined || w.end >= params.length - 0.5);
+    const reaches = (w: Wall): boolean => hasWallPosts(w) && (cornerU === 0 ? (w.start ?? 0) <= 0.5 : w.end === undefined || w.end >= params.length - 0.5);
     if (uStart <= 0.5 && reaches(walls.front)) uStart = -th;
     if (uEnd >= frame.length - 0.5 && reaches(walls.rear)) uEnd = frame.length + th;
   }
+  const bottom = screen ? SCREEN_GROUND_GAP : 0;
   const outer: ProfilePoint[] = [
-    { u: uStart, v: 0 },
-    { u: uEnd, v: 0 },
+    { u: uStart, v: bottom },
+    { u: uEnd, v: bottom },
     { u: uEnd, v: frame.claddingTopAt(uEnd) - 5 },
     { u: uStart, v: frame.claddingTopAt(uStart) - 5 },
   ];
-  const holes: ProfilePoint[][] = wall.openings.map((o) => [
+  // A screen has no framed openings: it simply stops where it is shortened
+  const holes: ProfilePoint[][] = (screen ? [] : wall.openings).map((o) => [
     { u: o.x, v: o.y },
     { u: o.x + o.width, v: o.y },
     { u: o.x + o.width, v: o.y + o.height },
@@ -313,6 +320,8 @@ export function generateWallFraming(
   ]);
   const grossArea = profileArea(outer) / 1e6;
   const holeArea = holes.reduce((s, h) => s + profileArea(h) / 1e6, 0);
+  const cladding = screen ? resolveScreenCladding(wall.cladding) : resolveCladding(wall.cladding);
+  const boards = cladding.gap > 0 ? claddingBoards(outer, holes, cladding) : undefined;
   const panel: Panel = {
     id: `cladding-${frame.id}`,
     kind: 'cladding',
@@ -322,7 +331,9 @@ export function generateWallFraming(
     up: frame.v,
     normal: frame.normal,
     outline: { outer, holes, thickness: th },
-    areaM2: Math.max(grossArea - holeArea, 0),
+    areaM2: boards ? boardsArea(boards) : Math.max(grossArea - holeArea, 0),
+    ...(boards ? { boards } : {}),
+    cladding,
   };
 
   return { members, panel, warnings };

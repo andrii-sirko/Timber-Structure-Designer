@@ -17,6 +17,7 @@ const CATEGORY_META: Record<MemberCategory, { label: string; labelDe: string; or
   sill: { label: 'Window sills', labelDe: 'Brüstungsriegel', order: 7 },
   bearer: { label: 'Floor bearers', labelDe: 'Unterzüge', order: 8 },
   joist: { label: 'Floor joists / sleepers', labelDe: 'Fußbodenbalken / Lagerhölzer', order: 9 },
+  batten: { label: 'Screen battens & rails', labelDe: 'Traglatten & Riegel', order: 10 },
 };
 
 const BOARD_THICKNESS_M = 0.02;

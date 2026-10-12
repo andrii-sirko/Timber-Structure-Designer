@@ -8,6 +8,7 @@ import type { WallFrames } from '@/engine/framing';
 import { computeAllWallFrames } from '@/engine';
 import { basisQuaternion } from '@/components/3d/TimberMember';
 import { MM } from '@/components/3d/materials';
+import { panelGeometry } from '@/components/3d/panelShapes';
 
 /**
  * Line drawings for the printed assembly guide: white solids with dark outlines on white paper,
@@ -107,16 +108,7 @@ export function createAssemblyDrawer(framing: FramingResult, frames: WallFrames,
     add(m.id, 'member', geometry, toVector(m.start), basisQuaternion(m.direction, m.up));
   }
   for (const p of framing.panels) {
-    let geometry: THREE.BufferGeometry;
-    if (p.outline) {
-      const shape = new THREE.Shape(p.outline.outer.map((q) => new THREE.Vector2(q.u * MM, q.v * MM)));
-      for (const hole of p.outline.holes) shape.holes.push(new THREE.Path(hole.map((q) => new THREE.Vector2(q.u * MM, q.v * MM))));
-      geometry = new THREE.ExtrudeGeometry(shape, { depth: p.outline.thickness * MM, bevelEnabled: false, steps: 1 });
-    } else {
-      const [a, b, t] = p.size ?? [1, 1, 0.02];
-      geometry = new THREE.BoxGeometry(a * MM, b * MM, t * MM);
-    }
-    add(p.id, 'panel', geometry, toVector(p.anchor), basisQuaternion(p.direction, p.up));
+    add(p.id, 'panel', panelGeometry(p), toVector(p.anchor), basisQuaternion(p.direction, p.up));
   }
   for (const { hostKey, opening } of openings) {
     const frame = frames[hostKey];

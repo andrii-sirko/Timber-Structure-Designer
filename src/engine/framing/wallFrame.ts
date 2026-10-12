@@ -22,6 +22,11 @@ export function wallExtent(wall: Pick<Wall, 'start' | 'end'>, length: number): W
   return { start, end: Math.min(end, length) };
 }
 
+/** Closed walls and slat screens stand on their own intermediate posts under a rail. */
+export function hasWallPosts(wall: Pick<Wall, 'closed' | 'screen'>): boolean {
+  return wall.closed || Boolean(wall.screen);
+}
+
 /**
  * Local 2D coordinate frame of a wall (outer wall or interior partition).
  *   u → along the wall, starting at the wall's start corner (front-left corner for
@@ -91,7 +96,7 @@ export function computeWallFrame(
   const rowPositions = (rowKey: string): number[] => grid.rows.find((r) => r.key === rowKey)?.positions ?? [];
   // Closed walls carry their own intermediate posts, but only along the closed stretch
   const wallPosts = (wallId: WallId, mids: number[], span: number): number[] => {
-    if (!wall.closed) return [pw / 2, ...mids, span - pw / 2];
+    if (!hasWallPosts(wall)) return [pw / 2, ...mids, span - pw / 2];
     const ext = wallExtent(wall, span);
     const inside = (pos: number): boolean => pos >= ext.start - pw / 2 && pos <= ext.end + pw / 2;
     const own = (grid.wallPosts[wallId]?.positions ?? []).filter(inside);

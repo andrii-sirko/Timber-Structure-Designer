@@ -27,9 +27,10 @@ import type {
   ViewSettings,
   WallId,
   WallKey,
+  WallCladding,
 } from '@/types';
 import { isOuterWall } from '@/types';
-import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, MIN_WALL_LENGTH, openingFromPreset, OPENING_DEFAULTS, sizeChanged, wallExtent } from '@/engine';
+import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, MIN_WALL_LENGTH, openingFromPreset, OPENING_DEFAULTS, resolveCladding, resolveScreenCladding, sizeChanged, wallExtent } from '@/engine';
 import { defaultObjectSize, findVehicleSpot, getVehicleModel, VEHICLE_COLORS } from '@/engine/vehicles';
 import { defaultPavedArea, insertVertex, PAVING_COLORS, resizePolygon, translatePolygon } from '@/engine/paving';
 import { clampFreePost, freePostMemberId } from '@/engine/freePosts';
@@ -124,6 +125,10 @@ interface ProjectStoreBase {
   setWallClosed: (id: WallId, closed: boolean) => void;
   /** Shorten a closed outer wall: closed stretch along the wall (mm from its start corner) */
   setWallExtent: (id: WallId, patch: { start?: number; end?: number }) => void;
+  /** Outer board layout of a wall: direction, board width and the gap between boards */
+  setWallCladding: (id: WallId, patch: Partial<WallCladding>) => void;
+  /** Slat screen in an open wall (fixed to the posts, no studs) */
+  setWallScreen: (id: WallId, screen: boolean) => void;
   addOpening: (wallKey: WallKey, type: OpeningType) => string;
   /** Add a door / window from the catalogue (OPENING_PRESETS) */
   addOpeningPreset: (wallKey: WallKey, presetId: string) => string | null;
@@ -306,9 +311,21 @@ export const useProjectStore = create<ProjectStore>()(
         set((s) => ({ project: { ...s.project, params: { ...s.project.params, insulation: { ...s.project.params.insulation, ...patch } } } })),
 
       setWallClosed: (id, closed) =>
-        set((s) => ({
-          project: clampAllOpenings({ ...s.project, walls: { ...s.project.walls, [id]: { ...s.project.walls[id], closed } } }),
-        })),
+        set((s) => {
+          const { screen: _screen, ...wall } = s.project.walls[id];
+          // A closed wall replaces the slat screen; opening it again leaves the bay open
+          return { project: clampAllOpenings({ ...s.project, walls: { ...s.project.walls, [id]: { ...wall, closed } } }) };
+        }),
+
+      setWallScreen: (id, screen) =>
+        set((s) => {
+          const { screen: _screen, ...wall } = s.project.walls[id];
+          if (!screen) return { project: { ...s.project, walls: { ...s.project.walls, [id]: wall } } };
+          // Closed boarding (no gap) of an earlier closed wall would make a solid fence: start from open slats
+          const { cladding, ...rest } = wall;
+          const next = cladding && cladding.gap > 0 ? { ...wall, closed: false, screen: true } : { ...rest, closed: false, screen: true };
+          return { project: { ...s.project, walls: { ...s.project.walls, [id]: next } } };
+        }),
 
       setWallExtent: (id, patch) =>
         set((s) => {
@@ -328,6 +345,13 @@ export const useProjectStore = create<ProjectStore>()(
           return {
             project: clampAllOpenings({ ...s.project, walls: { ...s.project.walls, [id]: full ? rest : { ...rest, start: ext.start, end: ext.end } } }),
           };
+        }),
+
+      setWallCladding: (id, patch) =>
+        set((s) => {
+          const wall = s.project.walls[id];
+          const cladding = wall.screen && !wall.closed ? resolveScreenCladding({ ...wall.cladding, ...patch }) : resolveCladding({ ...wall.cladding, ...patch });
+          return { project: { ...s.project, walls: { ...s.project.walls, [id]: { ...wall, cladding } } } };
         }),
 
       addOpening: (wallKey, type) => {

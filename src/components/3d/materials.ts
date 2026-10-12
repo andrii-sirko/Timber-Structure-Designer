@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { FloorDecking, InsulationMaterial, MemberCategory, RoofCovering } from '@/types';
+import type { FloorDecking, InsulationMaterial, MemberCategory, RoofCovering, WallCladding } from '@/types';
 
 /** Scene scale: 1 unit = 1 m; engine works in mm. */
 export const MM = 0.001;
@@ -79,7 +79,7 @@ function createWoodTexture(seed: number, base: string, dark: string): THREE.Canv
 }
 
 /** Vertical board cladding: one board per tile (120 mm wide, 1.2 m tall). */
-function createBoardTexture(base = '#b98a55', boardWidthM = 0.12, rotate = false): THREE.CanvasTexture {
+function createBoardTexture(base = '#b98a55', boardWidthM = 0.12, rotate = false, joints = true): THREE.CanvasTexture {
   const w = 128;
   const h = 1280;
   const ctx = makeCanvas(w, h);
@@ -97,10 +97,12 @@ function createBoardTexture(base = '#b98a55', boardWidthM = 0.12, rotate = false
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
-  ctx.fillStyle = '#4a2f16';
-  ctx.fillRect(0, 0, 6, h); // shadow gap between boards
-  ctx.fillStyle = 'rgba(255,255,255,0.12)';
-  ctx.fillRect(6, 0, 4, h); // highlight edge
+  if (joints) {
+    ctx.fillStyle = '#4a2f16';
+    ctx.fillRect(0, 0, 6, h); // shadow gap between boards
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(6, 0, 4, h); // highlight edge
+  }
   const texture = finishTexture(ctx, rotate ? [1 / 1.2, 1 / boardWidthM] : [1 / boardWidthM, 1 / 1.2]);
   if (rotate) texture.rotation = Math.PI / 2;
   return texture;
@@ -191,6 +193,7 @@ const CATEGORY_TINT: Record<MemberCategory, string> = {
   sill: '#d6ad70',
   bearer: '#a98252',
   joist: '#cfa66c',
+  batten: '#d9b47c',
 };
 
 export function getWoodMaterial(category: MemberCategory): THREE.MeshStandardMaterial {
@@ -257,8 +260,16 @@ export function getAssemblyGhostMaterial(): THREE.MeshBasicMaterial {
 /** Ghost pieces must not catch the pointer */
 export const noRaycast = (): void => {};
 
-export function getCladdingMaterial(): THREE.MeshStandardMaterial {
-  return cached('cladding', () => new THREE.MeshStandardMaterial({ map: createBoardTexture(), roughness: 0.9, side: THREE.DoubleSide }));
+/**
+ * Wall cladding: closed boarding shows the board joints at the real board width; separate
+ * (spaced) boards get plain grain, their gaps are real geometry. Horizontal boards turn the texture.
+ */
+export function getCladdingMaterial(cladding?: WallCladding, spaced = false): THREE.MeshStandardMaterial {
+  const horizontal = cladding?.orientation === 'horizontal';
+  const widthM = (cladding?.boardWidth ?? 120) / 1000;
+  return cached(`cladding-${horizontal ? 'h' : 'v'}-${spaced ? 'spaced' : widthM}`, () =>
+    new THREE.MeshStandardMaterial({ map: createBoardTexture(undefined, spaced ? 1 : widthM, horizontal, !spaced), roughness: 0.9, side: THREE.DoubleSide }),
+  );
 }
 
 /** Floor deck: boards running along the panel's local u or v axis, or plain OSB sheets. */

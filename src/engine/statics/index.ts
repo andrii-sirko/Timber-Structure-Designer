@@ -1,5 +1,6 @@
-import type { FramingResult, PostRow, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection, WallId } from '@/types';
+import type { FramingResult, PostRow, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection, Wall, WallId } from '@/types';
 import { DECKING, floorLayout, sanitizeParams, wallExtent } from '../framing';
+import { resolveScreenCladding } from '../framing/cladding';
 import { braceLayout, rowPostTop, type BracePlacement } from '../framing/structure';
 import { computeRoofLines, type RoofLines } from '../framing/roofLines';
 import { clampFreePost, freePostRow, freePostTop } from '../freePosts';
@@ -410,14 +411,24 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
   };
 }
 
+/** Share of a wall face that takes wind pressure: 1 closed, the board share for a slat screen, 0 open. */
+function windSolidity(wall: Wall | undefined): number {
+  if (!wall) return 0;
+  if (wall.closed) return 1;
+  if (!wall.screen) return 0;
+  const c = resolveScreenCladding(wall.cladding);
+  return c.boardWidth / (c.boardWidth + c.gap);
+}
+
 /** Characteristic horizontal wind force (kN) on the structure along `axis` for velocity pressure q (kN/m²). */
 function windForce(ctx: Context, axis: Axis, q: number): number {
   const { params, faceArea, edgeBand, planArea, canopy, tan } = ctx;
   const facing = WALLS_ALONG[OTHER[axis]]; // walls standing across the wind direction
-  const closed = facing.filter((id) => ctx.project.walls[id]?.closed);
+  // Closed walls catch the full face, slat screens their board share of it
+  const faces = facing.map((id) => faceArea[id] * windSolidity(ctx.project.walls[id])).filter((a) => a > 0);
   const o = params.overhangs;
   const extent = axis === 'x' ? params.width + o.front + o.rear : params.length + o.left + o.right;
-  const faceM2 = closed.length > 0 ? Math.max(...closed.map((id) => faceArea[id])) : (edgeBand * extent) / 1e6;
+  const faceM2 = faces.length > 0 ? Math.max(...faces) : (edgeBand * extent) / 1e6;
   let F = WALL_FORCE_COEFFICIENT * q * faceM2 + ROOF_FRICTION_COEFFICIENT * q * planArea;
   // component of the roof normal force along the slope (canonical slope runs along Z)
   if (axis === 'z') F += Math.max(canopy.down, -canopy.up) * q * planArea * tan;

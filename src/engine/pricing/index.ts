@@ -26,6 +26,7 @@ export const DEFAULT_TIMBER_PRICE_PER_M3: Record<MemberCategory, number> = {
   sill: 789, // KVH C24 80×100 / 80×160mm @ 663 €/m³ net
   bearer: 780, // Pressure-impregnated (KDI) C24 on foundations – e.g. 100×100mm @ €7.80/lfm
   joist: 773.5, // KVH C24 60×180mm @ 650 €/m³ net
+  batten: 773.5, // KVH C24 40×60mm @ 650 €/m³ net
 };
 
 /** Glulam GL24c 140×320mm, planed, chamfered @ 975 €/m³ net. */

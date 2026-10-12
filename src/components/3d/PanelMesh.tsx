@@ -5,6 +5,7 @@ import type { Panel, RoofCovering } from '@/types';
 import { getAssemblyCurrentMaterial, getAssemblyGhostMaterial, getCladdingMaterial, getFloorMaterial, getInsulationMaterial, getRoofMaterial, getWireframeMaterial, MM, noRaycast } from './materials';
 import { basisQuaternion } from './TimberMember';
 import { outlineKey, useKeyedGeometry } from './useKeyedGeometry';
+import { panelGeometry, panelGeometryKey } from './panelShapes';
 
 interface PanelMeshProps {
   panel: Panel;
@@ -25,21 +26,7 @@ interface PanelMeshProps {
 export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, onClick, onDoubleClick, onDragStart, onDrag, onDragEnd, dragCursor, assembly }: PanelMeshProps) {
   const dragging = useRef(false);
   const draggable = Boolean(onDragStart && onDrag && onDragEnd);
-  const outline = panel.outline;
-  const geometryKey = outline
-    ? `${outlineKey(outline.outer)}|${outline.holes.map(outlineKey).join('/')}|${outline.thickness}`
-    : `box|${panel.size?.join(',')}`;
-  const geometry = useKeyedGeometry<THREE.BufferGeometry>(geometryKey, () => {
-    if (outline) {
-      const shape = new THREE.Shape(outline.outer.map((p) => new THREE.Vector2(p.u * MM, p.v * MM)));
-      for (const hole of outline.holes) {
-        shape.holes.push(new THREE.Path(hole.map((p) => new THREE.Vector2(p.u * MM, p.v * MM))));
-      }
-      return new THREE.ExtrudeGeometry(shape, { depth: outline.thickness * MM, bevelEnabled: false, steps: 1 });
-    }
-    const [a, b, t] = panel.size ?? [1, 1, 0.02];
-    return new THREE.BoxGeometry(a * MM, b * MM, t * MM);
-  });
+  const geometry = useKeyedGeometry<THREE.BufferGeometry>(panelGeometryKey(panel, outlineKey), () => panelGeometry(panel));
 
   const quaternion = useMemo(() => basisQuaternion(panel.direction, panel.up), [panel.direction, panel.up]);
   const position = useMemo<[number, number, number]>(
@@ -59,7 +46,7 @@ export const PanelMesh = memo(function PanelMesh({ panel, covering, wireframe, o
             ? getFloorMaterial(panel.floorFinish)
             : panel.kind === 'insulation'
               ? getInsulationMaterial(panel.insulation?.material)
-              : getCladdingMaterial();
+              : getCladdingMaterial(panel.cladding, Boolean(panel.boards));
 
   return (
     <mesh

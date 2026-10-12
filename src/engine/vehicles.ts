@@ -1,6 +1,6 @@
 import type { FramingResult, ObjectCategory, ObjectSize, ProjectState, Vehicle, VehicleFit, VehicleModel, WallId } from '@/types';
 import { WALL_IDS } from '@/types';
-import { sanitizeParams, wallExtent } from './framing';
+import { hasWallPosts, sanitizeParams, wallExtent } from './framing';
 import { computeRoofLines } from './framing/roofLines';
 import { braceSides } from './framing/structure';
 import { toRad } from './geometry';
@@ -240,7 +240,7 @@ export function checkVehicleFit(vehicle: Vehicle, project: ProjectState, framing
     return false;
   };
   for (const id of WALL_IDS) {
-    if (!project.walls[id].closed) continue;
+    if (!hasWallPosts(project.walls[id])) continue;
     const [x0, z0, x1, z1] = wallLines[id];
     const alongX = id === 'front' || id === 'rear';
     const ext = wallExtent(project.walls[id], alongX ? L : W);

@@ -52,6 +52,7 @@ export function settingsTargetFor(picked: PickedObject): SettingsTarget {
         case 'plate':
         case 'header':
         case 'sill':
+        case 'batten':
           return picked.wallKey ? { tab: 'walls', focus: 'walls' } : { tab: 'structure', focus: 'timber' };
         case 'joist':
         case 'bearer':

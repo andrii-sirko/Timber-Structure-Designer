@@ -6,6 +6,7 @@ import { NEIGHBOUR_DEFAULTS } from '@/engine/neighbours';
 import { PAVING_COLORS, PAVING_DEFAULTS, PAVING_PATTERNS } from '@/engine/paving';
 import { FLOOR_DEFAULTS, sanitizeFloor } from '@/engine/framing/floor';
 import { INSULATION_DEFAULTS, sanitizeInsulation } from '@/engine/framing/insulation';
+import { resolveCladding } from '@/engine/framing/cladding';
 
 export const DEFAULT_PARAMS: StructureParams = {
   length: 6000,
@@ -276,6 +277,8 @@ export function normalizeProject(input: unknown): ProjectState {
       openings: normalizeOpenings(w.openings),
       ...(typeof w.start === 'number' && Number.isFinite(w.start) ? { start: w.start } : {}),
       ...(typeof w.end === 'number' && Number.isFinite(w.end) ? { end: w.end } : {}),
+      ...(w.cladding && typeof w.cladding === 'object' ? { cladding: resolveCladding(w.cladding) } : {}),
+      ...(w.screen === true && !w.closed ? { screen: true } : {}),
     };
   }
   const partitions: Partition[] = Array.isArray(src.partitions)

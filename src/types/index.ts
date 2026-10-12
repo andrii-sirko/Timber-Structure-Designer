@@ -118,6 +118,19 @@ export interface Opening {
   swing?: 'in' | 'out';
 }
 
+/** Direction the outer cladding boards run in. */
+export type CladdingOrientation = 'vertical' | 'horizontal';
+export const CLADDING_ORIENTATIONS: readonly CladdingOrientation[] = ['vertical', 'horizontal'] as const;
+
+/** Outer board cladding of a closed wall; a gap > 0 gives open slatted boarding (the frame shows through). */
+export interface WallCladding {
+  orientation: CladdingOrientation;
+  /** Visible board width (mm) */
+  boardWidth: Millimeters;
+  /** Clear gap between neighbouring boards (mm), 0 = closed boarding */
+  gap: Millimeters;
+}
+
 export interface Wall {
   id: WallId;
   /** true → wall is framed with studs and clad; false → open bay (carport style) */
@@ -126,6 +139,10 @@ export interface Wall {
   /** Closed part along the wall (mm from the wall's start corner, same axis as opening x); omitted → full length */
   start?: Millimeters;
   end?: Millimeters;
+  /** Outer board layout; omitted → closed vertical boarding (slat screen: horizontal slats with gaps) */
+  cladding?: WallCladding;
+  /** Open wall only: slat screen fixed to the posts (wall posts, rail and battens, no studs) */
+  screen?: boolean;
 }
 
 export type PartitionAxis = 'x' | 'z';
@@ -148,6 +165,8 @@ export interface Partition {
 export interface OpeningHost {
   closed: boolean;
   openings: Opening[];
+  cladding?: WallCladding;
+  screen?: boolean;
 }
 
 /** Selects either an outer wall (one of WALL_IDS) or a partition wall (its id). */
@@ -433,7 +452,8 @@ export type MemberCategory =
   | 'sill'
   | 'brace'
   | 'joist'
-  | 'bearer';
+  | 'bearer'
+  | 'batten';
 
 /** Angle of each end cut in degrees measured from a square (90°) cut. 0 = square. */
 export interface EndCuts {
@@ -498,6 +518,10 @@ export interface Panel {
   size?: [number, number, number];
   /** Outline with holes in (u, v) relative to anchor, extruded along normal by thickness */
   outline?: { outer: ProfilePoint[]; holes: ProfilePoint[][]; thickness: number };
+  /** Spaced cladding: the separate boards (u, v outlines) drawn instead of `outline.outer` / `holes` */
+  boards?: ProfilePoint[][];
+  /** Cladding panels: the board layout */
+  cladding?: WallCladding;
   /** Net area in m² (openings subtracted) */
   areaM2: number;
   /** Floor decks: deck material and the local axis the boards run along */

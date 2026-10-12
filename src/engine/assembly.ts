@@ -146,7 +146,7 @@ const STAGES: Record<AssemblyStage, StageInfo> = {
   },
 };
 
-const BASE_GROUPS = ['Bottom plate', 'Door threshold'];
+const BASE_GROUPS = ['Bottom plate', 'Door threshold', 'Screen bottom rail'];
 const TOP_GROUPS = ['Top plate', 'Side rail'];
 const OPENING_GROUPS = ['Jack stud', 'Header', 'Cripple stud', 'Window sill'];
 const inGroups = (member: Member, groups: string[]): boolean => groups.some((g) => member.group.startsWith(g));

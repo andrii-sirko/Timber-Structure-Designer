@@ -2,7 +2,7 @@ import type { BraceDirection, FramingWarning, Member, PostGrid, PostOverride, Po
 import { cutProfile, nextId, rectProfile, toDeg, X_AXIS, Y_AXIS, Z_AXIS } from '../geometry';
 import { computeRoofLines, type RoofLines } from './roofLines';
 import { resolvePostPositions } from '../postOverrides';
-import { wallExtent } from './wallFrame';
+import { hasWallPosts, wallExtent } from './wallFrame';
 
 const SQRT2 = Math.SQRT2;
 
@@ -158,7 +158,7 @@ export function generatePosts(
   // sloped-purlins: under the level front / rear rail)
   const midOffsets = sloped ? roof.midPurlinX : roof.midPurlinZ;
   for (const [id, posts] of Object.entries(grid.wallPosts) as [WallId, WallPosts][]) {
-    if (!walls[id].closed) continue;
+    if (!hasWallPosts(walls[id])) continue;
     const ext = wallExtent(walls[id], id === 'front' || id === 'rear' ? params.length : params.width);
     const labelDe = `Pfosten ${id === 'left' ? 'links' : id === 'right' ? 'rechts' : id === 'front' ? 'vorne' : 'hinten'}`;
     const fixed = id === 'left' || id === 'front' ? pw / 2 : (id === 'right' ? params.length : params.width) - pw / 2;
