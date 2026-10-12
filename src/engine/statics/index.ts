@@ -27,7 +27,7 @@ import {
  *    actual bracing system (knee braces / boarded walls / sway posts)
  *  - Lateral stability per direction: knee braces as compression struts, boarded walls as
  *    shear walls, or posts as cantilevers with combined compression + bending
- *  - Roof uplift (canopy suction) vs. dead load → net anchor tension per post
+ *  - Roof uplift (canopy suction) vs. dead load incl. concrete post footings → net anchor tension per post
  * Connections, fire, foundations and second-order effects are NOT covered – this is a
  * pre-design tool, not a replacement for a structural engineer's calculation.
  */
@@ -42,6 +42,8 @@ const NOTIONAL_SWAY = 0.01;
 /** Fraction of a knee brace's horizontal leg credited as purlin support (elastic support) */
 const BRACE_SPAN_CREDIT = 0.5;
 const G_ACCEL = 9.81;
+/** Unit weight of plain concrete (kN/m³, EN 1991-1-1) */
+const CONCRETE_WEIGHT = 24;
 const SQRT2 = Math.SQRT2;
 export const STANDARD_DEPTHS = [80, 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 360];
 export const BRACE_SECTIONS: TimberSection[] = [
@@ -895,6 +897,12 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
   {
     // Post self-weight (kN) hangs on the anchor too: section area × tallest post of the row.
     const postSelf = (height: number): number => (ctx.density * Apost * height) / 1e9;
+    // Concrete footing the post is cast into: its weight holds the post down as well
+    // (skin friction with the soil and soil cones are ignored – conservative).
+    const footingDepth = Math.max(0, loads.postFootingDepth ?? 0);
+    const footingDiameter = Math.max(0, loads.postFootingDiameter ?? 0);
+    const footingArea = (Math.PI * footingDiameter ** 2) / 4;
+    const footingG = (CONCRETE_WEIGHT * footingArea * footingDepth) / 1e9;
     let worstRow = purlinLoads[0];
     let worstUtil = 0;
     let worstNet = 0;
@@ -907,7 +915,7 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       const up = GAMMA_Q * load.qvUp * spanM;
       const roofG = load.qvG * spanM;
       const postG = postSelf(post.height);
-      const down = GAMMA_G_FAVOURABLE * (roofG + postG);
+      const down = GAMMA_G_FAVOURABLE * (roofG + postG + footingG);
       const util = down > 0 ? up / down : 0;
       if (util > worstUtil) {
         worstUtil = util;
@@ -918,6 +926,18 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       }
     }
     const spanM = (worstRow.row.supports.span + worstRow.row.supports.cantilever) / 1000;
+    const footing = footingG > 0 ? `Ø${Math.round(footingDiameter)} × ${Math.round(footingDepth)} mm` : '';
+    // Footing (depth ≥ 800 mm, diameter in 50 mm steps up to 600 mm) whose extra weight closes the net uplift
+    const bigger = (() => {
+      if (worstUtil <= 1) return undefined;
+      const depth = Math.max(footingDepth, 800);
+      for (let d = 200; d <= 600; d += 50) {
+        const g = (CONCRETE_WEIGHT * ((Math.PI * d ** 2) / 4) * depth) / 1e9;
+        if (GAMMA_G_FAVOURABLE * (g - footingG) >= worstNet) return { depth, d };
+      }
+      return undefined;
+    })();
+    const parts = `roof + purlin ${kn(GAMMA_G_FAVOURABLE * worstRow.qvG * spanM)}, post ${kn(GAMMA_G_FAVOURABLE * worstPostG)}${footing ? `, concrete footing ${footing} ${kn(GAMMA_G_FAVOURABLE * footingG)}` : ''}`;
     checks.push({
       id: 'uplift',
       kind: 'uplift',
@@ -935,9 +955,9 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       status: worstUtil > 1 ? 'warning' : 'ok',
       recommendation:
         worstUtil > 1
-          ? `Every post anchor and purlin-to-post joint must resist ${kn(worstNet)} tension (net uplift). Use tension-rated post shoes and screw / bolt the purlins and rafters down.`
+          ? `Every post anchor and purlin-to-post joint must resist ${kn(worstNet)} tension (net uplift). Use tension-rated post shoes and screw / bolt the purlins and rafters down.${bigger ? ` Or set the posts in concrete footings of at least Ø${bigger.d} × ${bigger.depth} mm.` : ''}`
           : undefined,
-      detail: `Canopy suction c_f = ${fmt(ctx.canopy.up, 2)} → ${fmt(windUp, 2)} kN/m² plan (q_p = ${fmt(q, 2)} kN/m²). ${worstRow.row.label}: uplift 1.5·W = ${kn(GAMMA_Q * worstRow.qvUp * spanM)} vs. dead load 1.0·G = ${kn(worstG)} per post (roof + purlin ${kn(GAMMA_G_FAVOURABLE * worstRow.qvG * spanM)}, post ${kn(GAMMA_G_FAVOURABLE * worstPostG)}) (${pct(worstUtil)}). ${worstUtil > 1 ? `Net ${kn(worstNet)} tension per post.` : 'Dead load holds the roof down; anchors take shear only.'} Light coverings (${ROOF_COVERING_LOAD[loads.roofCovering].label}) are governed by uplift, not snow.`,
+      detail: `Canopy suction c_f = ${fmt(ctx.canopy.up, 2)} → ${fmt(windUp, 2)} kN/m² plan (q_p = ${fmt(q, 2)} kN/m²). ${worstRow.row.label}: uplift 1.5·W = ${kn(GAMMA_Q * worstRow.qvUp * spanM)} vs. dead load 1.0·G = ${kn(worstG)} per post (${parts}) (${pct(worstUtil)}). ${worstUtil > 1 ? `Net ${kn(worstNet)} tension per post.` : 'Dead load holds the roof down; anchors take shear only.'}${footing ? ' The footing only counts when the post base is cast into it (H-anchor or threaded rods).' : ''} Light coverings (${ROOF_COVERING_LOAD[loads.roofCovering].label}) are governed by uplift, not snow.`,
     });
   }
 

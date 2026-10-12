@@ -92,6 +92,10 @@ export interface LoadSettings {
   serviceClass: 1 | 2 | 3;
   /** Peak velocity pressure q_p in kN/m² (DE zone 1 ≈ 0.50, zone 2 ≈ 0.65, zone 3 ≈ 0.80, zone 4 ≈ 0.95 for h ≤ 10 m) */
   windLoad: number;
+  /** Concrete footing the posts are set into: depth below ground (mm), 0 or missing = posts on a bare anchor */
+  postFootingDepth?: Millimeters;
+  /** Diameter of the cylindrical post footing (mm) */
+  postFootingDiameter?: Millimeters;
 }
 
 export type OpeningType = 'door' | 'window' | 'passage';

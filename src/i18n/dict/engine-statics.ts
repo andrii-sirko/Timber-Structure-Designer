@@ -363,6 +363,21 @@ export default {
     de: '{row}: Abhebung 1.5·W = {up} gegenüber Eigenlast 1.0·G = {down} je Pfosten (Dach + Pfette {roofG}, Pfosten {postG}) ({pct}).',
     pl: '{row}: odrywanie 1.5·W = {up} wobec ciężaru własnego 1.0·G = {down} na słup (dach + płatew {roofG}, słup {postG}) ({pct}).',
   },
+  '{row}: uplift 1.5·W = {up} vs. dead load 1.0·G = {down} per post (roof + purlin {roofG}, post {postG}, concrete footing Ø{d} × {h} mm {footG}) ({pct}).': {
+    uk: '{row}: відрив 1.5·W = {up} проти постійного навантаження 1.0·G = {down} на стовп (дах + прогон {roofG}, стовп {postG}, бетонний фундамент Ø{d} × {h} mm {footG}) ({pct}).',
+    de: '{row}: Abhebung 1.5·W = {up} gegenüber Eigenlast 1.0·G = {down} je Pfosten (Dach + Pfette {roofG}, Pfosten {postG}, Betonfundament Ø{d} × {h} mm {footG}) ({pct}).',
+    pl: '{row}: odrywanie 1.5·W = {up} wobec ciężaru własnego 1.0·G = {down} na słup (dach + płatew {roofG}, słup {postG}, fundament betonowy Ø{d} × {h} mm {footG}) ({pct}).',
+  },
+  'The footing only counts when the post base is cast into it (H-anchor or threaded rods).': {
+    uk: 'Фундамент враховується, лише якщо опора стовпа забетонована в нього (H-анкер або шпильки).',
+    de: 'Das Fundament zählt nur, wenn der Pfostenfuß einbetoniert ist (H-Anker oder Gewindestangen).',
+    pl: 'Fundament liczy się tylko wtedy, gdy stopa słupa jest w nim zabetonowana (kotwa H lub pręty gwintowane).',
+  },
+  'Or set the posts in concrete footings of at least Ø{d} × {depth} mm.': {
+    uk: 'Або забетонуйте стовпи у фундаменти щонайменше Ø{d} × {depth} mm.',
+    de: 'Oder die Pfosten in Betonfundamente von mindestens Ø{d} × {depth} mm setzen.',
+    pl: 'Albo osadź słupy w fundamentach betonowych co najmniej Ø{d} × {depth} mm.',
+  },
   'Net {net} tension per post.': { uk: 'Чистий розтяг {net} на стовп.', de: 'Netto {net} Zug je Pfosten.', pl: 'Rozciąganie netto {net} na słup.' },
   'Dead load holds the roof down; anchors take shear only.': {
     uk: 'Власна вага утримує дах; анкери сприймають лише зсув.',

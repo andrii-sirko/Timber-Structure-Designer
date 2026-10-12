@@ -55,6 +55,13 @@ export default {
   'Max joist spacing': { uk: 'Макс. крок балок', de: 'Max. Balkenabstand', pl: 'Maks. rozstaw legarów' },
   '→ {n} pcs @ {spacing} mm': { uk: '→ {n} шт. @ {spacing} мм', de: '→ {n} Stk. @ {spacing} mm', pl: '→ {n} szt. co {spacing} mm' },
   'Max bearer spacing': { uk: 'Макс. крок опорних балок', de: 'Max. Unterzugabstand', pl: 'Maks. rozstaw podciągów' },
+  'Post footing depth': { uk: 'Глибина бетонування стовпів', de: 'Tiefe Pfostenfundament', pl: 'Głębokość fundamentu słupa' },
+  'Post footing diameter': { uk: 'Діаметр бетонування стовпів', de: 'Durchmesser Pfostenfundament', pl: 'Średnica fundamentu słupa' },
+  'Posts cast into concrete – the footing weight counts against roof uplift. 0 = no footing.': {
+    uk: 'Стовпи забетоновані – вага бетону працює проти відриву даху. 0 = без бетонування.',
+    de: 'Pfosten einbetoniert – das Fundamentgewicht wirkt der Abhebung des Dachs entgegen. 0 = kein Fundament.',
+    pl: 'Słupy zabetonowane – ciężar fundamentu przeciwdziała odrywaniu dachu. 0 = bez fundamentu.',
+  },
   'Max foundation spacing': { uk: 'Макс. крок фундаментів', de: 'Max. Fundamentabstand', pl: 'Maks. rozstaw fundamentów' },
   'Max pad spacing': { uk: 'Макс. крок підкладок', de: 'Max. Auflagerabstand', pl: 'Maks. rozstaw podkładek' },
   '→ {n} foundations': { uk: '→ {n} фундаментів', de: '→ {n} Fundamente', pl: '→ {n} fundamentów' },

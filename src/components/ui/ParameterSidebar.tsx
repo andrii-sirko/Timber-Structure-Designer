@@ -519,6 +519,25 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
               { value: '3', label: t('3 – fully exposed') },
             ]}
           />
+          <NumberField
+            label={t('Post footing depth')}
+            value={params.loads.postFootingDepth ?? 0}
+            min={0}
+            max={2000}
+            step={50}
+            unit="mm"
+            onChange={(v) => setLoad('postFootingDepth', v)}
+          />
+          <NumberField
+            label={t('Post footing diameter')}
+            value={params.loads.postFootingDiameter ?? 0}
+            min={0}
+            max={1000}
+            step={10}
+            unit="mm"
+            onChange={(v) => setLoad('postFootingDiameter', v)}
+          />
+          <p className="text-[11px] text-slate-500">{t('Posts cast into concrete – the footing weight counts against roof uplift. 0 = no footing.')}</p>
           <SelectField
             label={t('Connections')}
             value={params.connectionMode}
