@@ -16,12 +16,12 @@ function downloadBlob(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function safeName(name: string): string {
+export function safeName(name: string): string {
   return name.replace(/[^\w\d-]+/g, '_').replace(/^_+|_+$/g, '') || 'project';
 }
 
 /** The finished structure, as on the assembly guide's cover, centred in the box; returns the y below it */
-function addFinishedRender(doc: jsPDF, project: ProjectState, model: DerivedModel, x: number, y: number, boxW: number, boxH: number): number {
+export function addFinishedRender(doc: jsPDF, project: ProjectState, model: DerivedModel, x: number, y: number, boxW: number, boxH: number): number {
   const render = renderFinished(project, model);
   const imageW = Math.min(boxW, boxH * render.aspect);
   const imageH = imageW / render.aspect;

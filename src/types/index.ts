@@ -96,7 +96,23 @@ export interface LoadSettings {
   postFootingDepth?: Millimeters;
   /** Diameter of the cylindrical post footing (mm) */
   postFootingDiameter?: Millimeters;
+  /** Snow load zone (DIN EN 1991-1-3/NA); with `altitude` it derives snowLoad, missing = s_k typed in directly */
+  snowZone?: SnowZone;
+  /** Site altitude above sea level (m) */
+  altitude?: number;
+  /** Site in the North German Plain: exceptional snow s_Ad = 2.3 · s_k as an accidental combination */
+  exceptionalSnow?: boolean;
+  /** Soil under the post footings, missing = 'non-cohesive' */
+  soil?: SoilType;
 }
+
+export type SnowZone = '1' | '1a' | '2' | '2a' | '3';
+
+/**
+ * non-cohesive = sand / gravel, at least medium dense; cohesive-stiff / cohesive-semi-firm = clayey
+ * silt / clay of stiff or semi-firm consistency (DIN 1054 Annex A bearing tables).
+ */
+export type SoilType = 'non-cohesive' | 'cohesive-stiff' | 'cohesive-semi-firm';
 
 export type OpeningType = 'door' | 'window' | 'passage';
 
@@ -674,11 +690,14 @@ export interface FramingResult {
 
 export type StaticsStatus = 'ok' | 'warning' | 'fail';
 
-export type StaticsCheckKind = 'vertical' | 'lateral' | 'uplift';
+export type StaticsCheckKind = 'vertical' | 'lateral' | 'uplift' | 'connection' | 'foundation';
 
 export interface StaticsCheck {
   id: string;
-  /** vertical = gravity member check, lateral = wind / sway bracing, uplift = anchoring against suction */
+  /**
+   * vertical = gravity member check, lateral = wind / sway bracing, uplift = anchoring against suction,
+   * connection = fasteners of a joint, foundation = post footing in the soil
+   */
   kind: StaticsCheckKind;
   element: string;
   elementDe: string;
@@ -720,6 +739,16 @@ export interface StaticsResult {
     windForce: { x: number; z: number };
     /** Characteristic roof uplift (suction) in kN/m² of plan */
     upliftPressure: number;
+    /** Characteristic ground snow load s_k (kN/m²) */
+    groundSnowLoad: number;
+    /** Snow load shape coefficient μ1 */
+    snowShape: number;
+    /** Exceptional ground snow s_Ad (kN/m²), only for sites in the North German Plain */
+    exceptionalSnow?: number;
+    /** Overall canopy force coefficients c_f (pressure / suction) */
+    canopyForce: { down: number; up: number };
+    /** Local net pressure coefficients c_p,net: interior zone A and the worst edge zone B / C */
+    canopyLocal: { interior: { down: number; up: number }; edge: { down: number; up: number } };
   };
   /** Gust speed (m/s) at which the first lateral / roof check reaches 100 % – undefined when the structure already fails without wind */
   collapseGustSpeed?: number;

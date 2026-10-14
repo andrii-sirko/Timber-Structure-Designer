@@ -5,7 +5,7 @@ import { buildFraming } from '../index.ts';
 import { autoFixStatics } from './autofix.ts';
 import { bracedPurlinSpan, computeStatics, freePostTributary } from './index.ts';
 import { gustSpeedToPressure, pressureToGustSpeed } from './materials.ts';
-import type { ProjectState, StructureParams } from '../../types/index.ts';
+import type { ProjectState, StaticsCheck, StructureParams } from '../../types/index.ts';
 
 function project(overrides: Partial<StructureParams> = {}, walls: Partial<Record<'front' | 'rear' | 'left' | 'right', boolean>> = {}): ProjectState {
   const p = createDefaultProject();
@@ -69,9 +69,11 @@ test('collapse gust speed is where the first check reaches 100 %', () => {
   const s = statics(project());
   assert.ok(s.collapseGustSpeed !== undefined && s.collapseGustSpeed > 20 && s.collapseGustSpeed < 150, String(s.collapseGustSpeed));
   const at = statics(project({ loads: { ...createDefaultProject().params.loads, windLoad: gustSpeedToPressure(s.collapseGustSpeed! + 1) } }));
-  assert.ok(at.checks.some((c) => c.kind !== 'uplift' && c.utilisation >= 1));
+  // joints and footings are sized afterwards and stay out of the collapse search
+  const member = (c: StaticsCheck) => c.kind !== 'uplift' && c.kind !== 'connection' && c.kind !== 'foundation';
+  assert.ok(at.checks.some((c) => member(c) && c.utilisation >= 1));
   const below = statics(project({ loads: { ...createDefaultProject().params.loads, windLoad: gustSpeedToPressure(s.collapseGustSpeed! - 1) } }));
-  assert.ok(below.checks.every((c) => c.kind === 'uplift' || c.utilisation < 1));
+  assert.ok(below.checks.every((c) => !member(c) || c.utilisation < 1));
 });
 
 test('uplift is an advisory: it never drives the overall status', () => {

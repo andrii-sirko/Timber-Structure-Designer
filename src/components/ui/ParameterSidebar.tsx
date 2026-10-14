@@ -1,13 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { Cable, CloudSnow, Layers, Lock, LockOpen, MapPin, MapPinned, Plus, Rows3, Ruler, Settings2, Trash2, TreePine, Triangle } from 'lucide-react';
-import type { BraceDirection, DerivedModel, FloorDecking, FloorSupport, InsulatedElement, InsulationLayer, InsulationMaterial, RoofCovering, RoofDirection, RoofScheme, StructureParams, TimberKey, TimberSection, WallId } from '@/types';
+import type { BraceDirection, DerivedModel, FloorDecking, FloorSupport, InsulatedElement, InsulationLayer, InsulationMaterial, RoofCovering, RoofDirection, RoofScheme, SnowZone, SoilType, StructureParams, TimberKey, TimberSection, WallId } from '@/types';
 import { DECKING, FLOOR_LOAD_PRESETS, gridPostCount, INSULATION, MAX_INSULATION_THICKNESS, MIN_PLAN_DIM, minWallHeight } from '@/engine/framing';
 import { midPurlinBounds } from '@/engine/framing/roofLines';
 import { freePostBounds, freePostMemberId } from '@/engine/freePosts';
 import { worldWall } from '@/engine/orientation';
 import { useProjectStore } from '@/store';
 import { useUiStore } from '@/store/uiStore';
-import { gustSpeedToPressure, pressureToGustSpeed, ROOF_COVERING_LOAD, SNOW_ZONE_PRESETS, STRENGTH_CLASSES, WIND_ZONE_PRESETS } from '@/engine/statics/materials';
+import { gustSpeedToPressure, pressureToGustSpeed, ROOF_COVERING_LOAD, STRENGTH_CLASSES, WIND_ZONE_PRESETS } from '@/engine/statics/materials';
+import { MAX_SNOW_ALTITUDE, siteSnowLoad, SNOW_ZONES } from '@/engine/statics/siteLoads';
 import { Button, NumberField, Section, SelectField, Toggle } from './primitives';
 import { StaticsBadge } from './StaticsBadge';
 import { WallEditor } from './WallEditor';
@@ -483,14 +484,37 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
 
         <Section title={t('Loads & connections')} icon={CloudSnow} defaultOpen={false}>
           <SelectField
-            label={t('Snow zone preset')}
-            value={String(SNOW_ZONE_PRESETS.find((p) => Math.abs(p.value - params.loads.snowLoad) < 0.001)?.value ?? 'custom')}
+            label={t('Snow load zone (DIN EN 1991-1-3/NA)')}
+            value={params.loads.snowZone ?? 'custom'}
             onChange={(v) => {
-              if (v !== 'custom') setLoad('snowLoad', Number(v));
+              if (v !== 'custom') setLoad('snowZone', v as SnowZone);
+              else {
+                // keep the s_k the zone gave as the starting point of the typed-in value
+                setLoad('snowLoad', Math.round(siteSnowLoad(params.loads) * 100) / 100);
+                setLoad('snowZone', undefined);
+              }
             }}
-            options={[...SNOW_ZONE_PRESETS.map((p) => ({ value: String(p.value), label: tx(p.label) })), { value: 'custom', label: t('Custom') }]}
+            options={[...SNOW_ZONES.map((z) => ({ value: z, label: t('Zone {zone}', { zone: z }) })), { value: 'custom', label: t('Custom s_k') }]}
           />
-          <NumberField label={t('Ground snow load s_k')} value={params.loads.snowLoad} min={0} max={5} step={0.05} unit="kN/m²" onChange={(v) => setLoad('snowLoad', v)} />
+          {params.loads.snowZone && (
+            <NumberField label={t('Site altitude above sea level')} value={params.loads.altitude ?? 0} min={0} max={MAX_SNOW_ALTITUDE} step={10} unit="m" onChange={(v) => setLoad('altitude', v)} />
+          )}
+          <NumberField
+            label={t('Ground snow load s_k')}
+            value={Math.round(siteSnowLoad(params.loads) * 100) / 100}
+            min={0}
+            max={5}
+            step={0.05}
+            unit="kN/m²"
+            disabled={!!params.loads.snowZone}
+            onChange={(v) => setLoad('snowLoad', v)}
+          />
+          <Toggle
+            label={t('North German Plain')}
+            description={t('Exceptional snow s_Ad = 2.3 · s_k as an accidental combination (DIN EN 1991-1-3/NA)')}
+            checked={!!params.loads.exceptionalSnow}
+            onChange={(v) => setLoad('exceptionalSnow', v)}
+          />
           <SelectField
             label={t('Wind zone preset')}
             value={String(WIND_ZONE_PRESETS.find((p) => Math.abs(p.value - params.loads.windLoad) < 0.001)?.value ?? 'custom')}
@@ -538,6 +562,16 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
             onChange={(v) => setLoad('postFootingDiameter', v)}
           />
           <p className="text-[11px] text-slate-500">{t('Posts cast into concrete – the footing weight counts against roof uplift. 0 = no footing.')}</p>
+          <SelectField<SoilType>
+            label={t('Soil under the footings')}
+            value={params.loads.soil ?? 'non-cohesive'}
+            onChange={(v) => setLoad('soil', v)}
+            options={[
+              { value: 'non-cohesive', label: t('Sand / gravel, medium dense') },
+              { value: 'cohesive-semi-firm', label: t('Clay / silt, semi-firm') },
+              { value: 'cohesive-stiff', label: t('Clay / silt, stiff') },
+            ]}
+          />
           <SelectField
             label={t('Connections')}
             value={params.connectionMode}

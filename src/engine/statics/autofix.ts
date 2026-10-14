@@ -30,6 +30,8 @@ const FLOOR_SPACINGS = [2500, 2000, 1750, 1500, 1250, 1000, 800, 600];
 const MIN_POST_SPACING = 1000;
 const POST_SPACING_STEP = 500;
 const MAX_ITERATIONS = 60;
+/** Checks that hardware or footings settle, not timber sections: auto-fix and cost optimization leave them aside. */
+const isMemberCheck = (c: StaticsCheck): boolean => c.kind !== 'uplift' && c.kind !== 'connection' && c.kind !== 'foundation';
 
 export interface AutoFixChange {
   label: string;
@@ -165,9 +167,9 @@ function diffParams(before: StructureParams, after: StructureParams): AutoFixCha
   return changes;
 }
 
-/** Overall status ignoring the uplift advisory (anchors are hardware, not a section choice). */
+/** Overall status of the members (uplift anchoring, joints and footings are hardware / footing choices). */
 function structuralStatus(statics: StaticsResult): StaticsStatus {
-  const s = statics.checks.filter((c) => c.kind !== 'uplift').map((c) => c.status);
+  const s = statics.checks.filter(isMemberCheck).map((c) => c.status);
   return s.includes('fail') ? 'fail' : s.includes('warning') ? 'warning' : 'ok';
 }
 
@@ -189,7 +191,7 @@ function finalResult<T extends StaticsAction>(project: ProjectState, params: Str
     params,
     changes: diffParams(project.params, params),
     status: structuralStatus(finalStatics),
-    unresolved: finalStatics.checks.filter((c) => c.status !== 'ok' && c.kind !== 'uplift').map((c) => c.element),
+    unresolved: finalStatics.checks.filter((c) => c.status !== 'ok' && isMemberCheck(c)).map((c) => c.element),
     action,
   };
 }
@@ -250,7 +252,7 @@ export function autoFixStatics(project: ProjectState): AutoFixResult {
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const checks = evaluate({ ...project, params });
     const pending = checks
-      .filter((c) => c.status !== 'ok' && c.kind !== 'uplift' && !exhausted.has(c.id))
+      .filter((c) => c.status !== 'ok' && isMemberCheck(c) && !exhausted.has(c.id))
       .sort((a, b) => b.utilisation - a.utilisation);
     if (pending.length === 0) break;
 

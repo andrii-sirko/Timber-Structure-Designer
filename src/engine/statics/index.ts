@@ -18,6 +18,10 @@ import {
   WALL_FORCE_COEFFICIENT,
   type MaterialProps,
 } from './materials';
+import { connectionChecks } from './connections';
+import { foundationChecks } from './foundations';
+import { EXCEPTIONAL_SNOW_FACTOR, siteSnowLoad } from './siteLoads';
+import { canopyLocalCoefficients, type CanopyZones } from './windZones';
 
 /**
  * Simplified structural verification following Eurocode 5 (EN 1995-1-1) principles:
@@ -99,12 +103,17 @@ interface BeamOutput {
 interface Kmods {
   medium: number;
   short: number;
+  /** Instantaneous action (accidental snow) */
+  instant: number;
   kdef: number;
+  /** s_Ad / s_k of the accidental snow combination, 0 = not applicable */
+  snowAccidental: number;
 }
 
-/** ULS combinations of a member under G, snow and wind pressure (EN 1990 6.10). */
+/** ULS combinations of a member under G, snow and wind pressure (EN 1990 6.10, accidental 6.11). */
 function combos(l: BeamLoads, k: Kmods): Combo[] {
   const out: Combo[] = [{ label: 'G + S', qd: GAMMA_G * l.qG + GAMMA_Q * l.qS, kmod: k.medium }];
+  if (k.snowAccidental > 0 && l.qS > 0) out.push({ label: 'G + S_Ad', qd: l.qG + k.snowAccidental * l.qS, kmod: k.instant });
   if (l.qW > 0) {
     out.push({ label: 'G + W + ψ₀S', qd: GAMMA_G * l.qG + GAMMA_Q * l.qW + GAMMA_Q * PSI0_SNOW * l.qS, kmod: k.short });
     out.push({ label: 'G + S + ψ₀W', qd: GAMMA_G * l.qG + GAMMA_Q * l.qS + GAMMA_Q * PSI0_WIND * l.qW, kmod: k.short });
@@ -299,6 +308,8 @@ interface Context {
   tan: number;
   density: number;
   deadLoad: number;
+  /** Characteristic ground snow load s_k (kN/m²) */
+  groundSnow: number;
   snowLoadRoof: number;
   spacingM: number;
   slopedPurlins: boolean;
@@ -316,6 +327,8 @@ interface Context {
   /** Face areas (m²) of every outer wall, plumb */
   faceArea: Record<WallId, number>;
   canopy: { down: number; up: number };
+  /** Local c_p,net for roof fixings (edge strips / interior) */
+  local: CanopyZones;
 }
 
 function buildContext(project: ProjectState, framing: FramingResult): Context {
@@ -325,7 +338,9 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
   const k: Kmods = {
     medium: KMOD_BY_SERVICE_CLASS[loads.serviceClass],
     short: KMOD_SHORT_BY_SERVICE_CLASS[loads.serviceClass],
+    instant: loads.serviceClass === 3 ? 0.9 : 1.1,
     kdef: KDEF_BY_SERVICE_CLASS[loads.serviceClass],
+    snowAccidental: loads.exceptionalSnow ? EXCEPTIONAL_SNOW_FACTOR : 0,
   };
   const roof = framing.roof;
   const roofLines = computeRoofLines(params);
@@ -337,7 +352,8 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
   const spacingM = Math.max(roof.rafterSpacing, 1) / 1000;
   const rafterSelf = (density * (timber.rafter.width / 1000) * (timber.rafter.height / 1000)) / spacingM; // kN/m² surface
   const deadLoad = (covering.load + rafterSelf) / cos; // kN/m² plan
-  const snowLoadRoof = snowShapeCoefficient(roof.pitchDeg) * loads.snowLoad;
+  const groundSnow = siteSnowLoad(loads);
+  const snowLoadRoof = snowShapeCoefficient(roof.pitchDeg) * groundSnow;
 
   const grid = framing.grid;
   const braces = braceLayout(params, roofLines, grid);
@@ -394,6 +410,7 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
     tan,
     density,
     deadLoad,
+    groundSnow,
     snowLoadRoof,
     spacingM,
     slopedPurlins: grid.scheme === 'sloped-purlins',
@@ -408,6 +425,7 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
     freePosts,
     faceArea,
     canopy: canopyForceCoefficients(roof.pitchDeg),
+    local: canopyLocalCoefficients(roof.pitchDeg),
   };
 }
 
@@ -635,6 +653,17 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     let utilisation = sigma / (col.kc * col.fcd);
     let governing = 'G + S';
     const combined: string[] = [];
+    let accidental = '';
+    if (k.snowAccidental > 0) {
+      const colAcc = columnCurve(timber.post, Lef, mat, k.instant);
+      const NAcc = G + k.snowAccidental * S;
+      const util = (NAcc * 1000) / Apost / (colAcc.kc * colAcc.fcd);
+      if (util > utilisation) {
+        utilisation = util;
+        governing = 'G + S_Ad';
+      }
+      accidental = ` Exceptional snow G + ${k.snowAccidental}·S: ${pct(util)}.`;
+    }
 
     // Sway directions: the post is a cantilever from a moment-fixed base and carries the wind moment
     for (const axis of ['x', 'z'] as Axis[]) {
@@ -695,7 +724,7 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       utilisation,
       status,
       recommendation,
-      detail: `${post.lead ? `${post.lead} ` : ''}N_d = ${kn(Nsnow)} (G + S), buckling length ${Math.round(Lef)} mm (in row ${Math.round(Lrow)} / across ${Math.round(Lperp)} mm; λ = ${fmt(col.lambda, 0)}, k_c = ${fmt(col.kc, 2)}). σ_c,0,d = ${fmt(sigma, 2)} ≤ k_c·f_c,0,d = ${fmt(col.kc * col.fcd, 2)} N/mm² (${pct(sigma / (col.kc * col.fcd))}).${combined.length ? ` With wind moment ${combined.join(', ')}.` : ''} Governing ${governing}.`,
+      detail: `${post.lead ? `${post.lead} ` : ''}N_d = ${kn(Nsnow)} (G + S), buckling length ${Math.round(Lef)} mm (in row ${Math.round(Lrow)} / across ${Math.round(Lperp)} mm; λ = ${fmt(col.lambda, 0)}, k_c = ${fmt(col.kc, 2)}). σ_c,0,d = ${fmt(sigma, 2)} ≤ k_c·f_c,0,d = ${fmt(col.kc * col.fcd, 2)} N/mm² (${pct(sigma / (col.kc * col.fcd))}).${combined.length ? ` With wind moment ${combined.join(', ')}.` : ''}${accidental} Governing ${governing}.`,
     };
   };
 
@@ -972,13 +1001,44 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     });
   }
 
+  // ── Joints: rafter bearings, purlin-to-post, knee brace ends ─────────────
+  checks.push(
+    ...connectionChecks({
+      mat,
+      strengthClass: timber.strengthClass,
+      kmodShort,
+      mode: params.connectionMode,
+      timber,
+      q,
+      local: ctx.local,
+      deadLoad,
+      rafterSpacing: roof.rafterSpacing,
+      rafterSeatHeight: timber.rafter.height - (slopedPurlins ? 0 : roof.birdsmouthDepth),
+      planLength: params.length + overhangs.left + overhangs.right,
+      planWidth: params.width + overhangs.front + overhangs.rear,
+      bearings: purlinRows.map((row, idx) => ({ label: row.label, trib: row.trib, inner: idx > 0 && idx < last })),
+      postJoints: postRows.map((post) => {
+        const spanM = (post.load.row.supports.span + post.load.row.supports.cantilever) / 1000;
+        return { label: post.label, uplift: post.load.qvUp * spanM, dead: post.load.qvG * spanM };
+      }),
+      braces: (['x', 'z'] as Axis[])
+        .filter((axis) => ctx.lateral[axis].kind === 'braces')
+        .map((axis) => {
+          const sys = ctx.lateral[axis];
+          const Hd = Math.max(H[axis].windLead, H[axis].snowLead);
+          const fewest = Math.min(...sys.bracedRows.map((r) => r.active));
+          return { key: axis, axis: AXIS_LABEL[axis], Nd: (Hd / sys.bracedRows.length / fewest) * SQRT2 };
+        }),
+    }),
+  );
+
   return checks;
 }
 
-/** Peak velocity pressure (kN/m²) at which the first non-uplift check exceeds 100 %. */
+/** Peak velocity pressure (kN/m²) at which the first member check exceeds 100 % (uplift, joints and footings aside). */
 function collapsePressure(ctx: Context, q0: number): { q: number; element: string } | undefined {
   const worstUtil = (q: number) => {
-    const checks = computeChecks(ctx, q).filter((c) => c.kind !== 'uplift');
+    const checks = computeChecks(ctx, q).filter((c) => c.kind !== 'uplift' && c.kind !== 'connection');
     return checks.reduce((m, c) => (c.utilisation > m.utilisation ? c : m), checks[0]);
   };
   if (worstUtil(0).utilisation >= 1) return undefined;
@@ -1082,15 +1142,35 @@ function computeFloorChecks(ctx: Context): StaticsCheck[] {
   return checks;
 }
 
+/**
+ * Post footings in the soil, from the forces of the member checks: the most loaded post (G + S)
+ * gives the soil pressure. Post bases are pinned, so the footings take no moment.
+ */
+function computeFoundationChecks(ctx: Context, checks: StaticsCheck[]): StaticsCheck[] {
+  const { loads, timber } = ctx.params;
+  const posts = checks.filter((c) => c.kind === 'vertical' && c.id.startsWith('post-') && c.loadUls > 0);
+  if (posts.length === 0) return [];
+  const worstPost = posts.reduce((w, c) => (c.loadUls > w.loadUls ? c : w));
+  return foundationChecks({
+    soil: loads.soil ?? 'non-cohesive',
+    depth: Math.max(0, loads.postFootingDepth ?? 0),
+    diameter: Math.max(0, loads.postFootingDiameter ?? 0),
+    post: timber.post,
+    worstPost: { label: worstPost.element, Nd: worstPost.loadUls },
+  });
+}
+
 export function computeStatics(project: ProjectState, framing: FramingResult): StaticsResult {
   const ctx = buildContext(project, framing);
   const q = Math.max(Number.isFinite(ctx.params.loads.windLoad) ? ctx.params.loads.windLoad : 0.65, 0);
-  const checks = [...computeChecks(ctx, q), ...computeFloorChecks(ctx)];
+  const memberChecks = computeChecks(ctx, q);
+  const checks = [...memberChecks, ...computeFloorChecks(ctx), ...computeFoundationChecks(ctx, memberChecks)];
   const collapse = collapsePressure(ctx, q);
-  const { deadLoad, snowLoadRoof } = ctx;
+  const { deadLoad, snowLoadRoof, params } = ctx;
+  const { loads } = params;
   return {
-    // The uplift check is an anchoring advisory (hardware choice), not a member failure
-    status: worst(checks.filter((c) => c.kind !== 'uplift').map((c) => c.status)),
+    // Uplift anchoring and joints are hardware advisories (they name the fasteners needed), not member failures
+    status: worst(checks.filter((c) => c.kind !== 'uplift' && c.kind !== 'connection').map((c) => c.status)),
     checks,
     loads: {
       deadLoad,
@@ -1103,6 +1183,11 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
       gustSpeed: pressureToGustSpeed(q),
       windForce: { x: windForce(ctx, 'x', q), z: windForce(ctx, 'z', q) },
       upliftPressure: -ctx.canopy.up * q,
+      groundSnowLoad: ctx.groundSnow,
+      snowShape: snowShapeCoefficient(ctx.framing.roof.pitchDeg),
+      exceptionalSnow: loads.exceptionalSnow ? EXCEPTIONAL_SNOW_FACTOR * ctx.groundSnow : undefined,
+      canopyForce: ctx.canopy,
+      canopyLocal: ctx.local,
     },
     collapseGustSpeed: collapse ? pressureToGustSpeed(collapse.q) : undefined,
     collapseElement: collapse?.element,

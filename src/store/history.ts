@@ -62,7 +62,7 @@ const FIELD_NAMES: Record<string, string> = {
   connectionMode: 'Connection mode',
 };
 const TIMBER_NAMES: Record<string, string> = { post: 'Post', beam: 'Purlin', rafter: 'Rafter', stud: 'Stud', brace: 'Knee brace' };
-const LOAD_NAMES: Record<string, string> = { snowLoad: 'Snow load', roofCovering: 'Roof covering', serviceClass: 'Service class', windLoad: 'Wind load' };
+const LOAD_NAMES: Record<string, string> = { snowLoad: 'Snow load', roofCovering: 'Roof covering', serviceClass: 'Service class', windLoad: 'Wind load', snowZone: 'Snow load zone', altitude: 'Site altitude', exceptionalSnow: 'Exceptional snow', soil: 'Soil' };
 const SIDE_NAMES: Record<string, string> = { front: 'Front', rear: 'Rear', left: 'Left', right: 'Right' };
 const OPENING_NAMES: Record<string, string> = { door: 'Door', window: 'Window', passage: 'Passage' };
 

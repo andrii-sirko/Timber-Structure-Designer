@@ -17,6 +17,7 @@ import type { DerivedModel } from "@/types";
 import { useProjectStore } from "@/store";
 import { useUiStore, type ResultsTab } from "@/store/uiStore";
 import { exportCutListCsv, exportCutListPdf } from "@/utils/export";
+import { exportStaticsReportPdf } from "@/utils/staticsReport";
 import {
   Button,
   STATUS_BG,
@@ -455,6 +456,14 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                   {t("Cost optimization")}
                 </Button>
               )}
+              <Button
+                size="sm"
+                icon={FileText}
+                onClick={() => void exportStaticsReportPdf(project, model)}
+                title={t("Pre-design calculation by position (PDF): loads, member, joint and footing checks")}
+              >
+                {t("Report")}
+              </Button>
             </div>
             {autoFixReport && (
               <div
@@ -548,7 +557,8 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                     element: tx(statics.collapseElement ?? ""),
                   })
                 : t("Gravity checks already exceed 100 % – no wind margin.")}{" "}
-              {t("Connections, foundations and fire are not verified – have a structural engineer confirm the design.")}
+              {t("Also checked: rafter, purlin and knee brace joints (EN 1995-1-1 section 8) with the local wind edge zones (EN 1991-1-4 Table 7.6), and the post footings in the soil (DIN 1054 Annex A).")}{" "}
+              {t("This pre-design does not replace a checkable structural calculation by a structural engineer. Fire, settlement, wall anchoring and second-order effects are not covered.")}
             </p>
             {statics.checks.map((c) => (
               <div
@@ -577,7 +587,10 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                     label={t("Section")}
                     value={`${c.section.width}×${c.section.height}`}
                   />
-                  <Stat label={t("Span")} value={`${c.span} mm`} />
+                  <Stat
+                    label={t(c.kind === "connection" ? "Fastener" : c.kind === "foundation" ? "Depth" : "Span")}
+                    value={c.span ? `${c.span} mm` : "–"}
+                  />
                   <Stat
                     label={t("Stress")}
                     value={`${Math.round(c.stressUtil * 100)} %`}
