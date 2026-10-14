@@ -1,8 +1,9 @@
-import type { FramingResult, PostRow, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection, Wall, WallId } from '@/types';
+import type { FramingResult, PostBaseType, PostRow, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection, Wall, WallId } from '@/types';
 import { DECKING, floorLayout, sanitizeParams, wallExtent } from '../framing';
 import { resolveScreenCladding } from '../framing/cladding';
 import { braceLayout, rowPostTop, type BracePlacement } from '../framing/structure';
 import { computeRoofLines, type RoofLines } from '../framing/roofLines';
+import { postBases } from '../joinery/anchors';
 import { clampFreePost, freePostRow, freePostTop } from '../freePosts';
 import { sectionLabel } from '../geometry';
 import {
@@ -18,6 +19,7 @@ import {
   WALL_FORCE_COEFFICIENT,
   type MaterialProps,
 } from './materials';
+import { H_ANCHOR, H_ANCHOR_MIN_FOOTING, postBaseCapacity } from './postBase';
 import { connectionChecks } from './connections';
 import { foundationChecks } from './foundations';
 import { EXCEPTIONAL_SNOW_FACTOR, siteSnowLoad } from './siteLoads';
@@ -463,6 +465,31 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
   const windDown = ctx.canopy.down * q; // kN/m² plan (vertical component of the roof pressure)
   const windUp = -ctx.canopy.up * q; // kN/m² plan suction
   const kmodShort = k.short;
+  const baseType: PostBaseType = loads.postBase ?? 'adjustable';
+  const bases = postBases(framing.members);
+  /**
+   * Sum of the base moment resistances (kNm) for wind along `axis` – the steel flanges and bolts
+   * yield in a ductile way, so all bases share the frame moment. weak = bases whose flanges are
+   * pushed sideways (turned for the bottom plates of a wall).
+   */
+  const baseMoment = (axis: Axis, type: PostBaseType): { sum: number; n: number; weak: number; governing: 'bolts' | 'flanges' } => {
+    // Posts outside walls get their base turned so the flanges bend in-plane in the only unbraced direction
+    const turnable = (postId: string) => ctx.lateral[OTHER[axis]].kind !== 'sway' && !framing.members.find((m) => m.id === postId)?.wallId;
+    const candidates =
+      bases.length > 0
+        ? bases.map((b) => ({ thickness: b.width, weak: !turnable(b.postId) && Math.abs(axis === 'x' ? b.flangeAxis.x : b.flangeAxis.z) > 0.5 }))
+        : Array.from({ length: ctx.totalPosts }, () => ({ thickness: pw, weak: false }));
+    let sum = 0;
+    let weak = 0;
+    let governing: 'bolts' | 'flanges' = 'flanges';
+    for (const c of candidates) {
+      const cap = postBaseCapacity(type, mat, c.thickness, kmodShort);
+      if (c.weak) weak++;
+      else if (cap.strongGoverning === 'bolts') governing = 'bolts';
+      sum += c.weak ? cap.momentWeak : cap.momentStrong;
+    }
+    return { sum, n: candidates.length, weak, governing };
+  };
 
   // ── Rafters ─────────────────────────────────────────────────────────────
   {
@@ -875,24 +902,45 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       });
     } else {
       const s = swayUtil[axis];
-      const status = statusOf(s.util);
       const canBrace = sys.rows.length > 0;
+      const hMax = Math.max(...postRows.map((r) => r.height));
+      const Mframe = (Hd * hMax) / 1000; // kNm, overturning moment all bases share
+      const pinned = baseType !== 'h-anchor';
+      const hBase = baseMoment(axis, 'h-anchor');
+      const baseUtil = pinned ? 0 : Mframe / Math.max(hBase.sum, 1e-6);
+      // A pinned base gives the post no fixity at all: the frame is a mechanism in this direction
+      const utilisation = pinned ? Math.max(s.util, 1) : Math.max(s.util, baseUtil);
+      const status = pinned ? 'fail' : statusOf(utilisation);
+      const brace = canBrace ? 'Enable knee braces in this direction (or close a wall in this plane)' : 'Close a wall in this plane (shear wall)';
+      let recommendation: string | undefined;
+      if (pinned) {
+        recommendation =
+          Mframe <= hBase.sum * OK_LIMIT && s.util <= OK_LIMIT
+            ? `Adjustable post bases are hinges. ${brace}, or use cast-in H post bases (Σ M_Rd = ${fmt(hBase.sum, 2)} kNm ≥ ${fmt(Mframe, 2)} kNm).`
+            : `Adjustable post bases are hinges. ${brace} – cast-in H post bases (Σ M_Rd = ${fmt(hBase.sum, 2)} kNm < ${fmt(Mframe, 2)} kNm) are not enough.`;
+      } else if (status !== 'ok') {
+        recommendation =
+          baseUtil >= s.util
+            ? `${brace} – the H post bases (Σ M_Rd = ${fmt(hBase.sum, 2)} kNm) cannot fix the posts.`
+            : canBrace
+              ? 'Enable knee braces in this direction (or close a wall in this plane), or use larger posts.'
+              : 'Close a wall in this plane (shear wall) or use larger posts.';
+      }
+      const mechanism = hBase.weak === hBase.n ? 'flanges bent sideways' : `${hBase.governing === 'bolts' ? 'couple of the 2 × M12 bolts' : 'flanges bent in their plane'}${hBase.weak > 0 ? `, ${hBase.weak} of them with flanges bent sideways` : ''}`;
+      const baseDetail = pinned
+        ? 'Adjustable post bases are hinges (no base moment) – the posts have no lateral stability in this direction.'
+        : `H post bases: H_d·h = ${fmt(Mframe, 2)} kNm vs. Σ M_Rd = ${fmt(hBase.sum, 2)} kNm of ${hBase.n} bases (${mechanism}) (${pct(baseUtil)}).`;
       checks.push({
         ...base,
         element: `Sway posts ${AXIS_LABEL[axis]}`,
         elementDe: 'Eingespannte Pfosten',
         section: timber.post,
-        span: Math.round(Math.max(...postRows.map((r) => r.height))),
+        span: Math.round(hMax),
         stressUtil: s.util,
-        utilisation: s.util,
+        utilisation,
         status,
-        recommendation:
-          status !== 'ok'
-            ? canBrace
-              ? 'Enable knee braces in this direction (or close a wall in this plane), or use larger posts.'
-              : 'Close a wall in this plane (shear wall) or use larger posts.'
-            : `Requires moment-fixed post bases (H-anchors ≥ 600 mm embedded or cast-in steel shoes) – ${kn(Hd / ctx.totalPosts)} shear and ${fmt((Hd / ctx.totalPosts) * (Math.max(...postRows.map((r) => r.height)) / 1000), 2)} kNm per base.`,
-        detail: `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)}. No knee braces or boarded wall act in this direction – the posts cantilever from their bases (buckling length 2·h). ${s.detail}`,
+        recommendation,
+        detail: `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)}. No knee braces or boarded wall act in this direction – the posts cantilever from their bases (buckling length 2·h). ${s.detail} ${baseDetail}`,
       });
     }
   }
@@ -977,6 +1025,23 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       }
       return undefined;
     })();
+    // H post base: the cast-in flanges need footing depth, the post has to fit between the flanges,
+    // and the two bolts hand the net tension down to the footing
+    const hAnchor = baseType === 'h-anchor';
+    const tensionRd = hAnchor ? Math.min(...(bases.length > 0 ? bases.map((b) => b.width) : [pw]).map((t) => postBaseCapacity('h-anchor', mat, t, kmodShort).tension)) : 0;
+    const shallow = hAnchor && footingDepth < H_ANCHOR_MIN_FOOTING;
+    const tooWide = hAnchor && (bases.length > 0 ? bases.some((b) => b.width > H_ANCHOR.clearWidth) : pw > H_ANCHOR.clearWidth);
+    const overTension = hAnchor && worstNet > tensionRd;
+    const baseIssues = [
+      shallow ? `The H post base needs a concrete footing at least ${H_ANCHOR_MIN_FOOTING} mm deep (${H_ANCHOR.concreteEmbed} mm cast in).` : '',
+      tooWide ? `Posts wider than ${H_ANCHOR.clearWidth} mm do not fit between the flanges of the H post base – use 140 mm posts.` : '',
+      overTension ? `Net tension ${kn(worstNet)} exceeds the 2 × M12 bolts of the H post base (${kn(tensionRd)}) – add footing weight or knee braces / roof ties.` : '',
+    ].filter(Boolean);
+    const baseNote = hAnchor
+      ? ` H post base cast ${H_ANCHOR.concreteEmbed} mm into the footing: its weight counts in full${worstUtil > 1 ? `; 2 × M12 bolts carry ${kn(tensionRd)} tension (${pct(worstNet / tensionRd)}).` : '.'}`
+      : footingG > 0
+        ? ' The footing only counts when the post base is cast into it (H-anchor or threaded rods).'
+        : '';
     const parts = `roof + purlin ${kn(GAMMA_G_FAVOURABLE * worstRow.qvG * spanM)}, post ${kn(GAMMA_G_FAVOURABLE * worstPostG)}${footing ? `, concrete footing ${footing} ${kn(GAMMA_G_FAVOURABLE * footingG)}` : ''}`;
     checks.push({
       id: 'uplift',
@@ -992,12 +1057,17 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       deflection: 0,
       deflectionLimit: 0,
       utilisation: worstUtil,
-      status: worstUtil > 1 ? 'warning' : 'ok',
+      status: worstUtil > 1 || baseIssues.length > 0 ? 'warning' : 'ok',
       recommendation:
-        worstUtil > 1
-          ? `Every post anchor and purlin-to-post joint must resist ${kn(worstNet)} tension (net uplift). Use tension-rated post shoes and screw / bolt the purlins and rafters down.${bigger ? ` Or set the posts in concrete footings of at least Ø${bigger.d} × ${bigger.depth} mm.` : ''}`
-          : undefined,
-      detail: `Canopy suction c_f = ${fmt(ctx.canopy.up, 2)} → ${fmt(windUp, 2)} kN/m² plan (q_p = ${fmt(q, 2)} kN/m²). ${worstRow.row.label}: uplift 1.5·W = ${kn(GAMMA_Q * worstRow.qvUp * spanM)} vs. dead load 1.0·G = ${kn(worstG)} per post (${parts}) (${pct(worstUtil)}). ${worstUtil > 1 ? `Net ${kn(worstNet)} tension per post.` : 'Dead load holds the roof down; anchors take shear only.'}${footing ? ' The footing only counts when the post base is cast into it (H-anchor or threaded rods).' : ''} Light coverings (${ROOF_COVERING_LOAD[loads.roofCovering].label}) are governed by uplift, not snow.`,
+        [
+          ...baseIssues,
+          worstUtil > 1
+            ? `Every post anchor and purlin-to-post joint must resist ${kn(worstNet)} tension (net uplift). Use tension-rated post shoes and screw / bolt the purlins and rafters down.${bigger ? ` Or set the posts in concrete footings of at least Ø${bigger.d} × ${bigger.depth} mm.` : ''}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ') || undefined,
+      detail: `Canopy suction c_f = ${fmt(ctx.canopy.up, 2)} → ${fmt(windUp, 2)} kN/m² plan (q_p = ${fmt(q, 2)} kN/m²). ${worstRow.row.label}: uplift 1.5·W = ${kn(GAMMA_Q * worstRow.qvUp * spanM)} vs. dead load 1.0·G = ${kn(worstG)} per post (${parts}) (${pct(worstUtil)}). ${worstUtil > 1 ? `Net ${kn(worstNet)} tension per post.` : 'Dead load holds the roof down; anchors take shear only.'}${baseNote} Light coverings (${ROOF_COVERING_LOAD[loads.roofCovering].label}) are governed by uplift, not snow.`,
     });
   }
 

@@ -112,6 +112,13 @@ export default {
   'Structure {length} × {width} mm, H1 {frontHeight} / H2 {rearHeight} mm · {strengthClass} · generated {date}':
     { uk: 'Конструкція {length} × {width} мм, H1 {frontHeight} / H2 {rearHeight} мм · {strengthClass} · створено {date}',
       de: 'Konstruktion {length} × {width} mm, H1 {frontHeight} / H2 {rearHeight} mm · {strengthClass} · erstellt am {date}', pl: 'Konstrukcja {length} × {width} mm, H1 {frontHeight} / H2 {rearHeight} mm · {strengthClass} · wygenerowano {date}' },
+  'Stock boards, either': { uk: 'Стандартні дошки, або', de: 'Handelslängen, entweder', pl: 'Deski handlowe, albo' },
+  '{length} m – {count} pcs (offcut {waste} %)': {
+    uk: '{length} м – {count} шт (обрізки {waste} %)',
+    de: '{length} m – {count} Stk (Verschnitt {waste} %)',
+    pl: '{length} m – {count} szt. (odpad {waste} %)',
+  },
+  or: { uk: 'або', de: 'oder', pl: 'albo' },
   'Bill of materials': { uk: 'Специфікація матеріалів', de: 'Stückliste', pl: 'Zestawienie materiałów' },
   Pieces: { uk: 'Штук', de: 'Stück', pl: 'Sztuki' },
   Area: { uk: 'Площа', de: 'Fläche', pl: 'Powierzchnia' },

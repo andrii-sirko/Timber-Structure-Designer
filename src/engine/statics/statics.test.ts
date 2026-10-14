@@ -66,18 +66,19 @@ test('wind pressure scales the lateral checks and a hurricane fails the structur
 });
 
 test('collapse gust speed is where the first check reaches 100 %', () => {
-  const s = statics(project());
+  // closed side wall: the default carport has no bracing across (Z)
+  const s = statics(project({}, { left: true }));
   assert.ok(s.collapseGustSpeed !== undefined && s.collapseGustSpeed > 20 && s.collapseGustSpeed < 150, String(s.collapseGustSpeed));
-  const at = statics(project({ loads: { ...createDefaultProject().params.loads, windLoad: gustSpeedToPressure(s.collapseGustSpeed! + 1) } }));
+  const at = statics(project({ loads: { ...createDefaultProject().params.loads, windLoad: gustSpeedToPressure(s.collapseGustSpeed! + 1) } }, { left: true }));
   // joints and footings are sized afterwards and stay out of the collapse search
   const member = (c: StaticsCheck) => c.kind !== 'uplift' && c.kind !== 'connection' && c.kind !== 'foundation';
   assert.ok(at.checks.some((c) => member(c) && c.utilisation >= 1));
-  const below = statics(project({ loads: { ...createDefaultProject().params.loads, windLoad: gustSpeedToPressure(s.collapseGustSpeed! - 1) } }));
+  const below = statics(project({ loads: { ...createDefaultProject().params.loads, windLoad: gustSpeedToPressure(s.collapseGustSpeed! - 1) } }, { left: true }));
   assert.ok(below.checks.every((c) => !member(c) || c.utilisation < 1));
 });
 
 test('uplift is an advisory: it never drives the overall status', () => {
-  const s = statics(project());
+  const s = statics(project({}, { left: true }));
   assert.equal(s.checks.find((c) => c.id === 'uplift')!.status, 'warning');
   assert.equal(s.status, 'ok');
 });
@@ -155,4 +156,28 @@ test('a free post between two rafters carries nothing and is flagged', () => {
 test('freePostTributary: continuous-beam share inside, full overhang at the ends', () => {
   assert.equal(freePostTributary(1000, [0, 1000, 3000], -500, 3500), 0.625 * 1000 + 0.625 * 2000);
   assert.equal(freePostTributary(3000, [0, 3000], -500, 3500), 0.625 * 3000 + 500);
+});
+
+const sway = (p: ProjectState) => statics(p).checks.find((c) => c.element.startsWith('Sway posts'))!;
+
+test('adjustable post bases are hinges: unbraced posts are a mechanism', () => {
+  const check = sway(project({ loads: { ...createDefaultProject().params.loads, postBase: 'adjustable' } }));
+  assert.equal(check.status, 'fail');
+  assert.match(check.detail, /hinges/);
+});
+
+test('cast-in H post bases fix the posts up to the summed base moment resistance', () => {
+  const calm = { ...createDefaultProject().params.loads, postBase: 'h-anchor' as const, windLoad: 0.2 };
+  const ok = sway(project({ loads: calm }));
+  assert.equal(ok.status, 'ok');
+  assert.match(ok.detail, /Σ M_Rd = \d/);
+  const stormy = sway(project({ loads: { ...calm, windLoad: 1.2 } }));
+  assert.ok(stormy.utilisation > ok.utilisation);
+  assert.equal(stormy.status, 'fail');
+});
+
+test('H post bases need a footing deep enough to cast them in', () => {
+  const shallow = byId(project({ loads: { ...createDefaultProject().params.loads, postBase: 'h-anchor', postFootingDepth: 300 } }), 'uplift');
+  assert.equal(shallow.status, 'warning');
+  assert.match(shallow.recommendation ?? '', /at least 450 mm deep/);
 });

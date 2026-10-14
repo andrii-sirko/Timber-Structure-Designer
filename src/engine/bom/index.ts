@@ -1,5 +1,6 @@
-import type { BomLine, BomResult, CutListItem, FixtureLine, FramingResult, MaterialItem, Member, MemberCategory, Opening, ProjectState } from '@/types';
+import type { BomLine, BomResult, StockBoardOption, CutListItem, FixtureLine, FramingResult, MaterialItem, Member, MemberCategory, Opening, ProjectState } from '@/types';
 import { DECKING } from '../framing/floor';
+import { claddingBoards } from '../framing/cladding';
 import { INSULATION } from '../framing/insulation';
 import { hasWallPosts } from '../framing/wallFrame';
 import { findPreset, frameSizeFor, openingMaterials, presetMatches } from '../framing/openingCatalog';
@@ -25,6 +26,10 @@ const BOARD_THICKNESS_M = 0.02;
 const BOARD_DENSITY = 500;
 const WASTE_FACTOR = 1.1;
 const INSULATION_WASTE = 1.05;
+/** Standard cladding board lengths sold (mm) */
+export const STOCK_BOARD_LENGTHS = [4000, 6000] as const;
+/** Saw kerf + end trim allowed per cut piece (mm) */
+const CUT_ALLOWANCE = 5;
 
 export function computeBom(project: ProjectState, framing: FramingResult): { bom: BomResult; cutList: CutListItem[] } {
   const density = MATERIALS[project.params.timber.strengthClass].density;
@@ -59,20 +64,7 @@ export function computeBom(project: ProjectState, framing: FramingResult): { bom
   );
 
   // ── Sheathing & roofing ───────────────────────────────────────────────
-  const claddingArea = framing.panels.filter((p) => p.kind === 'cladding').reduce((s, p) => s + p.areaM2, 0);
-  if (claddingArea > 0) {
-    const vol = claddingArea * BOARD_THICKNESS_M * WASTE_FACTOR;
-    lines.push({
-      category: 'sheathing',
-      label: 'Wall cladding boards 20 mm',
-      labelDe: 'Wandschalung',
-      count: framing.panels.filter((p) => p.kind === 'cladding').length,
-      totalLengthM: 0,
-      volumeM3: vol,
-      areaM2: claddingArea,
-      massKg: vol * BOARD_DENSITY,
-    });
-  }
+  for (const line of claddingLines(framing)) lines.push(line);
   const roofPanel = framing.panels.find((p) => p.kind === 'roof');
   if (roofPanel) {
     const covering = ROOF_COVERING_LOAD[project.params.loads.roofCovering];
@@ -112,11 +104,77 @@ export function computeBom(project: ProjectState, framing: FramingResult): { bom
     fixtures: collectFixtures(project),
     materials: collectMaterials(project, framing),
     totalVolumeM3: lines.reduce((s, l) => s + l.volumeM3, 0),
-    totalLengthM: lines.reduce((s, l) => s + l.totalLengthM, 0),
+    totalLengthM: lines.reduce((s, l) => s + (l.section ? l.totalLengthM : 0), 0),
     totalMassKg: lines.reduce((s, l) => s + l.massKg, 0),
   };
 
   return { bom, cutList: buildCutList(framing.members) };
+}
+
+/**
+ * Wall cladding, one line per board width: the boards as fitted (pieces cut at openings and sloped tops
+ * count separately) and their running metres. Closed boarding is laid out like spaced boarding without the gap.
+ */
+function claddingLines(framing: FramingResult): BomLine[] {
+  const byWidth = new Map<number, BomLine>();
+  const pieces = new Map<number, number[]>();
+  for (const panel of framing.panels) {
+    if (panel.kind !== 'cladding' || !panel.cladding || !panel.outline) continue;
+    const { boardWidth, orientation } = panel.cladding;
+    const boards = panel.boards ?? claddingBoards(panel.outline.outer, panel.outline.holes, panel.cladding);
+    const along = orientation === 'horizontal' ? 'u' : 'v';
+    let line = byWidth.get(boardWidth);
+    if (!line) {
+      line = {
+        category: 'sheathing',
+        label: `Wall cladding boards 20 × ${boardWidth} mm`,
+        labelDe: `Wandschalung 20 × ${boardWidth} mm`,
+        count: 0,
+        totalLengthM: 0,
+        volumeM3: 0,
+        areaM2: 0,
+        massKg: 0,
+      };
+      byWidth.set(boardWidth, line);
+    }
+    const lengths = boards.map((b) => Math.max(...b.map((p) => p[along])) - Math.min(...b.map((p) => p[along])));
+    pieces.set(boardWidth, [...(pieces.get(boardWidth) ?? []), ...lengths]);
+    line.count += boards.length;
+    line.totalLengthM += lengths.reduce((s, l) => s + l, 0) / 1000;
+    line.areaM2 = (line.areaM2 ?? 0) + panel.areaM2;
+  }
+  return [...byWidth.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([width, line]) => {
+      const vol = (line.areaM2 ?? 0) * BOARD_THICKNESS_M * WASTE_FACTOR;
+      const stockBoards = STOCK_BOARD_LENGTHS.map((len) => stockBoardsFor(pieces.get(width) ?? [], len));
+      return { ...line, volumeM3: vol, massKg: vol * BOARD_DENSITY, stockBoards };
+    });
+}
+
+/**
+ * Stock boards of one length needed for the pieces (first-fit decreasing, CUT_ALLOWANCE per piece).
+ * A piece longer than the stock board is joined from full boards plus the rest.
+ */
+export function stockBoardsFor(pieceLengths: number[], stockLength: number): StockBoardOption {
+  let count = 0;
+  const rest: number[] = [];
+  for (const len of pieceLengths) {
+    const full = Math.floor(len / stockLength);
+    count += full;
+    const remainder = len - full * stockLength;
+    if (remainder > 0.5) rest.push(Math.min(remainder + CUT_ALLOWANCE, stockLength));
+  }
+  const free: number[] = [];
+  for (const len of rest.sort((a, b) => b - a)) {
+    const i = free.findIndex((f) => f >= len);
+    if (i >= 0) free[i] -= len;
+    else free.push(stockLength - len);
+  }
+  count += free.length;
+  const used = pieceLengths.reduce((s, l) => s + l, 0);
+  const bought = count * stockLength;
+  return { lengthMm: stockLength, count, wastePct: bought > 0 ? Math.round((1 - used / bought) * 1000) / 10 : 0 };
 }
 
 /** Bulk materials that are not framing timber: roof battens & membranes, trims, floor DPC and the paving build-up. */

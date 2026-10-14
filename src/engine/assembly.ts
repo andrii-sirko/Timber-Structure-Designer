@@ -68,7 +68,7 @@ const STAGES: Record<AssemblyStage, StageInfo> = {
   posts: {
     title: 'Posts – {where}',
     instruction: 'Set out the post positions, fix the post bases, then stand the posts plumb and hold each one with two temporary diagonal props.',
-    hardwareIds: ['post-base', 'anchor', 'post-bolt'],
+    hardwareIds: ['post-base', 'post-base-h', 'anchor', 'post-bolt'],
   },
   purlin: {
     title: 'Purlin – {where}',

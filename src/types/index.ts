@@ -96,6 +96,8 @@ export interface LoadSettings {
   postFootingDepth?: Millimeters;
   /** Diameter of the cylindrical post footing (mm) */
   postFootingDiameter?: Millimeters;
+  /** Post base hardware, missing = 'adjustable' */
+  postBase?: PostBaseType;
   /** Snow load zone (DIN EN 1991-1-3/NA); with `altitude` it derives snowLoad, missing = s_k typed in directly */
   snowZone?: SnowZone;
   /** Site altitude above sea level (m) */
@@ -113,6 +115,12 @@ export type SnowZone = '1' | '1a' | '2' | '2a' | '3';
  * silt / clay of stiff or semi-firm consistency (DIN 1054 Annex A bearing tables).
  */
 export type SoilType = 'non-cohesive' | 'cohesive-stiff' | 'cohesive-semi-firm';
+
+/**
+ * adjustable = height-adjustable post base on a heavy-duty anchor (pinned, no base moment);
+ * h-anchor = H post base 141 mm, flat steel 800/80/8, cast 400 mm into the footing (partly moment-fixed).
+ */
+export type PostBaseType = 'adjustable' | 'h-anchor';
 
 export type OpeningType = 'door' | 'window' | 'passage';
 
@@ -773,6 +781,16 @@ export interface BomLine {
   areaM2?: number;
   /** Estimated timber mass in kg (density from strength class) */
   massKg: number;
+  /** Cladding lines: stock boards to buy for the pieces, one option per stock length */
+  stockBoards?: StockBoardOption[];
+}
+
+/** Stock boards of one length that the cladding pieces are cut from. */
+export interface StockBoardOption {
+  lengthMm: Millimeters;
+  count: number;
+  /** Offcut left over, % of the bought length */
+  wastePct: number;
 }
 
 /** A door or window product (Tür / Fenster) to be bought and fitted into a rough opening. */

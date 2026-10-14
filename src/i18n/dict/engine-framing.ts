@@ -122,7 +122,7 @@ export default {
   'Floor joists / sleepers': { uk: 'Лаги підлоги', de: 'Fußbodenbalken / Lagerhölzer', pl: 'Legary podłogi / legary na płycie' },
 
   // ── Sheathing / roofing / flooring BOM lines (bom/index.ts computeBom) ─────────────────────
-  'Wall cladding boards 20 mm': { uk: 'Дошки обшивки стін 20 мм', de: 'Wandschalungsbretter 20 mm', pl: 'Deski okładziny ściennej 20 mm' },
+  'Wall cladding boards 20 × {width} mm': { uk: 'Дошки обшивки стін 20 × {width} мм', de: 'Wandschalungsbretter 20 × {width} mm', pl: 'Deski okładziny ściennej 20 × {width} mm' },
   'Roof: {covering}': { uk: 'Дах: {covering}', de: 'Dach: {covering}', pl: 'Dach: {covering}' },
   'Roof: {covering} on 22 mm deck': { uk: 'Дах: {covering} на настилі 22 мм', de: 'Dach: {covering} auf 22 mm Schalung', pl: 'Dach: {covering} na deskowaniu 22 mm' },
   'Floor deck: {label}': { uk: 'Підлогове покриття: {label}', de: 'Fußbodenbelag: {label}', pl: 'Poszycie podłogi: {label}' },

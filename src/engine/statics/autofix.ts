@@ -1,6 +1,7 @@
 import type { ProjectState, StaticsCheck, StaticsResult, StaticsStatus, StructureParams, TimberKey, TimberSection } from '@/types';
 import { buildFramingCanonical, canonicalProject } from '../framing';
 import { BRACE_SECTIONS, computeStatics, STANDARD_DEPTHS } from './index';
+import { H_ANCHOR_MIN_FOOTING } from './postBase';
 import { findSmallestValidSection, findSmallestValidSquareSize } from './costOptimizationHelpers';
 
 /**
@@ -135,6 +136,14 @@ function applyFix(params: StructureParams, check: StaticsCheck): StructureParams
     }
     // sway posts: knee braces act only in the purlin-row direction
     if (!params.braces && check.element.includes(params.roofScheme === 'sloped-purlins' ? '(Z)' : '(X)')) return { ...params, braces: true };
+    // pinned adjustable bases cannot fix a cantilever post: cast-in H post bases into a footing deep enough for them
+    if (check.element.startsWith('Sway posts') && params.loads.postBase !== 'h-anchor') {
+      const { loads } = params;
+      return {
+        ...params,
+        loads: { ...loads, postBase: 'h-anchor', postFootingDepth: Math.max(loads.postFootingDepth ?? 0, H_ANCHOR_MIN_FOOTING), postFootingDiameter: Math.max(loads.postFootingDiameter ?? 0, 200) },
+      };
+    }
     const bigger = locked('post') ? undefined : nextUp(POST_SIZES, Math.min(timber.post.width, timber.post.height));
     if (bigger) return { ...params, timber: { ...timber, post: { width: bigger, height: bigger } } };
     return addPosts(params);
@@ -156,6 +165,9 @@ function diffParams(before: StructureParams, after: StructureParams): AutoFixCha
   push('Knee braces (Kopfbänder)', sec(before.timber.brace), sec(after.timber.brace));
   push('Knee braces enabled', before.braces ? 'yes' : 'no', after.braces ? 'yes' : 'no');
   push('Brace direction', before.braceDirection, after.braceDirection);
+  const baseLabel = (p: StructureParams) => (p.loads.postBase === 'h-anchor' ? 'H post base, cast-in' : 'Adjustable post base');
+  push('Post base', baseLabel(before), baseLabel(after));
+  push('Post footing', `Ø${before.loads.postFootingDiameter ?? 0} × ${before.loads.postFootingDepth ?? 0} mm`, `Ø${after.loads.postFootingDiameter ?? 0} × ${after.loads.postFootingDepth ?? 0} mm`);
   push('Max rafter spacing', `${before.maxRafterSpacing} mm`, `${after.maxRafterSpacing} mm`);
   push('Max rafter length', `${before.maxRafterLength} mm`, `${after.maxRafterLength} mm`);
   push('Max post spacing', `${before.maxPostSpacing} mm`, `${after.maxPostSpacing} mm`);

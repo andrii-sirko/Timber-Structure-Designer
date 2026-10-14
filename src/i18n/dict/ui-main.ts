@@ -56,6 +56,8 @@ export default {
   '→ {n} pcs @ {spacing} mm': { uk: '→ {n} шт. @ {spacing} мм', de: '→ {n} Stk. @ {spacing} mm', pl: '→ {n} szt. co {spacing} mm' },
   'Max bearer spacing': { uk: 'Макс. крок опорних балок', de: 'Max. Unterzugabstand', pl: 'Maks. rozstaw podciągów' },
   'Post footing depth': { uk: 'Глибина бетонування стовпів', de: 'Tiefe Pfostenfundament', pl: 'Głębokość fundamentu słupa' },
+  'Adjustable post base (pinned)': { uk: 'Регульована опора стовпа (шарнір)', de: 'Pfostenträger höhenverstellbar (gelenkig)', pl: 'Regulowana kotwa słupa (przegub)' },
+  'H post base 141 mm, 800/80/8, cast-in 400 mm': { uk: 'H-опора 141 mm, 800/80/8, бетонування 400 mm', de: 'H-Pfostenträger 141 mm, 800/80/8, 400 mm einbetoniert', pl: 'Kotwa H 141 mm, 800/80/8, zabetonowana 400 mm' },
   'Post footing diameter': { uk: 'Діаметр бетонування стовпів', de: 'Durchmesser Pfostenfundament', pl: 'Średnica fundamentu słupa' },
   'Posts cast into concrete – the footing weight counts against roof uplift. 0 = no footing.': {
     uk: 'Стовпи забетоновані – вага бетону працює проти відриву даху. 0 = без бетонування.',

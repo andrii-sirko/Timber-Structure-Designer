@@ -41,8 +41,12 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   };
 
   // Post bases are needed in both modes (timber must not touch concrete)
-  hw('post-base', 'Adjustable post base, hot-dip galvanised', 'Pfostenträger höhenverstellbar', `for ${timber.post.width}×${timber.post.height} mm`, nPosts);
-  hw('anchor', 'Heavy-duty concrete anchor', 'Schwerlastanker', 'M16 × 145 mm', nPosts, '1 per post base, min. 100 mm embedment');
+  if (params.loads.postBase === 'h-anchor') {
+    hw('post-base-h', 'H post base, cast-in, hot-dip galvanised', 'H-Pfostenträger einbetonierbar', '141 mm, 800/80/8 mm, post embedment 400 mm', nPosts, '400 mm cast into the footing');
+  } else {
+    hw('post-base', 'Adjustable post base, hot-dip galvanised', 'Pfostenträger höhenverstellbar', `for ${timber.post.width}×${timber.post.height} mm`, nPosts);
+    hw('anchor', 'Heavy-duty concrete anchor', 'Schwerlastanker', 'M16 × 145 mm', nPosts, '1 per post base, min. 100 mm embedment');
+  }
   hw('post-bolt', 'Hex bolt with nut & washers', 'Sechskantschraube', `M12 × ${timber.post.width + 40} mm`, nPosts * 2, '2 per post base');
 
   if (params.connectionMode === 'hardware') {

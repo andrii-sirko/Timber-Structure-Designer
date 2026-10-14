@@ -3,6 +3,7 @@ import test from 'node:test';
 import type { ProjectState, RoofDirection, WallCladding } from '@/types';
 import { buildModel } from './index.ts';
 import { claddingBoards } from './framing/cladding.ts';
+import { stockBoardsFor } from './bom/index.ts';
 import { normalizeProject, PROJECT_TEMPLATES } from '../store/defaults.ts';
 import { hasTranslation } from '../i18n/core.ts';
 
@@ -72,6 +73,32 @@ test('a gap turns the wall cladding into separate boards on every roof direction
     assert.ok(o.areaM2 < c.areaM2 * 0.6 && o.areaM2 > c.areaM2 * 0.4, `${dir}: half the wall is boards`);
     assert.equal(o.cladding?.orientation, 'horizontal');
   }
+});
+
+test('the BOM counts cladding boards and their running metres per board width', () => {
+  const model = buildModel(withCladding({ orientation: 'horizontal', boardWidth: 100, gap: 0 }));
+  const sheathing = model.bom.lines.filter((l) => l.category === 'sheathing');
+  const narrow = sheathing.find((l) => l.label === 'Wall cladding boards 20 × 100 mm')!;
+  const front = model.framing.panels.find((p) => p.kind === 'cladding' && p.wallId === 'front')!;
+  const boards = claddingBoards(front.outline!.outer, front.outline!.holes, front.cladding!);
+  assert.equal(narrow.count, boards.length);
+  // closed boarding: running metres × board width ≈ the wall face (sloped tops add a little)
+  assert.ok(Math.abs(narrow.totalLengthM * 0.1 - narrow.areaM2!) < narrow.areaM2! * 0.1, `${narrow.totalLengthM} m vs ${narrow.areaM2} m²`);
+  assert.ok(sheathing.some((l) => l.label === 'Wall cladding boards 20 × 120 mm' && l.count > 0 && l.totalLengthM > 0), 'other walls keep the default 120 mm boards');
+  assert.equal(model.bom.totalLengthM, model.bom.lines.reduce((s, l) => s + (l.section ? l.totalLengthM : 0), 0));
+  assert.ok(hasTranslation(narrow.label, 'uk'));
+});
+
+test('cladding pieces are packed into 4 m and 6 m stock boards', () => {
+  // 1.9 m pieces: two per 4 m board (with the cut allowance), three per 6 m board
+  assert.deepEqual(stockBoardsFor([1900, 1900, 1900, 1900, 1900, 1900], 4000), { lengthMm: 4000, count: 3, wastePct: 5 });
+  assert.equal(stockBoardsFor([1900, 1900, 1900, 1900, 1900, 1900], 6000).count, 2);
+  // a 7 m piece is joined: one full 4 m board + 3 m, and the short piece fits the 1 m left of the 3 m cut
+  assert.equal(stockBoardsFor([7000, 900], 4000).count, 2);
+  assert.equal(stockBoardsFor([], 6000).count, 0);
+  const line = buildModel(shed()).bom.lines.find((l) => l.category === 'sheathing')!;
+  assert.deepEqual(line.stockBoards?.map((o) => o.lengthMm), [4000, 6000]);
+  for (const o of line.stockBoards!) assert.ok(o.count * o.lengthMm >= line.totalLengthM * 1000, `${o.lengthMm}: enough length bought`);
 });
 
 test('the cladding layout survives save / load and is clamped', () => {

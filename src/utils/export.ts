@@ -2,7 +2,7 @@ import type { jsPDF } from 'jspdf';
 import { getLang, t, tx } from '@/i18n';
 import { roundMm } from '@/engine/geometry';
 import { embedUnicodeFont, UNICODE_FONT } from '@/utils/pdfFont';
-import type { CutListItem, DerivedModel, PricingLine, PricingResult, ProjectState } from '@/types';
+import type { CutListItem, DerivedModel, PricingLine, PricingResult, ProjectState, StockBoardOption } from '@/types';
 import { renderFinished } from '@/utils/assemblyRender';
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -14,6 +14,12 @@ function downloadBlob(blob: Blob, filename: string): void {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** "Stock boards: 4 m – 70 pcs (offcut 6 %) · 6 m – 46 pcs (offcut 4 %)" */
+export function stockBoardsText(options: StockBoardOption[]): string {
+  const parts = options.map((o) => t('{length} m – {count} pcs (offcut {waste} %)', { length: o.lengthMm / 1000, count: o.count, waste: o.wastePct }));
+  return `${t('Stock boards, either')}: ${parts.join(` ${t('or')} `)}`;
 }
 
 export function safeName(name: string): string {
@@ -159,14 +165,19 @@ export async function exportCutListPdf(project: ProjectState, model: DerivedMode
     startY: afterCut + 13,
     head: [[t('Category'), t('Section'), t('Pieces'), t('Length'), t('Area'), t('Volume'), t('Mass')]],
     body: [
-      ...bom.lines.map((l) => [
-        nameCell(l.label, l.labelDe),
-        l.section ? `${l.section.width}×${l.section.height}` : '–',
-        l.count,
-        l.totalLengthM ? `${l.totalLengthM.toFixed(2)} m` : '–',
-        l.areaM2 ? `${l.areaM2.toFixed(2)} m²` : '–',
-        `${l.volumeM3.toFixed(3)} m³`,
-        `${Math.round(l.massKg)} kg`,
+      ...bom.lines.flatMap((l) => [
+        [
+          nameCell(l.label, l.labelDe),
+          l.section ? `${l.section.width}×${l.section.height}` : '–',
+          l.count,
+          l.totalLengthM ? `${l.totalLengthM.toFixed(2)} m` : '–',
+          l.areaM2 ? `${l.areaM2.toFixed(2)} m²` : '–',
+          `${l.volumeM3.toFixed(3)} m³`,
+          `${Math.round(l.massKg)} kg`,
+        ],
+        ...(l.stockBoards?.length
+          ? [[{ content: stockBoardsText(l.stockBoards), colSpan: 7, styles: { fontSize: 7, textColor: [90, 90, 90] as [number, number, number] } }]]
+          : []),
       ]),
       [t('Total'), '', '', `${bom.totalLengthM.toFixed(1)} m`, '', `${bom.totalVolumeM3.toFixed(3)} m³`, `${Math.round(bom.totalMassKg)} kg`],
     ],

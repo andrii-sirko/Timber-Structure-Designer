@@ -32,6 +32,7 @@ test('keeps the current section when no smaller section passes', () => {
 
 test('cost optimization keeps a locked post section and still shrinks the unlocked ones', () => {
   const project = createDefaultProject();
+  project.walls.left.closed = true; // the default carport has no bracing across (Z)
   project.params.timber = { ...project.params.timber, post: { width: 200, height: 200 }, rafter: { width: 80, height: 280 } };
 
   const free = costOptimizeStatics(project);

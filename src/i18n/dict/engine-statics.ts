@@ -281,11 +281,6 @@ export default {
     de: 'Schließen Sie eine Wand in dieser Ebene (Wandscheibe) oder verwenden Sie größere Pfosten.',
     pl: 'Zamknij ścianę w tej płaszczyźnie (tarcza) lub użyj większych słupów.',
   },
-  'Requires moment-fixed post bases (H-anchors ≥ 600 mm embedded or cast-in steel shoes) – {shear} shear and {moment} kNm per base.': {
-    uk: 'Потребує жорстко защемлених опор стовпів (H-анкери завглибшки ≥ 600 mm або залиті сталеві черевики) – {shear} зсуву та {moment} kNm на опору.',
-    de: 'Erfordert biegesteife Pfostenfüße (H-Anker ≥ 600 mm einbetoniert oder eingegossene Stahlschuhe) – {shear} Schub und {moment} kNm je Fuß.',
-    pl: 'Wymaga utwierdzonych stóp słupów (kotwy H zabetonowane na ≥ 600 mm lub stalowe stopy wbetonowane) – {shear} ścinania i {moment} kNm na stopę.',
-  },
   // Wk/Hd end in a literal " kN." (not just a bare placeholder before the final period): with nothing
   // bounding a trailing placeholder, the template engine's greedy match will otherwise swallow whole
   // unrelated sentences that happen to start the same way (e.g. the bracing/boarded-wall detail texts
@@ -457,4 +452,79 @@ export default {
   'Bitumen shingles on OSB': { uk: 'Бітумна черепиця на ОСП', de: 'Bitumenschindeln auf OSB', pl: 'Gont bitumiczny na OSB' },
   'Concrete / clay tiles': { uk: 'Бетонна / керамічна черепиця', de: 'Beton-/Tondachziegel', pl: 'Dachówki betonowe / ceramiczne' },
   'Extensive green roof': { uk: 'Екстенсивний зелений дах', de: 'Extensive Dachbegrünung', pl: 'Ekstensywny zielony dach' },
+  // ── Post bases ────────────────────────────────────────────────────────────────────────
+  'Adjustable post bases are hinges.': { uk: 'Регульовані опори стовпів – шарніри.', de: 'Höhenverstellbare Pfostenträger sind Gelenke.', pl: 'Regulowane kotwy słupów są przegubami.' },
+  'Enable knee braces in this direction (or close a wall in this plane)': {
+    uk: 'Увімкніть підкоси в цьому напрямку (або зашийте стіну в цій площині)',
+    de: 'Aktivieren Sie Kopfbänder in dieser Richtung (oder schließen Sie eine Wand in dieser Ebene)',
+    pl: 'Włącz miecze w tym kierunku (lub zamknij ścianę w tej płaszczyźnie)',
+  },
+  'Close a wall in this plane (shear wall)': { uk: 'Зашийте стіну в цій площині (стіна-діафрагма)', de: 'Schließen Sie eine Wand in dieser Ebene (Wandscheibe)', pl: 'Zamknij ścianę w tej płaszczyźnie (tarcza)' },
+  '{brace}, or use cast-in H post bases (Σ M_Rd = {rd} kNm ≥ {m} kNm).': {
+    uk: '{brace} або використайте забетоновані H-опори стовпів (Σ M_Rd = {rd} kNm ≥ {m} kNm).',
+    de: '{brace} oder verwenden Sie einbetonierte H-Pfostenträger (Σ M_Rd = {rd} kNm ≥ {m} kNm).',
+    pl: '{brace} albo użyj zabetonowanych kotew H (Σ M_Rd = {rd} kNm ≥ {m} kNm).',
+  },
+  '{brace} – cast-in H post bases (Σ M_Rd = {rd} kNm < {m} kNm) are not enough.': {
+    uk: '{brace} – забетонованих H-опор стовпів (Σ M_Rd = {rd} kNm < {m} kNm) недостатньо.',
+    de: '{brace} – einbetonierte H-Pfostenträger (Σ M_Rd = {rd} kNm < {m} kNm) reichen nicht aus.',
+    pl: '{brace} – zabetonowane kotwy H (Σ M_Rd = {rd} kNm < {m} kNm) nie wystarczą.',
+  },
+  '{brace} – the H post bases (Σ M_Rd = {rd} kNm) cannot fix the posts.': {
+    uk: '{brace} – H-опори стовпів (Σ M_Rd = {rd} kNm) не можуть защемити стовпи.',
+    de: '{brace} – die H-Pfostenträger (Σ M_Rd = {rd} kNm) können die Pfosten nicht einspannen.',
+    pl: '{brace} – kotwy H (Σ M_Rd = {rd} kNm) nie utwierdzą słupów.',
+  },
+  'Adjustable post bases are hinges (no base moment) – the posts have no lateral stability in this direction.': {
+    uk: 'Регульовані опори стовпів – шарніри (без моменту в основі) – у цьому напрямку стовпи не мають поперечної стійкості.',
+    de: 'Höhenverstellbare Pfostenträger sind Gelenke (kein Fußmoment) – die Pfosten sind in dieser Richtung nicht ausgesteift.',
+    pl: 'Regulowane kotwy słupów są przegubami (brak momentu w podstawie) – słupy nie mają w tym kierunku stateczności poprzecznej.',
+  },
+  'H post bases: H_d·h = {m} kNm vs. Σ M_Rd = {rd} kNm of {n} bases ({mech}) ({pct}).': {
+    uk: 'H-опори стовпів: H_d·h = {m} kNm проти Σ M_Rd = {rd} kNm для {n} опор ({mech}) ({pct}).',
+    de: 'H-Pfostenträger: H_d·h = {m} kNm gegenüber Σ M_Rd = {rd} kNm aus {n} Füßen ({mech}) ({pct}).',
+    pl: 'Kotwy H: H_d·h = {m} kNm wobec Σ M_Rd = {rd} kNm z {n} kotew ({mech}) ({pct}).',
+  },
+  '{mech}, {k} of them with flanges bent sideways': {
+    uk: '{mech}, з них {k} з полицями, що згинаються вбік',
+    de: '{mech}, davon {k} mit seitlich gebogenen Laschen',
+    pl: '{mech}, w tym {k} z płaskownikami zginanymi na boki',
+  },
+  'flanges bent sideways': { uk: 'полиці згинаються вбік', de: 'Laschen seitlich gebogen', pl: 'płaskowniki zginane na boki' },
+  'couple of the 2 × M12 bolts': { uk: 'пара сил 2 × M12 болтів', de: 'Kräftepaar der 2 × M12 Bolzen', pl: 'para sił 2 × śrub M12' },
+  'flanges bent in their plane': { uk: 'полиці згинаються у своїй площині', de: 'Laschen in ihrer Ebene gebogen', pl: 'płaskowniki zginane w swojej płaszczyźnie' },
+  'The H post base needs a concrete footing at least {min} mm deep ({embed} mm cast in).': {
+    uk: 'H-опора стовпа потребує бетонного фундаменту завглибшки щонайменше {min} mm ({embed} mm у бетоні).',
+    de: 'Der H-Pfostenträger braucht ein Betonfundament von mindestens {min} mm Tiefe ({embed} mm einbetoniert).',
+    pl: 'Kotwa H wymaga fundamentu betonowego o głębokości co najmniej {min} mm ({embed} mm w betonie).',
+  },
+  'Posts wider than {w} mm do not fit between the flanges of the H post base – use 140 mm posts.': {
+    uk: 'Стовпи ширші за {w} mm не входять між полицями H-опори – використайте стовпи 140 mm.',
+    de: 'Pfosten breiter als {w} mm passen nicht zwischen die Laschen des H-Pfostenträgers – 140-mm-Pfosten verwenden.',
+    pl: 'Słupy szersze niż {w} mm nie mieszczą się między płaskownikami kotwy H – użyj słupów 140 mm.',
+  },
+  'Net tension {net} exceeds the 2 × M12 bolts of the H post base ({rd}) – add footing weight or knee braces / roof ties.': {
+    uk: 'Чистий відрив {net} перевищує несучу здатність 2 × M12 болтів H-опори ({rd}) – збільште вагу фундаменту або додайте підкоси / анкерування даху.',
+    de: 'Die Netto-Zugkraft {net} übersteigt die 2 × M12 Bolzen des H-Pfostenträgers ({rd}) – Fundamentgewicht erhöhen oder Kopfbänder / Dachverankerung ergänzen.',
+    pl: 'Siła odrywająca netto {net} przekracza nośność 2 × śrub M12 kotwy H ({rd}) – zwiększ ciężar fundamentu lub dodaj miecze / kotwienie dachu.',
+  },
+  'H post base cast {e} mm into the footing: its weight counts in full.': {
+    uk: 'H-опора стовпа забетонована на {e} mm у фундамент: його вага враховується повністю.',
+    de: 'H-Pfostenträger {e} mm ins Fundament einbetoniert: dessen Gewicht zählt voll.',
+    pl: 'Kotwa H zabetonowana na {e} mm w fundamencie: jego ciężar liczy się w pełni.',
+  },
+  'H post base cast {e} mm into the footing: its weight counts in full': {
+    uk: 'H-опора стовпа забетонована на {e} mm у фундамент: його вага враховується повністю',
+    de: 'H-Pfostenträger {e} mm ins Fundament einbetoniert: dessen Gewicht zählt voll',
+    pl: 'Kotwa H zabetonowana na {e} mm w fundamencie: jego ciężar liczy się w pełni',
+  },
+  '2 × M12 bolts carry {rd} tension ({pct}).': {
+    uk: '2 × M12 болти сприймають {rd} розтягу ({pct}).',
+    de: '2 × M12 Bolzen tragen {rd} Zug ({pct}).',
+    pl: '2 × śruby M12 przenoszą {rd} rozciągania ({pct}).',
+  },
+  'Post base': { uk: 'Опора стовпа', de: 'Pfostenträger', pl: 'Kotwa słupa' },
+  'Adjustable post base': { uk: 'Регульована опора стовпа', de: 'Pfostenträger höhenverstellbar', pl: 'Regulowana kotwa słupa' },
+  'H post base, cast-in': { uk: 'H-опора стовпа, забетонована', de: 'H-Pfostenträger, einbetoniert', pl: 'Kotwa H, zabetonowana' },
+  'Post footing': { uk: 'Фундамент стовпа', de: 'Pfostenfundament', pl: 'Fundament słupa' },
 } satisfies Dict;

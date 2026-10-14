@@ -16,7 +16,7 @@ import { useT } from "@/i18n";
 import type { DerivedModel } from "@/types";
 import { useProjectStore } from "@/store";
 import { useUiStore, type ResultsTab } from "@/store/uiStore";
-import { exportCutListCsv, exportCutListPdf } from "@/utils/export";
+import { exportCutListCsv, exportCutListPdf, stockBoardsText } from "@/utils/export";
 import { exportStaticsReportPdf } from "@/utils/staticsReport";
 import {
   Button,
@@ -117,6 +117,11 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                           {l.labelDe}
                         </div>
                       )}
+                      {l.stockBoards?.length ? (
+                        <div className="text-[10px] text-slate-400">
+                          {stockBoardsText(l.stockBoards)}
+                        </div>
+                      ) : null}
                     </td>
                     <td className={cx(td, mono)}>
                       {l.section

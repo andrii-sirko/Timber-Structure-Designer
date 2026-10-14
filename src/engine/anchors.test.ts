@@ -82,3 +82,12 @@ test('free end studs of shortened outer walls get an angle bracket on their open
   assert.equal(model.connections.hardware.find((h) => h.id === 'end-stud-bracket')?.quantity, brackets.length);
   assert.equal(endStudBrackets(buildModel(createDefaultProject()).framing.members).length, 0);
 });
+
+test('cast-in H post bases replace the adjustable bases and their concrete anchors', () => {
+  const p = createDefaultProject();
+  p.params.loads = { ...p.params.loads, postBase: 'h-anchor' };
+  const ids = buildModel(p).connections.hardware.map((h) => h.id);
+  assert.ok(ids.includes('post-base-h'));
+  assert.ok(!ids.includes('post-base') && !ids.includes('anchor'));
+  assert.ok(ids.includes('post-bolt'));
+});

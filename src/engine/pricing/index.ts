@@ -107,6 +107,7 @@ export const DEFAULT_ROOFING_PRICE_PER_M2: Record<RoofCovering, number> = {
 
 export const DEFAULT_HARDWARE_PRICE_PER_UNIT: Record<string, number> = {
   'post-base': 18,
+  'post-base-h': 45,
   anchor: 4.5,
   'post-bolt': 1.2,
   bracket: 3.5,
@@ -203,7 +204,7 @@ export function computePricing(bom: BomResult, connections: ConnectionsResult, p
       const area = line.areaM2 ?? 0;
       const unitPrice = prices.claddingBoardPerM2;
       timberLines.push({
-        id: `sheathing`,
+        id: `sheathing-${line.label}`,
         label: line.label,
         labelDe: line.labelDe,
         quantity: round2(area),

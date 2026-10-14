@@ -312,6 +312,9 @@ export default {
   // ---------------------------------------------------------------------------------------
   // engine/joinery/index.ts — hardware & joinery names, specs, notes
   // ---------------------------------------------------------------------------------------
+  'H post base, cast-in, hot-dip galvanised': { uk: 'H-опора стовпа для бетонування, гарячого оцинкування', de: 'H-Pfostenträger einbetonierbar, feuerverzinkt', pl: 'Kotwa H do zabetonowania, ocynkowana ogniowo' },
+  '141 mm, 800/80/8 mm, post embedment 400 mm': { uk: '141 mm, 800/80/8 mm, заглиблення стовпа 400 mm', de: '141 mm, 800/80/8 mm, Pfosteneinstand 400 mm', pl: '141 mm, 800/80/8 mm, osadzenie słupa 400 mm' },
+  '400 mm cast into the footing': { uk: '400 mm забетоновано у фундамент', de: '400 mm ins Fundament einbetoniert', pl: '400 mm zabetonowane w fundamencie' },
   'Adjustable post base, hot-dip galvanised': { uk: 'Регульована опора стовпа, гарячого оцинкування', de: 'Pfostenträger höhenverstellbar, feuerverzinkt', pl: 'Regulowana kotwa słupa, ocynkowana ogniowo' },
   'Heavy-duty concrete anchor': { uk: 'Важкий анкер для бетону', de: 'Schwerlastanker für Beton', pl: 'Kotwa do betonu o dużej nośności' },
   'Hex bolt with nut & washers': { uk: "Шестигранний болт з гайкою та шайбами", de: 'Sechskantschraube mit Mutter und Scheiben', pl: 'Śruba z łbem sześciokątnym z nakrętką i podkładkami' },

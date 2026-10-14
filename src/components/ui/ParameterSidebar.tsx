@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Cable, CloudSnow, Layers, Lock, LockOpen, MapPin, MapPinned, Plus, Rows3, Ruler, Settings2, Trash2, TreePine, Triangle } from 'lucide-react';
-import type { BraceDirection, DerivedModel, FloorDecking, FloorSupport, InsulatedElement, InsulationLayer, InsulationMaterial, RoofCovering, RoofDirection, RoofScheme, SnowZone, SoilType, StructureParams, TimberKey, TimberSection, WallId } from '@/types';
+import type { BraceDirection, DerivedModel, FloorDecking, FloorSupport, InsulatedElement, InsulationLayer, InsulationMaterial, PostBaseType, RoofCovering, RoofDirection, RoofScheme, SnowZone, SoilType, StructureParams, TimberKey, TimberSection, WallId } from '@/types';
 import { DECKING, FLOOR_LOAD_PRESETS, gridPostCount, INSULATION, MAX_INSULATION_THICKNESS, MIN_PLAN_DIM, minWallHeight } from '@/engine/framing';
 import { midPurlinBounds } from '@/engine/framing/roofLines';
 import { freePostBounds, freePostMemberId } from '@/engine/freePosts';
@@ -570,6 +570,15 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
               { value: 'non-cohesive', label: t('Sand / gravel, medium dense') },
               { value: 'cohesive-semi-firm', label: t('Clay / silt, semi-firm') },
               { value: 'cohesive-stiff', label: t('Clay / silt, stiff') },
+            ]}
+          />
+          <SelectField
+            label={t('Post base')}
+            value={params.loads.postBase ?? 'adjustable'}
+            onChange={(v) => setLoad('postBase', v as PostBaseType)}
+            options={[
+              { value: 'adjustable', label: t('Adjustable post base (pinned)') },
+              { value: 'h-anchor', label: t('H post base 141 mm, 800/80/8, cast-in 400 mm') },
             ]}
           />
           <SelectField

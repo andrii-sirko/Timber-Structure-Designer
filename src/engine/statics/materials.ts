@@ -18,6 +18,8 @@ export interface MaterialProps {
   e005: number;
   /** Mean density ρ_mean */
   density: number;
+  /** Characteristic density ρ_k (dowel embedment strength) */
+  rhok: number;
   /** Partial safety factor γ_M */
   gammaM: number;
   /** Straightness factor β_c for buckling (0.2 solid, 0.1 glulam) */
@@ -25,11 +27,11 @@ export interface MaterialProps {
 }
 
 export const MATERIALS: Record<StrengthClass, MaterialProps> = {
-  C16: { label: 'C16 solid softwood', fmk: 16, fc0k: 17, fvk: 3.2, e0mean: 8000, e005: 5400, density: 370, gammaM: 1.3, betaC: 0.2 },
-  C24: { label: 'C24 solid softwood', fmk: 24, fc0k: 21, fvk: 4.0, e0mean: 11000, e005: 7400, density: 420, gammaM: 1.3, betaC: 0.2 },
-  C30: { label: 'C30 solid softwood', fmk: 30, fc0k: 23, fvk: 4.0, e0mean: 12000, e005: 8000, density: 460, gammaM: 1.3, betaC: 0.2 },
-  GL24h: { label: 'GL24h glulam', fmk: 24, fc0k: 24, fvk: 3.5, e0mean: 11500, e005: 9600, density: 420, gammaM: 1.25, betaC: 0.1 },
-  GL28c: { label: 'GL28c glulam', fmk: 28, fc0k: 24, fvk: 3.5, e0mean: 12500, e005: 10400, density: 420, gammaM: 1.25, betaC: 0.1 },
+  C16: { label: 'C16 solid softwood', fmk: 16, fc0k: 17, fvk: 3.2, e0mean: 8000, e005: 5400, density: 370, rhok: 310, gammaM: 1.3, betaC: 0.2 },
+  C24: { label: 'C24 solid softwood', fmk: 24, fc0k: 21, fvk: 4.0, e0mean: 11000, e005: 7400, density: 420, rhok: 350, gammaM: 1.3, betaC: 0.2 },
+  C30: { label: 'C30 solid softwood', fmk: 30, fc0k: 23, fvk: 4.0, e0mean: 12000, e005: 8000, density: 460, rhok: 380, gammaM: 1.3, betaC: 0.2 },
+  GL24h: { label: 'GL24h glulam', fmk: 24, fc0k: 24, fvk: 3.5, e0mean: 11500, e005: 9600, density: 420, rhok: 385, gammaM: 1.25, betaC: 0.1 },
+  GL28c: { label: 'GL28c glulam', fmk: 28, fc0k: 24, fvk: 3.5, e0mean: 12500, e005: 10400, density: 420, rhok: 390, gammaM: 1.25, betaC: 0.1 },
 };
 
 export const STRENGTH_CLASSES: StrengthClass[] = ['C16', 'C24', 'C30', 'GL24h', 'GL28c'];
