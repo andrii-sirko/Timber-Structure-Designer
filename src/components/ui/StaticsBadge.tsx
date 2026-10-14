@@ -17,10 +17,11 @@ export function StaticsBadge({ statics }: { statics: StaticsResult }) {
   const openResults = useUiStore((s) => s.openResults);
   const runAutoFix = useAutoFixStatics();
   const { run: runCostOptimization, available: costOptimizationAvailable } = useCostOptimizationStatics();
-  const members = statics.checks.filter((c) => c.kind !== "uplift");
-  const worst = members.reduce(
-    (m, c) => (c.utilisation > m.utilisation ? c : m),
-    members[0],
+  // the row that sets the overall status: the most severe one, then the highest utilisation
+  const rank = { ok: 0, warning: 1, fail: 2 } as const;
+  const worst = statics.checks.reduce<(typeof statics.checks)[number] | undefined>(
+    (m, c) => (!m || rank[c.status] > rank[m.status] || (rank[c.status] === rank[m.status] && c.utilisation > m.utilisation) ? c : m),
+    undefined,
   );
   const Icon =
     statics.status === "ok"

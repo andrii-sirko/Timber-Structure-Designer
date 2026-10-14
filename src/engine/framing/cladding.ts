@@ -1,4 +1,4 @@
-import type { Member, Opening, ProfilePoint, WallCladding } from '@/types';
+import type { Member, Opening, ProfilePoint, TimberSection, WallCladding } from '@/types';
 import { cutProfile, nextId, profileArea, rectProfile, Y_AXIS } from '../geometry';
 import type { RoofLines } from './roofLines';
 import { wallBays, type WallFrame } from './wallFrame';
@@ -12,12 +12,12 @@ export const DEFAULT_SCREEN_CLADDING: WallCladding = { orientation: 'horizontal'
 /** Slat screens stop this far above the ground (mm), like their bottom rail. */
 export const SCREEN_GROUND_GAP = 50;
 
-/** Screen battens and rails, 40 mm deep behind the slats × 60 mm */
-const BATTEN = { depth: 40, width: 60 } as const;
-/** Width of a screen jamb or header rail – what an opening in a slat screen needs around it (mm) */
-export const SCREEN_BATTEN_WIDTH = BATTEN.width;
+/** Default screen battens and rails: 40 mm along the wall × 60 mm deep (strong axis in the wind direction) */
+export const SCREEN_BATTEN_SECTION: TimberSection = { width: 40, height: 60 };
+/** Room a screen jamb or header rail needs around an opening (mm) */
+export const SCREEN_BATTEN_WIDTH = 60;
 /** Largest free span of a 20 mm slat between its supports (mm) */
-const MAX_SLAT_SPAN = 800;
+export const MAX_SLAT_SPAN = 800;
 /** Largest vertical distance between the rails carrying vertical slats (mm) */
 const MAX_RAIL_SPACING = 1200;
 
@@ -59,7 +59,9 @@ export function resolveScreenCladding(cladding: Partial<WallCladding> | undefine
  * The slats are screwed to the posts, the battens and the purlin or side rail above.
  * Battens sit flush with the outer post face, the slats in front of them.
  */
-export function screenBattens(frame: WallFrame, cladding: WallCladding, openings: Opening[], roof: RoofLines): Member[] {
+export function screenBattens(frame: WallFrame, cladding: WallCladding, openings: Opening[], roof: RoofLines, section: TimberSection = SCREEN_BATTEN_SECTION, maxSlatSpan = MAX_SLAT_SPAN): Member[] {
+  // along the wall × deep behind the slats (the wind direction)
+  const BATTEN = { width: section.width, depth: section.height };
   const members: Member[] = [];
   const ref = { wallId: frame.wallId, partitionId: frame.partitionId };
   const n = -BATTEN.depth / 2;
@@ -144,7 +146,7 @@ export function screenBattens(frame: WallFrame, cladding: WallCladding, openings
       if (bay.endStud) batten(end - BATTEN.width / 2);
       const from = bay.startStud ? start + BATTEN.width : start;
       const to = bay.endStud ? end - BATTEN.width : end;
-      const k = Math.ceil((to - from) / MAX_SLAT_SPAN);
+      const k = Math.ceil((to - from) / maxSlatSpan);
       for (let i = 1; i < k; i++) {
         const u = from + ((to - from) * i) / k;
         // the jambs already carry the slats around an opening

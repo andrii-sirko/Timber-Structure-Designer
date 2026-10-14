@@ -2,7 +2,8 @@ import type { BraceDirection, FramingWarning, Member, PostGrid, PostOverride, Po
 import { cutProfile, nextId, rectProfile, toDeg, X_AXIS, Y_AXIS, Z_AXIS } from '../geometry';
 import { computeRoofLines, type RoofLines } from './roofLines';
 import { resolvePostPositions } from '../postOverrides';
-import { hasWallPosts, wallExtent } from './wallFrame';
+import { postBottomLevel } from '../build';
+import { computeWallFrame, hasWallPosts, wallExtent } from './wallFrame';
 import { groundAt, groundPlaneOf } from '../groundSlope';
 
 const SQRT2 = Math.SQRT2;
@@ -127,15 +128,17 @@ export function generatePosts(
   const members: Member[] = [];
   const section = { width: timber.post.width, height: timber.post.height };
   const sloped = grid.scheme === 'sloped-purlins';
-  // posts stand on the (possibly falling) ground: the foot drops, the top stays
+  // posts stand on the (possibly falling) ground, on their bases: the foot is the ground there
+  // plus the post bottom level (base gap above the concrete / curb top); the top stays
   const ground = groundPlaneOf(params, true);
+  const base = postBottomLevel(params);
 
   for (const row of grid.rows) {
     const label = row.name.replace('Purlin', 'Post');
     const labelDe = row.nameDe === 'Mittelpfette' ? 'Pfosten mitte' : row.nameDe.replace('Pfette', 'Pfosten');
     row.positions.forEach((pos, i) => {
       const p = rowPoint(row, pos);
-      const foot = groundAt(ground, p.x, p.z);
+      const foot = groundAt(ground, p.x, p.z) + base;
       const top = rowPostTop(row, roof, params, pos) - foot;
       // sloped purlin: top cut follows the slope, +Z side is lower
       const profile = sloped ? cutProfile(top, section.height, 0, -roof.pitchDeg) : rectProfile(top, section.height);
@@ -173,7 +176,7 @@ export function generatePosts(
       if (pos < ext.start - pw / 2 || pos > ext.end + pw / 2) return;
       const alongZ = id === 'left' || id === 'right';
       const plan = alongZ ? { x: fixed, z: pos } : { x: pos, z: fixed };
-      const foot = groundAt(ground, plan.x, plan.z);
+      const foot = groundAt(ground, plan.x, plan.z) + base;
       const start = { ...plan, y: foot };
       if (alongZ) {
         // classic: under the sloped side rail
@@ -338,18 +341,46 @@ export interface BracePlacement {
   postIndex: number;
   /** Post axis position along the row */
   pos: number;
-  /** -1 = towards the row start, +1 = towards the row end */
+  /** -1 = towards the start of the brace's axis, +1 = towards its end */
   side: number;
-  /** Underside of the purlin where the brace top lands */
+  /** Underside of the purlin / rail where the brace top lands */
   top: number;
+  /** Axis the brace leans along (the plane it stiffens) */
+  axis: 'x' | 'z';
+  /** Set for a brace across the rows: the outer wall whose rail (Rähm) carries its top */
+  wall?: WallId;
+  /** Ground point of the post axis */
+  x: number;
+  z: number;
+}
+
+/** Rail (Rähm) stretches of a wall without a purlin, as [start, end] along the wall (empty when it has no rail). */
+export function wallRailSpans(id: WallId, params: StructureParams, wall: Wall, roof: RoofLines, grid: PostGrid): [number, number][] {
+  if (!(hasWallPosts(wall) || wall.rail)) return [];
+  const frame = computeWallFrame(id, params, wall, roof, grid);
+  if (frame.hasPurlin) return [];
+  const bw = params.timber.beam.width;
+  const rowU = frame.sloped ? roof.purlins.map((p) => p.z) : [frame.postU[0], ...roof.midPurlinX, frame.postU[frame.postU.length - 1]];
+  const spans: [number, number][] = [];
+  // an explicit rail runs the full wall length, even past a shortened closed stretch
+  const ext = wall.rail ? { start: -Infinity, end: Infinity } : frame.extent;
+  for (let k = 0; k < rowU.length - 1; k++) {
+    const a = Math.max(rowU[k] + bw / 2, ext.start);
+    const b = Math.min(rowU[k + 1] - bw / 2, ext.end);
+    if (b - a > 100) spans.push([a, b]);
+  }
+  return spans;
 }
 
 /**
  * Where knee braces actually end up: every wanted brace whose post is tall enough
  * (post top ≥ leg + 400 mm). Shared by the member generator and the statics engine so
  * both see the same braces.
+ *  - along the rows: from every row post up to its purlin (classic: across the slope)
+ *  - across the rows: from the end post of a row up to the rail of the outer wall it stands in,
+ *    when that wall has a rail (closed wall, slat screen or a rail on an open side)
  */
-export function braceLayout(params: StructureParams, roof: RoofLines, grid: PostGrid): BracePlacement[] {
+export function braceLayout(params: StructureParams, roof: RoofLines, grid: PostGrid, walls?: Record<WallId, Wall>): BracePlacement[] {
   if (!params.braces) return [];
   const pw = params.timber.post.width;
   const leg = Math.max(300, params.braceLeg);
@@ -358,13 +389,40 @@ export function braceLayout(params: StructureParams, roof: RoofLines, grid: Post
   for (const row of grid.rows) {
     const positions = row.positions;
     positions.forEach((pos, i) => {
+      const p = rowPoint(row, pos);
       for (const side of braceSides(params.braceDirection, i, positions.length)) {
         const topPos = pos + side * (pw / 2 + leg);
         const top = sloped ? roof.railBottomAt(topPos) : rowPostTop(row, roof, params, pos);
         if (top < leg + 400) continue; // post too short for a brace
-        out.push({ rowKey: row.key, postIndex: i, pos, side, top });
+        out.push({ rowKey: row.key, postIndex: i, pos, side, top, axis: row.axis, x: p.x, z: p.z });
       }
     });
+  }
+  if (!walls) return out;
+
+  // Across the rows: the walls without a purlin run perpendicular to the rows
+  const crossWalls: WallId[] = sloped ? ['front', 'rear'] : ['left', 'right'];
+  const crossAxis: 'x' | 'z' = sloped ? 'x' : 'z';
+  const rowCoord = (row: PostRow) => row.offset; // the row's position along the wall
+  for (const id of crossWalls) {
+    const spans = wallRailSpans(id, params, walls[id], roof, grid);
+    if (spans.length === 0) continue;
+    const frame = computeWallFrame(id, params, walls[id], roof, grid);
+    const wallLine = id === 'left' || id === 'front' ? pw / 2 : (id === 'right' ? params.length : params.width) - pw / 2;
+    for (const row of grid.rows) {
+      // the row's post standing in this wall
+      const i = row.positions.findIndex((pos) => Math.abs(pos - wallLine) < pw);
+      if (i < 0) continue;
+      const u = rowCoord(row);
+      for (const side of [-1, 1]) {
+        const uTop = u + side * (pw / 2 + leg);
+        if (!spans.some(([a, b]) => uTop >= a && uTop <= b)) continue;
+        const top = frame.studTopAt(uTop);
+        if (top < leg + 400) continue;
+        const p = rowPoint(row, row.positions[i]);
+        out.push({ rowKey: row.key, postIndex: i, pos: u, side, top, axis: crossAxis, wall: id, x: p.x, z: p.z });
+      }
+    }
   }
   return out;
 }
@@ -374,8 +432,8 @@ export function braceLayout(params: StructureParams, roof: RoofLines, grid: Post
  * Under a sloped purlin the brace top lands on the purlin underside at the brace's own Z, so
  * the upper cut deviates from 45° by the roof pitch (noted on the member).
  */
-export function generateBraces(params: StructureParams, roof: RoofLines, grid: PostGrid): Member[] {
-  const layout = braceLayout(params, roof, grid);
+export function generateBraces(params: StructureParams, roof: RoofLines, grid: PostGrid, walls?: Record<WallId, Wall>): Member[] {
+  const layout = braceLayout(params, roof, grid, walls);
   if (layout.length === 0) return [];
   const { timber } = params;
   const pw = timber.post.width;
@@ -389,19 +447,21 @@ export function generateBraces(params: StructureParams, roof: RoofLines, grid: P
   for (const brace of layout) {
     const row = rows.get(brace.rowKey);
     if (!row) continue;
-    const { pos, side: s, top, postIndex: i } = brace;
+    const { side: s, top, postIndex: i, axis } = brace;
+    const cross = brace.wall;
     const rowWord = row.wallId ?? row.name.replace('Purlin ', '');
-    const nameDe = row.wallId ? `Kopfband ${SIDE_DE[row.wallId]}` : 'Kopfband mitte';
-    const along = pos + s * (pw / 2);
-    const p = rowPoint(row, along);
-    const start = { x: p.x, y: top - leg, z: p.z };
-    const direction = row.axis === 'x' ? { x: s / SQRT2, y: 1 / SQRT2, z: 0 } : { x: 0, y: 1 / SQRT2, z: s / SQRT2 };
-    const up = row.axis === 'x' ? { x: s / SQRT2, y: -1 / SQRT2, z: 0 } : { x: 0, y: -1 / SQRT2, z: s / SQRT2 };
-    const endCut = sloped ? round1(45 - s * roof.pitchDeg) : 45;
+    const nameDe = cross ? `Kopfband ${SIDE_DE[cross]}` : row.wallId ? `Kopfband ${SIDE_DE[row.wallId]}` : 'Kopfband mitte';
+    // brace foot on the post face it leans away from
+    const start = { x: brace.x + (axis === 'x' ? s * (pw / 2) : 0), y: top - leg, z: brace.z + (axis === 'z' ? s * (pw / 2) : 0) };
+    const direction = axis === 'x' ? { x: s / SQRT2, y: 1 / SQRT2, z: 0 } : { x: 0, y: 1 / SQRT2, z: s / SQRT2 };
+    const up = axis === 'x' ? { x: s / SQRT2, y: -1 / SQRT2, z: 0 } : { x: 0, y: -1 / SQRT2, z: s / SQRT2 };
+    // The member above slopes along Z (sloped purlin, or the side rail of a classic roof)
+    const slopedAbove = axis === 'z' && (sloped || Boolean(cross));
+    const endCut = slopedAbove ? round1(45 - s * roof.pitchDeg) : 45;
     members.push({
       id: nextId('brace'),
       category: 'brace',
-      name: `Knee brace ${rowWord} ${i + 1}${s > 0 ? 'R' : 'L'}`,
+      name: cross ? `Knee brace ${cross} rail ${rowWord} ${s > 0 ? 'R' : 'L'}` : `Knee brace ${rowWord} ${i + 1}${s > 0 ? 'R' : 'L'}`,
       nameDe,
       group: 'Knee brace (Kopfband)',
       section,
@@ -411,8 +471,8 @@ export function generateBraces(params: StructureParams, roof: RoofLines, grid: P
       up,
       cuts: { start: 45, end: endCut },
       profile: cutProfile(axisLength, section.height, 45, endCut),
-      wallId: row.wallId,
-      notes: sloped ? `Upper cut ${endCut}° against the sloped purlin` : undefined,
+      wallId: cross ?? row.wallId,
+      notes: slopedAbove ? `Upper cut ${endCut}° against the sloped ${cross ? 'rail' : 'purlin'}` : undefined,
     });
   }
   return members;

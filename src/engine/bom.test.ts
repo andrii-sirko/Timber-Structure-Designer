@@ -7,7 +7,7 @@ import { collectFixtures, collectMaterials } from './bom/index.ts';
 import { buildFramingCanonical, canonicalProject } from './framing/index.ts';
 import { memberVolumeM3 } from './geometry.ts';
 
-const MEMBER_ORDER: MemberCategory[] = ['post', 'beam', 'rafter', 'brace', 'stud', 'plate', 'header', 'sill', 'bearer', 'joist'];
+const MEMBER_ORDER: MemberCategory[] = ['post', 'beam', 'rafter', 'brace', 'stud', 'plate', 'header', 'sill', 'bearer', 'joist', 'batten'];
 const near = (actual: number, expected: number, eps = 1e-9) => assert.ok(Math.abs(actual - expected) < eps, `${actual} ≠ ${expected}`);
 
 for (const tpl of PROJECT_TEMPLATES) {
@@ -46,19 +46,25 @@ for (const tpl of PROJECT_TEMPLATES) {
     for (const m of materials) {
       assert.ok(m.quantity > 0, m.id);
       if (m.unit === 'pcs') assert.ok(Number.isInteger(m.quantity), m.id);
+      else if (m.unit === 'm³') near(m.quantity, Math.round(m.quantity * 1000) / 1000);
       else near(m.quantity, Math.round(m.quantity * 100) / 100);
     }
   });
 }
 
-test('roof edge trim is the roof perimeter in metres plus 10 %', () => {
+test('sheet roofs get eave, verge and top trims: roof edges in metres plus 10 %', () => {
   const project = canonicalProject(PROJECT_TEMPLATES[0].build());
+  assert.equal(project.params.loads.roofCovering, 'trapezoidal-sheet');
   const framing = buildFramingCanonical(project);
   const roof = framing.panels.find((p) => p.kind === 'roof');
   assert.ok(roof?.size);
   const [a, b] = roof.size;
-  const trim = collectMaterials(project, framing).find((m) => m.id === 'roof-trim');
-  assert.equal(trim?.quantity, Math.round(((2 * (a + b)) / 1000) * 1.1 * 100) / 100);
+  const materials = collectMaterials(project, framing);
+  const qty = (id: string) => materials.find((m) => m.id === id)?.quantity;
+  assert.equal(qty('eave-trim'), Math.round((a / 1000) * 1.1 * 100) / 100);
+  assert.equal(qty('top-trim'), Math.round((a / 1000) * 1.1 * 100) / 100);
+  assert.equal(qty('verge-trim'), Math.round(((2 * b) / 1000) * 1.1 * 100) / 100);
+  assert.equal(qty('roof-trim'), undefined);
 });
 
 test('fixtures list doors and windows on closed walls only, never passages', () => {

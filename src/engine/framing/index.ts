@@ -2,6 +2,7 @@ import type { FramingResult, FramingWarning, Member, OpeningHost, Panel, Project
 import { isOuterWall, WALL_IDS } from '@/types';
 import { resetIds } from '../geometry';
 import { generateRoof } from './roof';
+import { planWarnings } from './planChecks';
 import { computeRoofLines } from './roofLines';
 import { computePostGrid, generateBraces, generatePosts, generatePurlins } from './structure';
 import { clampPartition } from './partitions';
@@ -20,7 +21,7 @@ export { computeWallFrame, computePartitionFrame, hasWallPosts, wallBays, wallEx
 export { clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH } from './partitions';
 export type { WallFrame, WallBay } from './wallFrame';
 export { clampOpening, openingLimits, headerHeight, OPENING_DEFAULTS, MIN_OPENING_SIZE, OPENING_SNAP } from './openings';
-export { OPENING_PRESETS, FRAME_GAP, findPreset, presetsOfType, presetMatches, presetFits, openingFromPreset, openingMaterials, frameSizeFor } from './openingCatalog';
+export { OPENING_PRESETS, FRAME_GAP, DEFAULT_INSTALL_GAP, findPreset, presetsOfType, presetMatches, presetRough, presetFits, openingFromPreset, openingMaterials, frameSizeFor, relabelForPreset, legacyPresetRough, roughFor } from './openingCatalog';
 export type { OpeningPreset, DoorPreset, WindowPreset, DoorStyle, WindowStyle, PresetFit } from './openingCatalog';
 export { resizeOpening, resizableEdges, edgeHandleCentre, sizeChanged, OPENING_EDGES } from './openingResize';
 export type { OpeningEdge } from './openingResize';
@@ -120,7 +121,7 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
   members.push(...generatePosts(params, walls, roof, grid));
   members.push(...generateFreePosts(params, roof, grid, project.freePosts));
   members.push(...generatePurlins(params, roof, grid, warnings));
-  members.push(...generateBraces(params, roof, grid));
+  members.push(...generateBraces(params, roof, grid, walls));
 
   const roofBuild = generateRoof(params, roof, warnings);
   members.push(...roofBuild.rafters);
@@ -188,9 +189,7 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
   if (project.params.rearHeight > project.params.frontHeight) {
     warnings.push({ level: 'error', message: 'Low eave H2 exceeds high eave H1 – swap the heights or change the roof direction. H2 was clamped to H1.' });
   }
-  if (roof.pitchDeg < 3) {
-    warnings.push({ level: 'warning', message: `Roof pitch ${roof.pitchDeg.toFixed(1)}° is below 3° – minimum for sheet roofing; 5° or more is recommended for drainage.` });
-  }
+  warnings.push(...planWarnings(project, members, roofBuild.geometry, roofBuild.panel.size?.[1] ?? roofBuild.geometry.rafterLength));
   if (roof.pitchDeg > 30) {
     warnings.push({ level: 'info', message: `Roof pitch ${roof.pitchDeg.toFixed(1)}° is unusually steep for a monopitch outbuilding.` });
   }

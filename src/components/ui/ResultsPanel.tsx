@@ -160,6 +160,46 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                 </tr>
               </tfoot>
             </table>
+            {bom.timberOrder.length > 0 && (
+              <div className="border-t border-slate-800">
+                <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                  <Package className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
+                    {t("Timber order by section")}
+                    {lang !== "de" && " (Holzbestellung)"}
+                  </span>
+                </div>
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className={th}>{t("Section")}</th>
+                      <th className={th}>{t("Order lengths")}</th>
+                      <th className={cx(th, "text-right")}>{t("Offcut")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bom.timberOrder.map((o) => (
+                      <tr key={`${o.section.width}x${o.section.height}`} className="border-t border-slate-800/80 hover:bg-slate-900/60">
+                        <td className={cx(td, mono)}>
+                          {o.section.width}×{o.section.height}
+                          {o.glulam && <span className="ml-1 text-[10px] text-slate-500">BSH</span>}
+                        </td>
+                        <td className={cx(td, mono)}>
+                          {[
+                            ...o.stock.map((st) => `${st.count} × ${(st.lengthMm / 1000).toFixed(1)} m`),
+                            ...o.special.map((l) => `1 × ${(l / 1000).toFixed(1)} m ${t("to length")}`),
+                          ].join(" + ")}
+                          <div className="text-[10px] text-slate-500">
+                            {t("{n} pieces", { n: o.pieces.length })}: {o.pieces.join(", ")} mm
+                          </div>
+                        </td>
+                        <td className={cx(td, mono, "text-right")}>{o.offcutPct.toFixed(1)} %</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-2 p-3 text-[11px]">
               <Stat label={t("Mass")} value={`${Math.round(bom.totalMassKg)} kg`} />
               <Stat
@@ -313,7 +353,8 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                   <th className={th}>#</th>
                   <th className={th}>{t("Piece")}</th>
                   <th className={th}>{t("Section")}</th>
-                  <th className={cx(th, "text-right")}>{t("Length")}</th>
+                  <th className={cx(th, "text-right")}>{t("Target length")}</th>
+                  <th className={cx(th, "text-right")}>{t("Order length")}</th>
                   <th className={cx(th, "text-right")}>{t("Cuts")}</th>
                   <th className={cx(th, "text-right")}>{t("Qty")}</th>
                 </tr>
@@ -338,6 +379,9 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                       {c.section.width}×{c.section.height}
                     </td>
                     <td className={cx(td, mono, "text-right")}>{c.length}</td>
+                    <td className={cx(td, mono, "text-right", c.orderLength ? "text-amber-200" : "text-slate-500")} title={c.orderLength ? t("Cut to the target length on site after levelling the bases") : undefined}>
+                      {c.orderLength ?? c.length}
+                    </td>
                     <td className={cx(td, mono, "text-right")}>
                       {c.cuts.start === 0 && c.cuts.end === 0
                         ? "90°"
@@ -546,7 +590,7 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
             )}
             <p className="text-[11px] text-slate-500">
               {t(
-                "Simplified EN 1995-1-1 pre-design: bending, shear, deflection (w_inst ≤ L/300, w_fin ≤ L/200), post buckling with the actual bracing system, knee braces / boarded walls / sway posts under wind, and roof uplift. k_mod {kmodSnow} (snow) / {kmodWind} (wind), k_def {kdef}, γ_G 1.35 / γ_Q 1.5, ψ₀ snow 0.5 / wind 0.6. Wind q_p {qp} kN/m² (≈ {gust} m/s gust).",
+                "Simplified EN 1995-1-1 pre-design: bending, shear, deflection (w_inst ≤ L/300, w_fin ≤ L/200), post buckling, pinned post bases held by knee braces or braced walls in both directions, studs and screen battens in wind, and the uplift load path from the sheet to the concrete. k_mod {kmodSnow} (snow) / {kmodWind} (wind), k_def {kdef}, γ_G 1.35 / γ_Q 1.5, ψ₀ snow 0.5 / wind 0.6. Wind q_p {qp} kN/m² (≈ {gust} m/s gust).",
                 {
                   kmodSnow: statics.loads.kmod,
                   kmodWind: statics.loads.kmod < 0.75 ? 0.7 : 0.9,
@@ -563,8 +607,18 @@ export function ResultsPanel({ model }: { model: DerivedModel }) {
                   })
                 : t("Gravity checks already exceed 100 % – no wind margin.")}{" "}
               {t("Also checked: rafter, purlin and knee brace joints (EN 1995-1-1 section 8) with the local wind edge zones (EN 1991-1-4 Table 7.6), and the post footings in the soil (DIN 1054 Annex A).")}{" "}
-              {t("This pre-design does not replace a checkable structural calculation by a structural engineer. Fire, settlement, wall anchoring and second-order effects are not covered.")}
+              {t("This pre-design does not replace a checkable structural calculation by a structural engineer.")}
             </p>
+            {statics.notChecked.length > 0 && (
+              <div className="rounded-md border border-slate-700 bg-slate-900/60 p-2 text-[11px] text-slate-300">
+                <div className="mb-1 font-semibold text-slate-200">{t("Not checked")}</div>
+                <ul className="ml-4 list-disc space-y-0.5">
+                  {statics.notChecked.map((n) => (
+                    <li key={n}>{tx(n)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {statics.checks.map((c) => (
               <div
                 key={c.id}

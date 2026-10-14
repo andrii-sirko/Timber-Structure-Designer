@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Opening } from '@/types';
 import { edgeHandleCentre, resizableEdges, resizeOpening, sizeChanged } from './openingResize.ts';
-import { FRAME_GAP, OPENING_PRESETS, findPreset, frameSizeFor, openingFromPreset, openingMaterials, presetMatches } from './openingCatalog.ts';
+import { DEFAULT_INSTALL_GAP, FRAME_GAP, OPENING_PRESETS, findPreset, frameSizeFor, openingFromPreset, openingMaterials, presetMatches, presetRough, relabelForPreset } from './openingCatalog.ts';
 import { headerHeight } from './openings.ts';
 
 const door: Opening = { id: 'd', type: 'door', x: 1000, y: 0, width: 900, height: 2000 };
@@ -39,34 +39,44 @@ test('sizeChanged ignores pure moves', () => {
   assert.equal(sizeChanged(door, { ...door, width: 910 }), true);
 });
 
-test('every preset is on the 10 mm framing grid and keeps the header at 160 mm or less', () => {
+test('every preset: rough opening = frame + 2 × install gap (doors: head gap only), header at 160 mm or less', () => {
   for (const p of OPENING_PRESETS) {
-    assert.equal(p.roughWidth % 10, 0, p.id);
-    assert.equal(p.roughHeight % 10, 0, p.id);
+    assert.equal(p.roughWidth, p.frameWidth + 2 * DEFAULT_INSTALL_GAP, p.id);
+    assert.equal(p.roughHeight, p.frameHeight + (p.type === 'door' ? 1 : 2) * DEFAULT_INSTALL_GAP, p.id);
     assert.ok(headerHeight(p.roughWidth) <= 160, `${p.id} needs a ${headerHeight(p.roughWidth)} mm header`);
-    assert.ok(p.roughWidth > p.frameWidth && p.roughHeight > p.frameHeight, `${p.id} frame must be smaller than the rough opening`);
     assert.ok(p.materials.length >= 3, `${p.id} lists its materials`);
   }
   assert.ok(new Set(OPENING_PRESETS.map((p) => p.id)).size === OPENING_PRESETS.length, 'preset ids are unique');
 });
 
-test('DIN door sizes: 875×2000 → rough 890×2010, frame 860×1992', () => {
+test('door sizes: frame = nominal 875×2000, rough 899×2012 measured from the floor', () => {
   const p = findPreset('door-boarded-875');
   assert.ok(p);
-  assert.equal(p.roughWidth, 890);
-  assert.equal(p.roughHeight, 2010);
-  assert.equal(p.frameWidth, 860);
-  assert.equal(p.frameHeight, 1992);
+  assert.equal(p.frameWidth, 875);
+  assert.equal(p.frameHeight, 2000);
+  assert.equal(p.roughWidth, 899);
+  assert.equal(p.roughHeight, 2012);
   const o = { id: 'x', x: 0, ...openingFromPreset(p) };
   assert.equal(o.type, 'door');
   assert.equal(o.y, 0);
   assert.equal(o.hinge, 'left');
   assert.ok(presetMatches(o, p));
-  assert.deepEqual(frameSizeFor(o), { width: 860, height: 1992 });
+  assert.deepEqual(frameSizeFor(o), { width: 875, height: 2000 });
   assert.equal(openingMaterials(o), p.materials);
+  // a double door 1750 × 2000 needs a 1774 mm wide opening; the gap is a build setting
+  const double = findPreset('door-double-1750')!;
+  assert.deepEqual(presetRough(double), { width: 1774, height: 2012 });
+  assert.deepEqual(presetRough(double, 15), { width: 1780, height: 2015 });
 });
 
-test('window presets carry their sill height and a 10 mm gap per side', () => {
+test('switching the preset renames a label that carries a preset name, custom labels stay', () => {
+  const single = findPreset('window-turntilt-1000x1000')!;
+  assert.equal(relabelForPreset('Two-sash window 1400×1000 1', single), 'Turn-tilt window 1000×1000 1');
+  assert.equal(relabelForPreset('Kitchen window', single), 'Kitchen window');
+  assert.equal(relabelForPreset(undefined, single), 'Turn-tilt window 1000×1000');
+});
+
+test('window presets carry their sill height and the install gap per side', () => {
   const p = findPreset('window-turntilt-800x800');
   assert.ok(p && p.type === 'window');
   const o = { id: 'x', x: 0, ...openingFromPreset(p) };
@@ -80,6 +90,6 @@ test('a hand-resized preset falls back to made-to-measure materials and frame si
   assert.ok(p);
   const o: Opening = { id: 'x', x: 0, ...openingFromPreset(p), width: 900 };
   assert.equal(presetMatches(o, p), false);
-  assert.deepEqual(frameSizeFor(o), { width: 880, height: 800 });
+  assert.deepEqual(frameSizeFor(o), { width: 900 - 2 * DEFAULT_INSTALL_GAP, height: 800 });
   assert.match(openingMaterials(o)[0], /Made-to-measure/);
 });

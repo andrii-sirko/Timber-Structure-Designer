@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { postBottomLevel } from './build.ts';
 import test from 'node:test';
 import { clampFreePost, freePostIdOf, freePostMemberId, freePostTop, generateFreePosts } from './freePosts.ts';
 import { computePostGrid } from './framing/structure.ts';
@@ -48,7 +49,8 @@ test('generates one post member per free post', () => {
   assert.equal(members.length, 1);
   assert.equal(members[0].id, 'free:a');
   assert.equal(members[0].category, 'post');
-  assert.deepEqual(members[0].start, { x: 2500, y: 0, z: 1500 });
+  // the post foot stands on its base, the base gap above the concrete
+  assert.deepEqual(members[0].start, { x: 2500, y: postBottomLevel(params), z: 1500 });
 });
 
 test('free posts stay at their world position when the roof direction changes', () => {

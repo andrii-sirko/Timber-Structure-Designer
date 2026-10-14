@@ -9,8 +9,10 @@ import engineStatics from './engine-statics';
 import engineFraming from './engine-framing';
 import engineParts from './engine-parts';
 import engineJoints from './engine-joints';
+import engineSpec from './engine-spec';
+import uiBuild from './ui-build';
 
 /** One file per app area so entries stay next to the code that uses them; later files win on duplicates. */
-export const DICTIONARY_PARTS: Record<string, Dict> = { common, uiMain, results, panels, scene, assembly, engineStatics, engineFraming, engineParts, engineJoints };
+export const DICTIONARY_PARTS: Record<string, Dict> = { common, uiMain, results, panels, scene, assembly, engineStatics, engineFraming, engineParts, engineJoints, engineSpec, uiBuild };
 
 export const DICTIONARY: Dict = Object.assign({}, ...Object.values(DICTIONARY_PARTS));

@@ -1,0 +1,201 @@
+{
+  "app": "timber-structure-designer",
+  "version": 1,
+  "exportedAt": "2026-10-13T21:29:20.235Z",
+  "project": {
+    "id": "ef8c10fc-3e31-4537-8318-64dea4199225",
+    "name": "Entrance roof",
+    "params": {
+      "length": 4900,
+      "width": 1840,
+      "frontHeight": 2800,
+      "rearHeight": 2550,
+      "roofDirection": "left",
+      "roofScheme": "classic",
+      "overhangs": {
+        "front": 0,
+        "rear": 0,
+        "left": 0,
+        "right": 0
+      },
+      "maxPostSpacing": 3300,
+      "postsPerRow": null,
+      "maxRafterSpacing": 700,
+      "maxRafterLength": 6000,
+      "midPurlinPositions": [],
+      "maxStudSpacing": 1000,
+      "maxStockLength": 6000,
+      "braces": true,
+      "braceLeg": 650,
+      "braceDirection": "both",
+      "connectionMode": "hardware",
+      "timber": {
+        "post": {
+          "width": 140,
+          "height": 140
+        },
+        "beam": {
+          "width": 120,
+          "height": 100
+        },
+        "rafter": {
+          "width": 80,
+          "height": 160
+        },
+        "stud": {
+          "width": 40,
+          "height": 80
+        },
+        "brace": {
+          "width": 100,
+          "height": 100
+        },
+        "strengthClass": "C24"
+      },
+      "lockedSections": [
+        "post"
+      ],
+      "loads": {
+        "snowLoad": 0.85,
+        "roofCovering": "trapezoidal-sheet",
+        "serviceClass": 3,
+        "windLoad": 0.65,
+        "postFootingDepth": 800,
+        "postFootingDiameter": 500,
+        "snowZone": "2",
+        "altitude": 50,
+        "exceptionalSnow": true,
+        "soil": "non-cohesive",
+        "postBase": "h-anchor"
+      },
+      "floor": {
+        "enabled": false,
+        "support": "bearers",
+        "joist": {
+          "width": 60,
+          "height": 120
+        },
+        "bearer": {
+          "width": 100,
+          "height": 100
+        },
+        "maxJoistSpacing": 600,
+        "maxBearerSpacing": 1500,
+        "maxSupportSpacing": 1200,
+        "decking": "spruce-boards",
+        "liveLoad": 2
+      },
+      "insulation": {
+        "enabled": false,
+        "walls": {
+          "material": "mineral-wool",
+          "thickness": 120
+        },
+        "roof": {
+          "material": "mineral-wool",
+          "thickness": 160
+        },
+        "floor": {
+          "material": "mineral-wool",
+          "thickness": 120
+        }
+      },
+      "build": {
+        "site": "Borkheide, Brandenburg",
+        "windZone": "2 (inland)",
+        "terrainCategory": "II–III",
+        "baseGap": 50,
+        "cutReserve": 80,
+        "footingShape": "square",
+        "braceConnector": "screws",
+        "purlinPostConnector": "angle-brackets",
+        "rafterAnchorsPerBearing": 2,
+        "screenBatten": {
+          "width": 60,
+          "height": 80
+        }
+      }
+    },
+    "walls": {
+      "front": {
+        "id": "front",
+        "closed": false,
+        "openings": [],
+        "start": 2510,
+        "end": 4900,
+        "cladding": {
+          "orientation": "horizontal",
+          "boardWidth": 110,
+          "gap": 30
+        },
+        "screen": true,
+        "rail": true
+      },
+      "rear": {
+        "id": "rear",
+        "closed": false,
+        "openings": [],
+        "start": 0,
+        "end": 1450,
+        "rail": true
+      },
+      "left": {
+        "id": "left",
+        "closed": false,
+        "openings": [],
+        "cladding": {
+          "orientation": "horizontal",
+          "boardWidth": 125,
+          "gap": 35
+        },
+        "screen": true
+      },
+      "right": {
+        "id": "right",
+        "closed": false,
+        "openings": []
+      }
+    },
+    "partitions": [],
+    "vehicles": [
+      {
+        "id": "f725f367-ce1a-40eb-9461-ea6d54b8012c",
+        "modelId": "bicycle",
+        "x": 3830,
+        "z": 550,
+        "rotationDeg": 0,
+        "color": "#b91c1c"
+      },
+      {
+        "id": "bb31b0d2-0423-4f86-91c1-4bf6e3ae0c9d",
+        "modelId": "bicycle",
+        "x": 3810,
+        "z": 1330,
+        "rotationDeg": 0,
+        "color": "#1d4ed8"
+      }
+    ],
+    "pavedAreas": [],
+    "postOverrides": {
+      "front:0": {
+        "position": 1920
+      },
+      "rear:0": {
+        "position": -380
+      },
+      "left:0": {
+        "position": 320
+      },
+      "front:1": {
+        "position": -1970
+      }
+    },
+    "freePosts": [
+      {
+        "id": "17a7e42e-b0cc-42a9-9ed9-14b24914a9d1",
+        "x": 2610,
+        "z": 70
+      }
+    ]
+  }
+}

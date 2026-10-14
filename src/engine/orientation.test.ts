@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { postBottomLevel } from './build.ts';
 import test from 'node:test';
 import type { ProjectState, RoofDirection, WallId } from '../types/index.ts';
 import { WALL_IDS } from '../types/index.ts';
@@ -60,8 +61,10 @@ test('the roof slopes down towards the chosen world wall', () => {
     const lowPosts = m.framing.members.filter((x) => x.category === 'post' && x.wallId === dir);
     const highPosts = m.framing.members.filter((x) => x.category === 'post' && x.wallId === worldWall(dir, 'front'));
     assert.ok(lowPosts.length >= 2 && highPosts.length >= 2, dir);
-    for (const p of lowPosts) assert.equal(p.length, 2250 - bh, `${dir} low post`);
-    for (const p of highPosts) assert.equal(p.length, 2600 - bh, `${dir} high post`);
+    // posts stand on their bases, the base gap above the concrete
+    const foot = postBottomLevel(project(dir).params);
+    for (const p of lowPosts) assert.equal(p.length, 2250 - bh - foot, `${dir} low post`);
+    for (const p of highPosts) assert.equal(p.length, 2600 - bh - foot, `${dir} high post`);
     // posts stand on the correct world edge
     const edge = (w: WallId, p: { start: { x: number; z: number } }) =>
       w === 'front' ? p.start.z : w === 'rear' ? 3000 - p.start.z : w === 'left' ? 6000 - p.start.x : p.start.x;

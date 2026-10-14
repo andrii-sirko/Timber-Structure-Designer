@@ -129,7 +129,7 @@ function leftover(source: string, out: string): number {
 function translateDynamic(text: string, lang: Exclude<Lang, 'en'>, depth: number): string | undefined {
   const exact = DICTIONARY[text];
   if (exact) return exact[lang];
-  if (depth > 4 || !/[A-Za-z]/.test(text)) return undefined;
+  if (depth > 6 || !/[A-Za-z]/.test(text)) return undefined;
   const candidates: string[] = [];
   for (const tpl of TEMPLATES) {
     const lazy = tpl.re.exec(text);

@@ -12,6 +12,7 @@ import { MAX_SNOW_ALTITUDE, siteSnowLoad, SNOW_ZONES } from '@/engine/statics/si
 import { Button, NumberField, Section, SelectField, Toggle } from './primitives';
 import { StaticsBadge } from './StaticsBadge';
 import { WallEditor } from './WallEditor';
+import { BuildSettingsEditor } from './BuildSettingsEditor';
 import { VehiclesPanel } from './VehiclesPanel';
 import { PavingPanel } from './PavingPanel';
 import { focusFallbacks, SIDEBAR_TABS } from './sidebarNavigation';
@@ -553,7 +554,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
             onChange={(v) => setLoad('postFootingDepth', v)}
           />
           <NumberField
-            label={t('Post footing diameter')}
+            label={t(params.build.footingShape === 'round' ? 'Post footing diameter' : 'Post footing side')}
             value={params.loads.postFootingDiameter ?? 0}
             min={0}
             max={1000}
@@ -577,8 +578,9 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
             value={params.loads.postBase ?? 'adjustable'}
             onChange={(v) => setLoad('postBase', v as PostBaseType)}
             options={[
+              { value: 'h-anchor', label: t('H post anchor, cast-in (pinned)') },
+              { value: 'h-anchor-reinforced', label: t('H post anchor, reinforced, cast-in (pinned)') },
               { value: 'adjustable', label: t('Adjustable post base (pinned)') },
-              { value: 'h-anchor', label: t('H post base 141 mm, 800/80/8, cast-in 400 mm') },
             ]}
           />
           <SelectField
@@ -617,6 +619,7 @@ export function ParameterSidebar({ model }: { model: DerivedModel }) {
               : t('The structure already exceeds 100 % without wind – fix the gravity checks first.')}
           </p>
         </Section>
+        <BuildSettingsEditor params={params} />
         </>}
 
         {activeTab === 'walls' && <>

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { DoorOpen, PanelsTopLeft, Plus, RectangleHorizontal, Trash2, Move3d, SplitSquareHorizontal, SplitSquareVertical } from 'lucide-react';
-import type { CladdingOrientation, Opening, OpeningType, WallId } from '@/types';
+import type { CladdingOrientation, Opening, OpeningType, WallBracing, WallId } from '@/types';
 import { isOuterWall, WALL_IDS } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
-import { MIN_PARTITION_LENGTH, OPENING_PRESETS, findPreset, frameSizeFor, openingHost, openingLimits, openingMaterials, partitionLimits, MIN_WALL_LENGTH, presetFits, presetMatches, presetsOfType, resolveCladding, resolveScreenCladding, hasWallPosts, CLADDING_LIMITS } from '@/engine';
+import { MIN_PARTITION_LENGTH, OPENING_PRESETS, findPreset, frameSizeFor, openingHost, openingLimits, openingMaterials, partitionLimits, MIN_WALL_LENGTH, presetFits, presetMatches, presetRough, presetsOfType, resolveCladding, resolveScreenCladding, hasWallPosts, CLADDING_LIMITS } from '@/engine';
 import type { OpeningPreset } from '@/engine';
 import type { WallFrame } from '@/engine/framing';
 import { useT } from '@/i18n';
@@ -44,7 +44,7 @@ function PresetPicker({ frame, onAdd }: { frame: WallFrame; onAdd: (presetId: st
         </Button>
       </div>
       <p className="text-[11px] text-slate-500">
-        {tx(preset.description)} {t('Frame {w}×{h} mm, rough opening {rw}×{rh} mm.', { w: preset.frameWidth, h: preset.frameHeight, rw: preset.roughWidth, rh: preset.roughHeight })}
+        {tx(preset.description)} {t('Frame {w}×{h} mm, rough opening {rw}×{rh} mm.', { w: preset.frameWidth, h: preset.frameHeight, rw: presetRough(preset, params.build.installGap).width, rh: presetRough(preset, params.build.installGap).height })}
         {!fit.fits && <span className="text-amber-300">{t(' Does not fit this wall: {reason}.', { reason: tx(fit.reason ?? '') })}</span>}
       </p>
     </div>
@@ -53,8 +53,9 @@ function PresetPicker({ frame, onAdd }: { frame: WallFrame; onAdd: (presetId: st
 
 function PresetSummary({ opening, preset }: { opening: Opening; preset: OpeningPreset | undefined }) {
   const { t, tx } = useT();
-  const stock = preset && presetMatches(opening, preset);
-  const frame = frameSizeFor(opening);
+  const gap = useProjectStore((s) => s.project.params.build.installGap);
+  const stock = preset && presetMatches(opening, preset, gap);
+  const frame = frameSizeFor(opening, gap);
   const materials = openingMaterials(opening);
   return (
     <div className="space-y-1 text-[11px] text-slate-400">
@@ -135,6 +136,8 @@ export function WallEditor() {
   const setWallClosed = useProjectStore((s) => s.setWallClosed);
   const setWallExtent = useProjectStore((s) => s.setWallExtent);
   const setWallScreen = useProjectStore((s) => s.setWallScreen);
+  const setWallBracing = useProjectStore((s) => s.setWallBracing);
+  const setWallRail = useProjectStore((s) => s.setWallRail);
   const addOpening = useProjectStore((s) => s.addOpening);
   const addOpeningPreset = useProjectStore((s) => s.addOpeningPreset);
   const applyOpeningPreset = useProjectStore((s) => s.applyOpeningPreset);
@@ -228,6 +231,26 @@ export function WallEditor() {
               description={t('Open slats fixed to the posts, on a bottom rail and battens – no studs, air and light pass through')}
               checked={Boolean(walls[outerId].screen)}
               onChange={(v) => setWallScreen(outerId, v)}
+            />
+          )}
+          {outerId && wall.closed && (
+            <SelectField<WallBracing>
+              label={t('Wall bracing')}
+              value={walls[outerId].bracing ?? 'none'}
+              onChange={(v) => setWallBracing(outerId, v)}
+              options={[
+                { value: 'none', label: t('None – board cladding is no shear wall') },
+                { value: 'strap', label: t('Crossed steel straps (Windrispenband 40 × 2)') },
+                { value: 'panels', label: t('Sheet panels (OSB ≥ 15 mm)') },
+              ]}
+            />
+          )}
+          {outerId && (
+            <Toggle
+              label={t('Rail for knee braces')}
+              description={t('A rail (Rähm) along the whole wall between the purlin rows, so knee braces can stiffen the frame in this plane')}
+              checked={Boolean(walls[outerId].rail)}
+              onChange={(v) => setWallRail(outerId, v)}
             />
           )}
           {outerId && hasWallPosts(walls[outerId]) && (
@@ -332,7 +355,7 @@ export function WallEditor() {
                   <div className="grid grid-cols-2 gap-2">
                     <label className="block space-y-1">
                       <span className="text-[11px] font-medium tracking-wide text-slate-400 uppercase">{t('Standard size')}</span>
-                      <select className={selectCls} value={findPreset(o.preset) && presetMatches(o, findPreset(o.preset)!) ? o.preset : ''} onChange={(e) => applyOpeningPreset(selectedWallId, o.id, e.target.value)}>
+                      <select className={selectCls} value={findPreset(o.preset) && presetMatches(o, findPreset(o.preset)!, project.params.build.installGap) ? o.preset : ''} onChange={(e) => applyOpeningPreset(selectedWallId, o.id, e.target.value)}>
                         <option value="">{t('Custom')}</option>
                         {presetsOfType(o.type).map((p) => (
                           <option key={p.id} value={p.id}>

@@ -1,8 +1,8 @@
 import type { ProjectState, StaticsCheck, StaticsResult, StaticsStatus, StructureParams, TimberKey, TimberSection } from '@/types';
 import { buildFramingCanonical, canonicalProject } from '../framing';
 import { BRACE_SECTIONS, computeStatics, STANDARD_DEPTHS } from './index';
-import { H_ANCHOR_MIN_FOOTING } from './postBase';
 import { findSmallestValidSection, findSmallestValidSquareSize } from './costOptimizationHelpers';
+import { STUD_CANDIDATES } from './studs';
 
 /**
  * Automatic resolution of statics warnings / failures by stepping the governing
@@ -122,6 +122,15 @@ function applyFix(params: StructureParams, check: StaticsCheck): StructureParams
     const closer = nextDown(FLOOR_SPACINGS, floor.maxSupportSpacing);
     return closer ? { ...params, floor: { ...floor, maxSupportSpacing: closer } } : undefined;
   }
+  if (check.id.startsWith('studs-')) {
+    // smallest stud / batten from the candidate list that is larger than the current one
+    const screen = check.element.startsWith('Screen');
+    const current = screen ? params.build.screenBatten : timber.stud;
+    const next = STUD_CANDIDATES.find((c) => c.width * c.height > current.width * current.height && c.height >= current.height);
+    if (!next) return undefined;
+    if (screen) return { ...params, build: { ...params.build, screenBatten: next } };
+    return locked('stud') ? undefined : { ...params, timber: { ...timber, stud: next } };
+  }
   if (check.id.startsWith('header')) {
     const deeper = locked('stud') ? undefined : nextUp(STUD_DEPTHS, timber.stud.height);
     return deeper ? { ...params, timber: { ...timber, stud: { ...timber.stud, height: deeper } } } : undefined;
@@ -134,19 +143,14 @@ function applyFix(params: StructureParams, check: StaticsCheck): StructureParams
       if (params.braceDirection !== 'both') return { ...params, braceDirection: 'both' };
       return addPosts(params);
     }
-    // sway posts: knee braces act only in the purlin-row direction
-    if (!params.braces && check.element.includes(params.roofScheme === 'sloped-purlins' ? '(Z)' : '(X)')) return { ...params, braces: true };
-    // pinned adjustable bases cannot fix a cantilever post: cast-in H post bases into a footing deep enough for them
-    if (check.element.startsWith('Sway posts') && params.loads.postBase !== 'h-anchor') {
-      const { loads } = params;
-      return {
-        ...params,
-        loads: { ...loads, postBase: 'h-anchor', postFootingDepth: Math.max(loads.postFootingDepth ?? 0, H_ANCHOR_MIN_FOOTING), postFootingDiameter: Math.max(loads.postFootingDiameter ?? 0, 200) },
-      };
-    }
+    // pinned post bases: an unbraced direction needs knee braces (they also land on wall rails across the rows)
+    if (check.element.startsWith('No bracing') && (!params.braces || params.braceDirection !== 'both')) return { ...params, braces: true, braceDirection: 'both' };
+    return undefined;
+  }
+  if (check.id.startsWith('brace-post')) {
+    if (params.braceDirection !== 'both') return { ...params, braceDirection: 'both' };
     const bigger = locked('post') ? undefined : nextUp(POST_SIZES, Math.min(timber.post.width, timber.post.height));
-    if (bigger) return { ...params, timber: { ...timber, post: { width: bigger, height: bigger } } };
-    return addPosts(params);
+    return bigger ? { ...params, timber: { ...timber, post: { width: bigger, height: bigger } } } : undefined;
   }
   return undefined;
 }

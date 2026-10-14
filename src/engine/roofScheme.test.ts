@@ -65,7 +65,7 @@ test('sloped purlins: posts step down along each row and carry the purlin unders
   for (let i = 1; i < sorted.length; i++) assert.ok(sorted[i].profile[3].v <= sorted[i - 1].profile[3].v, 'lower towards the low eave');
   // front post top ≈ H1 − purlin plumb thickness
   const cos = Math.cos(framing.roof.pitchRad);
-  const frontTop = Math.max(...sorted[0].profile.map((q) => q.u));
+  const frontTop = sorted[0].start.y + Math.max(...sorted[0].profile.map((q) => q.u));
   assert.ok(near(frontTop, p.params.frontHeight - bh / cos, 2 + (p.params.timber.post.height / 2) * Math.tan(framing.roof.pitchRad)));
   // all posts sit on a row line (canonical x = pw/2, mid, L − pw/2 → world x = L − offset)
   const rowX = framing.grid.rows.map((r) => p.params.length - r.offset);

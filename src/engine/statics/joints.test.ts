@@ -26,7 +26,7 @@ test('ground snow load follows the NA zone formulas and their minimum values', (
   near(groundSnowLoad('2a', 500), 1.25 * groundSnowLoad('2', 500), 1e-9);
   near(groundSnowLoad('3', 800), 0.31 + 2.91 * (940 / 760) ** 2, 1e-9);
   const typed = createDefaultProject().params.loads;
-  assert.equal(siteSnowLoad({ ...typed, snowLoad: 1.23 }), 1.23);
+  assert.equal(siteSnowLoad({ ...typed, snowZone: undefined, snowLoad: 1.23 }), 1.23);
   assert.equal(siteSnowLoad({ ...typed, snowLoad: 1.23, snowZone: '2', altitude: 500 }), groundSnowLoad('2', 500));
 });
 
@@ -57,7 +57,7 @@ test('footing bearing interpolates the DIN 1054 table', () => {
 
 test('every structure gets joint checks, footings only when there is a footing', () => {
   const s = statics(project());
-  for (const id of ['conn-rafter', 'conn-post', 'foundation-bearing']) assert.ok(s.checks.some((c) => c.id === id), id);
+  for (const id of ['uplift-sheet', 'uplift-rafter', 'uplift-purlin', 'uplift-post', 'uplift-foundation', 'conn-brace-x', 'foundation-bearing']) assert.ok(s.checks.some((c) => c.id === id), id);
   const bare = statics(project({}, { postFootingDepth: 0 }));
   assert.ok(!bare.checks.some((c) => c.kind === 'foundation'));
 });
@@ -71,32 +71,46 @@ test('a shallow footing is flagged as not frost-free and a small one as overload
   assert.ok(soft.utilisation > big.utilisation);
 });
 
-test('a pegged tenon cannot take the net uplift of a light roof', () => {
+test('the purlin–post connector sets the resistance of link 3; screws must reach the post', () => {
   const light = { roofCovering: 'polycarbonate' as const };
-  const pegged = statics(project({ connectionMode: 'traditional' }, light)).checks.find((c) => c.id === 'conn-post')!;
-  assert.equal(pegged.status, 'warning');
-  assert.match(pegged.recommendation ?? '', /fully threaded screws/);
-  const tiles = statics(project({ connectionMode: 'traditional' }, { roofCovering: 'roof-tiles' })).checks.find((c) => c.id === 'conn-post')!;
-  assert.equal(tiles.status, 'ok');
+  const of = (purlinPostConnector: 'angle-brackets' | 'screws' | 'strap', beam = { width: 120, height: 200 }) => {
+    const p = project({ timber: { ...createDefaultProject().params.timber, beam } }, light);
+    p.params.build = { ...p.params.build, purlinPostConnector };
+    return statics(p).checks.find((c) => c.id === 'uplift-purlin')!;
+  };
+  assert.match(of('angle-brackets').detail, /angle brackets/);
+  assert.match(of('strap').detail, /Lochband/);
+  assert.match(of('screws').detail, /8 × 300 mm from the purlin top/);
+  // a 320 mm purlin leaves an 8 × 300 screw nothing to grip in the post
+  assert.match(of('screws', { width: 120, height: 320 }).detail, /do not reach the post/);
 });
 
-test('edge-zone suction governs the rafter bearings and stronger wind needs more screws', () => {
-  const calm = statics(project({}, { windLoad: 0.5 })).checks.find((c) => c.id === 'conn-rafter')!;
-  const storm = statics(project({}, { windLoad: 1.25 })).checks.find((c) => c.id === 'conn-rafter')!;
+test('two rafter anchors per bearing halve the utilisation of link 2', () => {
+  const one = project();
+  const two = project();
+  two.params.build = { ...two.params.build, rafterAnchorsPerBearing: 2 };
+  const u1 = statics(one).checks.find((c) => c.id === 'uplift-rafter')!;
+  const u2 = statics(two).checks.find((c) => c.id === 'uplift-rafter')!;
+  assert.ok(Math.abs(u2.utilisation - u1.utilisation / 2) < 1e-9);
+});
+
+test('edge-zone suction governs the rafter bearings and stronger wind pulls harder', () => {
+  const calm = statics(project({}, { windLoad: 0.5 })).checks.find((c) => c.id === 'uplift-rafter')!;
+  const storm = statics(project({}, { windLoad: 1.25 })).checks.find((c) => c.id === 'uplift-rafter')!;
   assert.ok(storm.loadUls > calm.loadUls);
-  assert.match(calm.detail, /edge strips/);
+  assert.match(calm.detail, /edge/);
 });
 
-test('joints are advisories: they do not drive the overall status', () => {
-  const s = statics(project({ connectionMode: 'traditional' }, { roofCovering: 'polycarbonate' }));
-  const withoutJoints = s.checks.filter((c) => c.kind !== 'uplift' && c.kind !== 'connection');
-  const worst = withoutJoints.some((c) => c.status === 'fail') ? 'fail' : withoutJoints.some((c) => c.status === 'warning') ? 'warning' : 'ok';
-  assert.equal(s.status, worst);
+test('every link of the chain names its load, resistance and utilisation', () => {
+  for (const c of statics(project()).checks.filter((x) => x.kind === 'uplift')) {
+    assert.match(c.detail, /%\)/, c.id);
+    assert.ok(Number.isFinite(c.utilisation), c.id);
+  }
 });
 
 test('exceptional snow adds an accidental combination that can govern light roofs', () => {
   // light roof, heavy snow: (g + 2.3·s) / k_mod,instant 1.1 beats (1.35·g + 1.5·s) / k_mod,medium 0.8
-  const heavySnow = { snowLoad: 2.0, roofCovering: 'trapezoidal-sheet' as const };
+  const heavySnow = { snowLoad: 2.0, snowZone: undefined, exceptionalSnow: false, roofCovering: 'trapezoidal-sheet' as const };
   const normal = statics(project({}, heavySnow)).checks.find((c) => c.id === 'rafter')!;
   const plain = statics(project({}, { ...heavySnow, exceptionalSnow: true }));
   const exceptional = plain.checks.find((c) => c.id === 'rafter')!;
@@ -104,4 +118,12 @@ test('exceptional snow adds an accidental combination that can govern light roof
   assert.match(exceptional.detail, /G \+ S_Ad/);
   assert.match(plain.checks.find((c) => c.id === 'post-front')!.detail, /Exceptional snow/);
   near(plain.loads.exceptionalSnow!, 2.3 * 2.0, 1e-9);
+});
+
+test('the overall status is the worst of every row, joints and footings included', () => {
+  for (const p of [project(), project({ connectionMode: 'traditional' }, { roofCovering: 'polycarbonate' })]) {
+    const s = statics(p);
+    const worst = s.checks.some((c) => c.status === 'fail') ? 'fail' : s.checks.some((c) => c.status === 'warning') ? 'warning' : 'ok';
+    assert.equal(s.status, worst);
+  }
 });

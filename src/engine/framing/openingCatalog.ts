@@ -37,24 +37,29 @@ export interface WindowPreset extends PresetBase {
 export type OpeningPreset = DoorPreset | WindowPreset;
 
 /** Installation gap per side between frame and rough opening (foam / compression tape). */
-export const FRAME_GAP = 10;
+/** Default installation gap per side between a frame and the rough opening (mm) – BuildSettings.installGap */
+export const DEFAULT_INSTALL_GAP = 12;
+/** @deprecated the installation gap is a build setting now; kept for the default */
+export const FRAME_GAP = DEFAULT_INSTALL_GAP;
 
 /**
- * Rough door opening per DIN 18100: nominal width + 10, nominal height + 5, rounded up to the
- * 10 mm framing grid. Frame outer size per DIN 18111: nominal − 15 / − 8 (leaf 860×1985 for 875×2000).
+ * Rough opening for a frame: width = frame + 2 × gap; doors stand on the finished floor (clear
+ * height measured from ±0), so their height gets the gap at the head only; windows get it all round.
  */
-function doorSizes(nominalW: number, nominalH: number): Pick<PresetBase, 'frameWidth' | 'frameHeight' | 'roughWidth' | 'roughHeight'> {
-  return {
-    frameWidth: nominalW - 15,
-    frameHeight: nominalH - 8,
-    roughWidth: Math.ceil((nominalW + 10) / 10) * 10,
-    roughHeight: Math.ceil((nominalH + 5) / 10) * 10,
-  };
+export function roughFor(type: OpeningType, frameW: number, frameH: number, gap = DEFAULT_INSTALL_GAP): { width: number; height: number } {
+  return { width: frameW + 2 * gap, height: frameH + (type === 'door' ? gap : 2 * gap) };
 }
 
-/** Rough window opening = frame outer size + 10 mm gap on every side. */
+/** Door: frame = nominal size (e.g. 1750 × 2000). */
+function doorSizes(nominalW: number, nominalH: number): Pick<PresetBase, 'frameWidth' | 'frameHeight' | 'roughWidth' | 'roughHeight'> {
+  const rough = roughFor('door', nominalW, nominalH);
+  return { frameWidth: nominalW, frameHeight: nominalH, roughWidth: rough.width, roughHeight: rough.height };
+}
+
+/** Window: frame outer size as named. */
 function windowSizes(frameW: number, frameH: number): Pick<PresetBase, 'frameWidth' | 'frameHeight' | 'roughWidth' | 'roughHeight'> {
-  return { frameWidth: frameW, frameHeight: frameH, roughWidth: frameW + 2 * FRAME_GAP, roughHeight: frameH + 2 * FRAME_GAP };
+  const rough = roughFor('window', frameW, frameH);
+  return { frameWidth: frameW, frameHeight: frameH, roughWidth: rough.width, roughHeight: rough.height };
 }
 
 const BOARDED_MATERIALS = (leaves: 1 | 2, nominal: string): string[] => [
@@ -300,18 +305,25 @@ export function presetsOfType(type: OpeningType): OpeningPreset[] {
   return OPENING_PRESETS.filter((p) => p.type === type);
 }
 
+/** Rough opening of a preset for an installation gap. */
+export function presetRough(preset: OpeningPreset, gap = DEFAULT_INSTALL_GAP): { width: number; height: number } {
+  return roughFor(preset.type, preset.frameWidth, preset.frameHeight, gap);
+}
+
 /** true when the opening still has the preset's rough size (it was not resized by hand). */
-export function presetMatches(opening: Opening, preset: OpeningPreset): boolean {
-  return opening.width === preset.roughWidth && opening.height === preset.roughHeight;
+export function presetMatches(opening: Opening, preset: OpeningPreset, gap = DEFAULT_INSTALL_GAP): boolean {
+  const rough = presetRough(preset, gap);
+  return opening.width === rough.width && opening.height === rough.height;
 }
 
 /** Opening fields (without id / x) for a preset. */
-export function openingFromPreset(preset: OpeningPreset): Omit<Opening, 'id' | 'x'> {
+export function openingFromPreset(preset: OpeningPreset, gap = DEFAULT_INSTALL_GAP): Omit<Opening, 'id' | 'x'> {
+  const rough = presetRough(preset, gap);
   return {
     type: preset.type,
     y: preset.type === 'window' ? preset.sill : 0,
-    width: preset.roughWidth,
-    height: preset.roughHeight,
+    width: rough.width,
+    height: rough.height,
     preset: preset.id,
     label: preset.label,
     hinge: preset.type === 'door' ? 'left' : undefined,
@@ -373,11 +385,30 @@ export function openingMaterials(opening: Opening): string[] {
 }
 
 /** Frame outer size that fits a rough opening (preset size, or rough minus the installation gap). */
-export function frameSizeFor(opening: Opening): { width: number; height: number } {
+export function frameSizeFor(opening: Opening, gap = DEFAULT_INSTALL_GAP): { width: number; height: number } {
   const preset = findPreset(opening.preset);
-  if (preset && presetMatches(opening, preset)) return { width: preset.frameWidth, height: preset.frameHeight };
+  if (preset && presetMatches(opening, preset, gap)) return { width: preset.frameWidth, height: preset.frameHeight };
   return {
-    width: opening.width - 2 * FRAME_GAP,
-    height: opening.type === 'window' ? opening.height - 2 * FRAME_GAP : opening.height - FRAME_GAP,
+    width: opening.width - 2 * gap,
+    height: opening.type === 'window' ? opening.height - 2 * gap : opening.height - gap,
   };
+}
+
+/**
+ * Label after switching an opening to `preset`: a label that starts with any preset's name (as
+ * "Two-sash window 1400×1000 1") gets the new name and keeps its number; a custom label stays.
+ */
+export function relabelForPreset(label: string | undefined, preset: OpeningPreset): string {
+  if (!label) return preset.label;
+  const known = [...OPENING_PRESETS].sort((a, b) => b.label.length - a.label.length).find((p) => label.startsWith(p.label));
+  return known ? preset.label + label.slice(known.label.length) : label;
+}
+
+/**
+ * Rough size an opening was given by the catalogue before the installation gap became a setting
+ * (doors per DIN 18100 on a 10 mm grid, windows frame + 2 × 10 mm) – lets old files migrate.
+ */
+export function legacyPresetRough(preset: OpeningPreset): { width: number; height: number } {
+  if (preset.type === 'door') return { width: Math.ceil((preset.frameWidth + 10) / 10) * 10, height: Math.ceil((preset.frameHeight + 5) / 10) * 10 };
+  return { width: preset.frameWidth + 20, height: preset.frameHeight + 20 };
 }

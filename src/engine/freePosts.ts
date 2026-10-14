@@ -1,3 +1,4 @@
+import { postBottomLevel } from './build';
 import type { FreePost, Member, PostGrid, PostRow, StructureParams } from '@/types';
 import { cutProfile, rectProfile, Y_AXIS, Z_AXIS } from './geometry';
 import type { RoofLines } from './framing/roofLines';
@@ -67,7 +68,8 @@ export function generateFreePosts(params: StructureParams, roof: RoofLines, grid
     const p = clampFreePost(post, params, 'canonical');
     const top = freePostTop(p, params, roof, grid);
     const { sloped, underPurlin } = top;
-    const foot = groundAt(ground, p.x, p.z);
+    // foot: the ground there plus the post bottom level (base gap / curb top)
+    const foot = groundAt(ground, p.x, p.z) + postBottomLevel(params);
     const centreHeight = top.centreHeight - foot;
     const pitch = Math.round(Math.abs(roof.pitchDeg) * 10) / 10;
     return {

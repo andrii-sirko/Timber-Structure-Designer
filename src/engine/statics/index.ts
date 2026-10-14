@@ -1,10 +1,9 @@
-import type { FramingResult, PostBaseType, PostRow, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection, Wall, WallId } from '@/types';
+import type { FramingResult, PostRow, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection, Wall, WallId } from '@/types';
 import { DECKING, floorLayout, sanitizeParams, wallExtent } from '../framing';
 import { resolveScreenCladding } from '../framing/cladding';
 import { braceLayout, rowPoint, rowPostTop, type BracePlacement } from '../framing/structure';
 import { groundAt, groundPlaneOf } from '../groundSlope';
 import { computeRoofLines, type RoofLines } from '../framing/roofLines';
-import { postBases } from '../joinery/anchors';
 import { clampFreePost, freePostRow, freePostTop } from '../freePosts';
 import { sectionLabel } from '../geometry';
 import {
@@ -20,7 +19,9 @@ import {
   WALL_FORCE_COEFFICIENT,
   type MaterialProps,
 } from './materials';
-import { H_ANCHOR, H_ANCHOR_MIN_FOOTING, postBaseCapacity } from './postBase';
+import { upliftChainChecks } from './upliftChain';
+import { studWindChecks } from './studs';
+import { strapNailCapacity, strapTensionRd, wallStraps } from '../framing/straps';
 import { connectionChecks } from './connections';
 import { foundationChecks } from './foundations';
 import { EXCEPTIONAL_SNOW_FACTOR, siteSnowLoad } from './siteLoads';
@@ -41,7 +42,6 @@ import { canopyLocalCoefficients, type CanopyZones } from './windZones';
  */
 
 const GAMMA_G = 1.35;
-const GAMMA_G_FAVOURABLE = 1.0;
 const GAMMA_Q = 1.5;
 const PSI0_SNOW = 0.5;
 const PSI0_WIND = 0.6;
@@ -50,8 +50,6 @@ const NOTIONAL_SWAY = 0.01;
 /** Fraction of a knee brace's horizontal leg credited as purlin support (elastic support) */
 const BRACE_SPAN_CREDIT = 0.5;
 const G_ACCEL = 9.81;
-/** Unit weight of plain concrete (kN/m³, EN 1991-1-1) */
-const CONCRETE_WEIGHT = 24;
 const SQRT2 = Math.SQRT2;
 export const STANDARD_DEPTHS = [80, 100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300, 320, 360];
 export const BRACE_SECTIONS: TimberSection[] = [
@@ -275,14 +273,31 @@ const OTHER: Record<Axis, Axis> = { x: 'z', z: 'x' };
 const AXIS_LABEL: Record<Axis, string> = { x: 'along the length (X)', z: 'across (Z)' };
 const WALLS_ALONG: Record<Axis, WallId[]> = { x: ['front', 'rear'], z: ['left', 'right'] };
 
+/** A line of knee-braced posts acting in one direction: a purlin row, or the rail of an outer wall. */
+interface BracedLine {
+  key: string;
+  label: string;
+  /** Active knee braces per load sense (min over both senses) */
+  active: number;
+  /** Posts carrying braces in this line – they share the line's horizontal force (pinned bases) */
+  posts: number;
+  /** Purlin row the braced posts belong to (one per post for a wall line) */
+  rowKeys: string[];
+  /** Tallest braced post (mm) */
+  height: number;
+  wall?: WallId;
+}
+
 interface LateralSystem {
   axis: Axis;
   /** Rows whose purlins run along this axis (their knee braces act in this direction) */
   rows: PostRow[];
-  /** Active knee braces per braced row: min over both load senses */
-  bracedRows: { row: PostRow; active: number }[];
-  /** Closed (boarded) outer walls in the plane of this axis */
-  shearWalls: WallId[];
+  /** Knee-braced lines in this direction */
+  lines: BracedLine[];
+  /** Closed outer walls in this plane that are braced (steel straps or sheet panels) – boards alone do not count */
+  shearWalls: { id: WallId; bracing: 'strap' | 'panels' }[];
+  /** Closed walls in this plane with board cladding only: no shear wall */
+  unbracedWalls: WallId[];
   kind: 'braces' | 'wall' | 'sway';
 }
 
@@ -359,25 +374,33 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
   const snowLoadRoof = snowShapeCoefficient(roof.pitchDeg) * groundSnow;
 
   const grid = framing.grid;
-  const braces = braceLayout(params, roofLines, grid);
+  const braces = braceLayout(params, roofLines, grid, project.walls);
   const braceLeg = Math.max(300, params.braceLeg);
   const hardware = params.connectionMode === 'hardware';
 
   const lateral = {} as Record<Axis, LateralSystem>;
   for (const axis of ['x', 'z'] as Axis[]) {
     const rows = grid.rows.filter((r) => r.axis === axis);
-    const bracedRows: LateralSystem['bracedRows'] = [];
-    for (const row of rows) {
-      const rowBraces = braces.filter((b) => b.rowKey === row.key);
-      // Load sense +: braces leaning towards − go into compression, the others into tension
-      // (tension only counts with mechanical connectors – a tenon cannot pull).
-      const active = (sense: number) => rowBraces.filter((b) => b.side === -sense).length + (hardware ? rowBraces.filter((b) => b.side === sense).length : 0);
+    const lines: BracedLine[] = [];
+    // Load sense +: braces leaning towards − go into compression, the others into tension
+    // (tension only counts with mechanical connectors – a tenon cannot pull).
+    const addLine = (key: string, label: string, lineBraces: BracePlacement[], wall?: WallId): void => {
+      const active = (sense: number) => lineBraces.filter((b) => b.side === -sense).length + (hardware ? lineBraces.filter((b) => b.side === sense).length : 0);
       const n = Math.min(active(1), active(-1));
-      if (n > 0) bracedRows.push({ row, active: n });
-    }
-    const shearWalls = WALLS_ALONG[axis].filter((id) => project.walls[id]?.closed);
-    const kind: LateralSystem['kind'] = bracedRows.length > 0 ? 'braces' : shearWalls.length > 0 ? 'wall' : 'sway';
-    lateral[axis] = { axis, rows, bracedRows, shearWalls, kind };
+      if (n <= 0) return;
+      const postKeys = [...new Set(lineBraces.map((b) => `${b.rowKey}:${b.postIndex}`))];
+      lines.push({ key, label, active: n, posts: postKeys.length, rowKeys: [...new Set(lineBraces.map((b) => b.rowKey))], height: Math.max(...lineBraces.map((b) => b.top)), wall });
+    };
+    for (const row of rows) addLine(row.key, row.name, braces.filter((b) => !b.wall && b.rowKey === row.key));
+    for (const id of WALLS_ALONG[axis]) addLine(`wall-${id}`, `Rail ${id}`, braces.filter((b) => b.wall === id && b.axis === axis), id);
+    const closedWalls = WALLS_ALONG[axis].filter((id) => project.walls[id]?.closed);
+    const shearWalls = closedWalls.flatMap((id) => {
+      const bracing = project.walls[id].bracing;
+      return bracing === 'strap' || bracing === 'panels' ? [{ id, bracing }] : [];
+    });
+    const unbracedWalls = closedWalls.filter((id) => !shearWalls.some((w) => w.id === id));
+    const kind: LateralSystem['kind'] = lines.length > 0 ? 'braces' : shearWalls.length > 0 ? 'wall' : 'sway';
+    lateral[axis] = { axis, rows, lines, shearWalls, unbracedWalls, kind };
   }
 
   const lengthM = (params.length + overhangs.left + overhangs.right) / 1000;
@@ -468,32 +491,6 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
   const windDown = ctx.canopy.down * q; // kN/m² plan (vertical component of the roof pressure)
   const windUp = -ctx.canopy.up * q; // kN/m² plan suction
   const kmodShort = k.short;
-  const baseType: PostBaseType = loads.postBase ?? 'adjustable';
-  const bases = postBases(framing.members);
-  /**
-   * Sum of the base moment resistances (kNm) for wind along `axis` – the steel flanges and bolts
-   * yield in a ductile way, so all bases share the frame moment. weak = bases whose flanges are
-   * pushed sideways (turned for the bottom plates of a wall).
-   */
-  const baseMoment = (axis: Axis, type: PostBaseType): { sum: number; n: number; weak: number; governing: 'bolts' | 'flanges' } => {
-    // Posts outside walls get their base turned so the flanges bend in-plane in the only unbraced direction
-    const turnable = (postId: string) => ctx.lateral[OTHER[axis]].kind !== 'sway' && !framing.members.find((m) => m.id === postId)?.wallId;
-    const candidates =
-      bases.length > 0
-        ? bases.map((b) => ({ thickness: b.width, weak: !turnable(b.postId) && Math.abs(axis === 'x' ? b.flangeAxis.x : b.flangeAxis.z) > 0.5 }))
-        : Array.from({ length: ctx.totalPosts }, () => ({ thickness: pw, weak: false }));
-    let sum = 0;
-    let weak = 0;
-    let governing: 'bolts' | 'flanges' = 'flanges';
-    for (const c of candidates) {
-      const cap = postBaseCapacity(type, mat, c.thickness, kmodShort);
-      if (c.weak) weak++;
-      else if (cap.strongGoverning === 'bolts') governing = 'bolts';
-      sum += c.weak ? cap.momentWeak : cap.momentStrong;
-    }
-    return { sum, n: candidates.length, weak, governing };
-  };
-
   // ── Rafters ─────────────────────────────────────────────────────────────
   {
     let horizontalSpan = 500;
@@ -534,6 +531,66 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     });
   }
 
+  // ── Roof sheet supports: battens across the fall line, or the level rafters themselves ──
+  if (loads.roofCovering === 'trapezoidal-sheet') {
+    const maxSpan = params.build.sheetMaxSpan;
+    const battens = framing.members.filter((m) => m.group.startsWith('Roof batten'));
+    if (battens.length > 0) {
+      const rowsZ = [...new Set(battens.map((m) => Math.round(m.start.z)))].sort((a, b) => a - b);
+      let gap = 0;
+      for (let i = 1; i < rowsZ.length; i++) gap = Math.max(gap, (rowsZ[i] - rowsZ[i - 1]) / cos);
+      const sec = battens[0].section; // laid flat: height = thickness
+      const sb = gap / 1000;
+      const selfW = ctx.density * (sec.width / 1000) * (sec.height / 1000);
+      const bl: BeamLoads = { qG: ROOF_COVERING_LOAD[loads.roofCovering].load * sb + selfW, qS: snowLoadRoof * cos * sb, qW: windDown * sb };
+      const res = checkBeam({ section: sec, span: roof.rafterSpacing, cantilever: 0, ...bl }, mat, k);
+      const spanUtil = gap / maxSpan;
+      // the span limit is a yes / no rule of the profile, the utilisation is the batten's bending
+      const utilisation = res.utilisation;
+      const status: StaticsStatus = spanUtil > 1.001 ? 'fail' : statusOf(utilisation);
+      checks.push({
+        id: 'roof-batten',
+        kind: 'vertical',
+        element: 'Roof battens',
+        elementDe: 'Dachlattung',
+        section: sec,
+        span: Math.round(roof.rafterSpacing),
+        loadUls: res.qd,
+        loadSls: bl.qG + slsVariable(bl),
+        stressUtil: res.stressUtil,
+        deflectionUtil: res.deflectionUtil,
+        deflection: res.wFin,
+        deflectionLimit: res.wLimit,
+        utilisation,
+        status,
+        recommendation: status !== 'ok' ? (spanUtil > 1.001 ? `Lay the battens at ≤ ${maxSpan} mm along the slope.` : 'Use deeper battens or reduce the rafter spacing.') : undefined,
+        detail: `${rowsZ.length} rows ${sec.width}×${sec.height} mm across the fall line at ${Math.round(gap)} mm along the slope (sheet max. span ${maxSpan} mm, ${pct(spanUtil)}), spanning ${Math.round(roof.rafterSpacing)} mm between rafters. Governing ${res.governing}: σ_m,d = ${fmt(res.sigma)} ≤ f_m,d = ${fmt(res.fmd)} N/mm² (${pct(res.stressUtil)}), w_fin = ${fmt(res.wFin)} mm ≤ ${fmt(res.wLimit)} mm.`,
+      });
+    } else if (slopedPurlins) {
+      // the level rafters run across the fall line and carry the sheet directly
+      const spanUtil = roof.rafterSpacing / maxSpan;
+      const status: StaticsStatus = spanUtil > 1.001 ? 'fail' : 'ok';
+      checks.push({
+        id: 'sheet-span',
+        kind: 'vertical',
+        element: 'Roof sheet span',
+        elementDe: 'Stützweite Trapezblech',
+        section: timber.rafter,
+        span: Math.round(roof.rafterSpacing),
+        loadUls: 0,
+        loadSls: 0,
+        stressUtil: spanUtil,
+        deflectionUtil: 0,
+        deflection: 0,
+        deflectionLimit: 0,
+        utilisation: spanUtil,
+        status,
+        recommendation: status !== 'ok' ? `Reduce the rafter spacing to ≤ ${maxSpan} mm.` : undefined,
+        detail: `The level ${timber.rafter.width}×${timber.rafter.height} mm rafters run across the fall line and carry the sheet directly – no battens needed. Spacing ${Math.round(roof.rafterSpacing)} mm ≤ profile max. span ${maxSpan} mm (${pct(spanUtil)}).`,
+      });
+    }
+  }
+
   // ── Purlins ─────────────────────────────────────────────────────────────
   const purlinSelf = ctx.density * (timber.beam.width / 1000) * (timber.beam.height / 1000);
   const purlinStart = slopedPurlins ? -overhangs.front : -overhangs.left;
@@ -571,6 +628,13 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     const qvUp = windUp * tribM;
     return { row, qvG, qvS, qvW, qvUp, beam: { qG: qvG * loadFactor, qS: qvS * loadFactor, qW: qvW * loadFactor } as BeamLoads };
   });
+  /**
+   * Purlin length (m) a post of the row carries: with two posts both are end supports (half the bay
+   * plus the overhang); with more posts an inner support of the (spliced) purlin governs (one bay).
+   */
+  const postShareM = (supports: { span: number; cantilever: number; posts: number }): number =>
+    (supports.posts >= 3 ? supports.span : supports.span / 2 + supports.cantilever) / 1000;
+
   for (const { row, beam } of purlinLoads) {
     const { cantilever: gapCantilever, posts } = row.supports;
     const gap = posts >= 2 ? row.braced.span : row.supports.span;
@@ -631,9 +695,11 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
   };
   const H: Record<Axis, ReturnType<typeof horizontal>> = { x: horizontal('x'), z: horizontal('z') };
 
-  /** Effective buckling length of a post in direction `axis` (sway frames double the height). */
+  /**
+   * Effective buckling length of a post in direction `axis`. Post bases are pinned and the roof
+   * holds the post tops (an unbraced direction is a mechanism, reported by the bracing check).
+   */
   const bucklingLength = (axis: Axis, height: number, rowAxis: Axis, rowBraced: boolean): number => {
-    if (ctx.lateral[axis].kind === 'sway') return 2 * height;
     if (axis === rowAxis && rowBraced && (params.braceDirection === 'both' || params.connectionMode === 'hardware')) return Math.max(height - ctx.braceLeg, 500);
     return height;
   };
@@ -655,17 +721,13 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       labelDe: row.nameDe === 'Mittelpfette' ? 'Pfosten mitte' : row.nameDe.replace('Pfette', 'Pfosten'),
       height: tallest,
       rowAxis: row.axis,
-      rowBraced: ctx.lateral[row.axis].bracedRows.some((b) => b.row.key === row.key),
+      rowBraced: ctx.lateral[row.axis].lines.some((l) => l.key === row.key),
       load,
     };
   });
-  const swayUtil: Record<Axis, { util: number; detail: string; element: string }> = {
-    x: { util: 0, detail: '', element: '' },
-    z: { util: 0, detail: '', element: '' },
-  };
   /**
-   * Post as a strut under its characteristic axial loads (kN): buckling under G + S, plus the
-   * wind moment of every sway direction (the post shares the horizontal load with all others).
+   * Post as a pinned strut under its characteristic axial loads (kN): buckling under G + S (and the
+   * accidental snow). The bending from knee braces is checked with the bracing.
    */
   const checkPost = (post: {
     id: string;
@@ -678,7 +740,7 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     /** Sentence leading the detail (what the post carries) */
     lead?: string;
   }): StaticsCheck => {
-    const { G, S, W } = post.N;
+    const { G, S } = post.N;
     const Nsnow = GAMMA_G * G + GAMMA_Q * S;
     const Nk = G + S;
     const { Lrow, Lperp } = post;
@@ -687,7 +749,6 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     const sigma = (Nsnow * 1000) / Apost;
     let utilisation = sigma / (col.kc * col.fcd);
     let governing = 'G + S';
-    const combined: string[] = [];
     let accidental = '';
     if (k.snowAccidental > 0) {
       const colAcc = columnCurve(timber.post, Lef, mat, k.instant);
@@ -700,36 +761,6 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       accidental = ` Exceptional snow G + ${k.snowAccidental}·S: ${pct(util)}.`;
     }
 
-    // Sway directions: the post is a cantilever from a moment-fixed base and carries the wind moment
-    for (const axis of ['x', 'z'] as Axis[]) {
-      if (ctx.lateral[axis].kind !== 'sway') continue;
-      const colShort = columnCurve(timber.post, Lef, mat, kmodShort);
-      const fmdShort = (kmodShort * mat.fmk) / mat.gammaM;
-      const cases = [
-        { label: 'G + W + ψ₀S', N: GAMMA_G * G + GAMMA_Q * W + GAMMA_Q * PSI0_SNOW * S, Hd: H[axis].windLead },
-        { label: 'G + S + ψ₀W', N: GAMMA_G * G + GAMMA_Q * S + GAMMA_Q * PSI0_WIND * W, Hd: H[axis].snowLead },
-      ];
-      for (const c of cases) {
-        const Hpost = c.Hd / ctx.totalPosts;
-        const Md = Hpost * post.height; // kN·mm
-        const sigmaC = (c.N * 1000) / Apost;
-        const sigmaM = (Md * 1000) / Wpost;
-        const util = sigmaC / (colShort.kc * colShort.fcd) + sigmaM / fmdShort;
-        if (util > utilisation) {
-          utilisation = util;
-          governing = `${c.label} ${AXIS_LABEL[axis]}`;
-        }
-        if (util > swayUtil[axis].util) {
-          swayUtil[axis] = {
-            util,
-            element: post.label,
-            detail: `${post.label}: H_d = ${kn(Hpost)} per post (${ctx.totalPosts} posts share ${kn(c.Hd)} incl. ${Math.round(NOTIONAL_SWAY * 100)} % notional sway), M_d = ${fmt(Md / 1000, 2)} kNm at the base, N_d = ${kn(c.N)}. σ_c/(k_c·f_c,0,d) + σ_m/f_m,d = ${fmt(sigmaC / (colShort.kc * colShort.fcd), 2)} + ${fmt(sigmaM / fmdShort, 2)} = ${pct(util)} (${c.label}, k_mod ${kmodShort}).`,
-          };
-        }
-        combined.push(`${c.label}: ${pct(util)}`);
-      }
-    }
-
     const status = statusOf(utilisation);
     let recommendation: string | undefined;
     if (status !== 'ok') {
@@ -737,11 +768,9 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
         if (s <= Math.min(timber.post.width, timber.post.height)) return false;
         const sec = { width: s, height: s };
         const c = columnCurve(sec, Lef, mat, k.medium);
-        return (Nsnow * 1000) / (s * s) / (c.kc * c.fcd) <= OK_LIMIT * 0.7; // leave room for the sway bending
+        return (Nsnow * 1000) / (s * s) / (c.kc * c.fcd) <= OK_LIMIT * 0.7; // leave room for the brace bending
       });
-      const sway = (['x', 'z'] as Axis[]).filter((a) => ctx.lateral[a].kind === 'sway');
       recommendation = better ? `Use ${better}×${better} mm posts or add posts to reduce the load per post.` : 'Add posts to reduce the load per post.';
-      if (sway.length > 0) recommendation += ` Bracing ${sway.map((a) => AXIS_LABEL[a]).join(' and ')} (knee braces / a boarded wall) halves the buckling length and removes the wind moment.`;
     }
     return {
       id: post.id,
@@ -759,13 +788,12 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       utilisation,
       status,
       recommendation,
-      detail: `${post.lead ? `${post.lead} ` : ''}N_d = ${kn(Nsnow)} (G + S), buckling length ${Math.round(Lef)} mm (in row ${Math.round(Lrow)} / across ${Math.round(Lperp)} mm; λ = ${fmt(col.lambda, 0)}, k_c = ${fmt(col.kc, 2)}). σ_c,0,d = ${fmt(sigma, 2)} ≤ k_c·f_c,0,d = ${fmt(col.kc * col.fcd, 2)} N/mm² (${pct(sigma / (col.kc * col.fcd))}).${combined.length ? ` With wind moment ${combined.join(', ')}.` : ''}${accidental} Governing ${governing}.`,
+      detail: `${post.lead ? `${post.lead} ` : ''}N_d = ${kn(Nsnow)} (G + S), buckling length ${Math.round(Lef)} mm (in row ${Math.round(Lrow)} / across ${Math.round(Lperp)} mm; λ = ${fmt(col.lambda, 0)}, k_c = ${fmt(col.kc, 2)}). σ_c,0,d = ${fmt(sigma, 2)} ≤ k_c·f_c,0,d = ${fmt(col.kc * col.fcd, 2)} N/mm² (${pct(sigma / (col.kc * col.fcd))}).${accidental} Governing ${governing}.`,
     };
   };
 
   for (const row of postRows) {
-    const { span: gap, cantilever: gapCantilever } = row.load.row.supports;
-    const spanM = (gap + gapCantilever) / 1000;
+    const spanM = postShareM(row.load.row.supports);
     const { qvG, qvS, qvW } = row.load;
     checks.push(
       checkPost({
@@ -852,9 +880,17 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     );
   }
 
-  // ── Bracing per direction ────────────────────────────────────────────────
+  // ── Bracing per direction (post bases are pinned: every direction needs knee braces or a braced wall) ──
   const braceSection = timber.brace;
   const braceAxisLength = ctx.braceLeg * SQRT2;
+  const rhok = mat.rhok;
+  /** Axial post loads (kN, characteristic) of a purlin row's most loaded post */
+  const rowPostLoads = (rowKey: string): { G: number; S: number; W: number } => {
+    const post = postRows.find((p) => p.load.row.row.key === rowKey);
+    if (!post) return { G: 0, S: 0, W: 0 };
+    const spanM = postShareM(post.load.row.supports);
+    return { G: post.load.qvG * spanM, S: post.load.qvS * spanM, W: post.load.qvW * spanM };
+  };
   for (const axis of ['x', 'z'] as Axis[]) {
     const sys = ctx.lateral[axis];
     const Hd = Math.max(H[axis].windLead, H[axis].snowLead);
@@ -867,16 +903,21 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       deflection: 0,
       deflectionLimit: 0,
     };
+    const boardsNote = sys.unbracedWalls.length > 0 ? ` The board cladding of the ${sys.unbracedWalls.join(' + ')} wall${sys.unbracedWalls.length > 1 ? 's' : ''} is not a shear wall (no diagonal straps or sheet panels).` : '';
     if (sys.kind === 'braces') {
-      const Hrow = Hd / sys.bracedRows.length;
-      let worstRow = sys.bracedRows[0];
-      for (const r of sys.bracedRows) if (r.active < worstRow.active) worstRow = r;
-      const Nbrace = (Hrow / worstRow.active) * SQRT2;
+      // The roof shares the wind out by stiffness: every braced post takes the same shear
+      const totalPosts = sys.lines.reduce((n, l) => n + l.posts, 0);
+      const lineShare = (l: BracedLine) => (Hd * l.posts) / totalPosts;
+      const braceForce = (l: BracedLine) => (lineShare(l) / l.active) * SQRT2;
+      let worstLine = sys.lines[0];
+      for (const l of sys.lines) if (braceForce(l) > braceForce(worstLine)) worstLine = l;
+      const Nbrace = braceForce(worstLine);
       const col = columnCurve(braceSection, braceAxisLength, mat, kmodShort);
       const sigma = (Nbrace * 1000) / (braceSection.width * braceSection.height);
       const utilisation = sigma / (col.kc * col.fcd);
       const status = statusOf(utilisation);
       const better = status !== 'ok' ? BRACE_SECTIONS.find((s) => s.width * s.height > braceSection.width * braceSection.height && (Nbrace * 1000) / (s.width * s.height) / (columnCurve(s, braceAxisLength, mat, kmodShort).kc * col.fcd) <= OK_LIMIT) : undefined;
+      const lineList = sys.lines.map((l) => `${l.label} (${l.active})`).join('; ');
       checks.push({
         ...base,
         element: `Knee braces ${AXIS_LABEL[axis]}`,
@@ -892,66 +933,124 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
               ? `Use ${sectionLabel(better)} knee braces, add posts (more braces per row)${params.connectionMode === 'hardware' ? '' : ' or use mechanical connectors so the tension braces also act'}.`
               : `Add posts (more braces per row)${params.braceDirection === 'both' ? '' : ' or set the brace direction to both sides'}.`
             : undefined,
-        detail: `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)} (incl. ${Math.round(NOTIONAL_SWAY * 100)} % notional sway) shared by ${sys.bracedRows.length} braced row${sys.bracedRows.length > 1 ? 's' : ''}; ${worstRow.row.name} has ${worstRow.active} active brace${worstRow.active > 1 ? 's' : ''} per load sense${params.connectionMode === 'hardware' ? ' (tension braces count – mechanical connectors)' : ' (compression only – tenon joints)'}. Strut N_d = ${kn(Nbrace)}, L_ef = ${Math.round(braceAxisLength)} mm, k_c = ${fmt(col.kc, 2)}: σ_c,0,d = ${fmt(sigma, 2)} ≤ ${fmt(col.kc * col.fcd, 2)} N/mm² (${pct(utilisation)}). Brace-to-post / purlin joints not verified.`,
+        detail: `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)} (incl. ${Math.round(NOTIONAL_SWAY * 100)} % notional sway) shared by ${totalPosts} braced posts in ${sys.lines.length} lines. Active braces per load sense: ${lineList}. ${params.connectionMode === 'hardware' ? 'Tension braces count too (mechanical connectors).' : 'Compression braces only (tenon joints).'} Strut N_d = ${kn(Nbrace)}, L_ef = ${Math.round(braceAxisLength)} mm, k_c = ${fmt(col.kc, 2)}: σ_c,0,d = ${fmt(sigma, 2)} ≤ ${fmt(col.kc * col.fcd, 2)} N/mm² (${pct(utilisation)}).${boardsNote}`,
+      });
+
+      // Post bending: the brace force enters the post at the brace foot; the pinned base takes the shear
+      let worst = { util: 0, detail: '', line: worstLine, M: 0, N: 0 };
+      const colPost = (Lef: number) => columnCurve(timber.post, Lef, mat, kmodShort);
+      const fmdShort = (kmodShort * mat.fmk) / mat.gammaM;
+      for (const line of sys.lines) {
+        const Hline = lineShare(line);
+        const V = Hline / line.posts; // shear per braced post at its pinned base
+        const hJoint = Math.max(line.height - ctx.braceLeg, 300);
+        const Md = V * hJoint; // kN·mm
+        const braceV = Hline / line.active; // vertical component of one 45° brace force
+        for (const rowKey of line.rowKeys) {
+          const { G, S, W } = rowPostLoads(rowKey);
+          const cases = [
+            { label: 'G + W + ψ₀S', N: GAMMA_G * G + GAMMA_Q * W + GAMMA_Q * PSI0_SNOW * S, f: 1 },
+            { label: 'G + S + ψ₀W', N: GAMMA_G * G + GAMMA_Q * S + GAMMA_Q * PSI0_WIND * W, f: H[axis].snowLead / Math.max(Hd, 1e-9) },
+          ];
+          for (const c of cases) {
+            const N = c.N + braceV * c.f;
+            const M = Md * c.f;
+            const cp = colPost(hJoint);
+            const sigmaC = (N * 1000) / Apost;
+            const sigmaM = (M * 1000) / Wpost;
+            const util = sigmaC / (cp.kc * cp.fcd) + sigmaM / fmdShort;
+            if (util > worst.util) {
+              worst = {
+                util,
+                line,
+                M,
+                N,
+                detail: `${line.label}: H_d = ${kn(Hline)} on ${line.posts} braced post${line.posts > 1 ? 's' : ''} → V_d = ${kn(V * c.f)} at each pinned base, M_d = ${fmt(M / 1000, 2)} kNm at the brace foot (${Math.round(hJoint)} mm above the base), N_d = ${kn(N)} incl. the brace's vertical component (${c.label}). Interaction: σ_c/(k_c·f_c,0,d) + σ_m/f_m,d = ${fmt(sigmaC / (cp.kc * cp.fcd), 2)} + ${fmt(sigmaM / fmdShort, 2)} = ${pct(util)} (k_mod ${kmodShort}).`,
+              };
+            }
+          }
+        }
+      }
+      const postStatus = statusOf(worst.util);
+      checks.push({
+        ...base,
+        id: `brace-post-${axis}`,
+        kind: 'lateral',
+        element: `Posts in brace bending ${AXIS_LABEL[axis]}`,
+        elementDe: 'Pfosten mit Kopfband (Biegung)',
+        section: timber.post,
+        span: Math.round(Math.max(worst.line.height - ctx.braceLeg, 300)),
+        loadUls: worst.N,
+        stressUtil: worst.util,
+        utilisation: worst.util,
+        status: postStatus,
+        recommendation: postStatus !== 'ok' ? 'Brace more posts in this direction (both sides of each post), shorten the post or use larger posts.' : undefined,
+        detail: worst.detail,
       });
     } else if (sys.kind === 'wall') {
-      const wallArea = sys.shearWalls.reduce((a, id) => a + ctx.faceArea[id], 0);
-      const shear = Hd / Math.max(wallArea, 0.1); // kN/m² of boarded wall face
+      const Hwall = Hd / sys.shearWalls.length;
+      const parts: string[] = [];
+      let utilisation = 0;
+      let recommendation: string | undefined;
+      for (const sw of sys.shearWalls) {
+        if (sw.bracing === 'panels') {
+          parts.push(`Wall ${sw.id}: sheet panels (OSB ≥ 15 mm, nailed at ≤ 150 mm) carry ${kn(Hwall)}.`);
+          continue;
+        }
+        const straps = wallStraps(sw.id, project.walls[sw.id], params);
+        if (!straps || straps.crosses.length === 0) {
+          utilisation = Math.max(utilisation, 9.99);
+          recommendation = `Wall ${sw.id} has no stretch free of openings for a strap cross – brace another wall or add knee braces.`;
+          parts.push(`Wall ${sw.id}: no room for a strap cross.`);
+          continue;
+        }
+        const flattest = straps.crosses.reduce((m, c) => (c.angleDeg < m.angleDeg ? c : m));
+        const cos = Math.cos((flattest.angleDeg * Math.PI) / 180);
+        const T = Hwall / (straps.crosses.length * cos); // one diagonal per cross in tension
+        const Rd = strapTensionRd();
+        const nailRd = (kmodShort * strapNailCapacity(rhok)) / 1.3 / 1000;
+        const nails = Math.max(4, Math.ceil(T / nailRd));
+        const holdDown = (Hwall / straps.crosses.length) * (flattest.height / Math.max(flattest.end - flattest.start, 1));
+        const u = T / Rd;
+        utilisation = Math.max(utilisation, u);
+        parts.push(
+          `Wall ${sw.id}: Windrispenband 40 × 2 mm, ${straps.crosses.length} × cross (flattest ${fmt(flattest.angleDeg, 0)}°, diagonal ${fmt(flattest.diagonal / 1000, 2)} m): T_d = ${kn(T)} ≤ N_t,Rd = ${kn(Rd)} (${pct(u)}). Nails: ${nails} Kammnägel 4.0 × 40 per strap end (F_v,Rd = ${kn(nailRd)} each). Hold-down at the wall ends ${kn(holdDown)} – anchor the end studs into the base.`,
+        );
+      }
+      const status = statusOf(utilisation);
       checks.push({
         ...base,
-        element: `Boarded wall ${AXIS_LABEL[axis]}`,
+        element: `Braced wall ${AXIS_LABEL[axis]}`,
         elementDe: 'Wandscheibe',
         section: timber.stud,
-        span: Math.round(sys.shearWalls.reduce((m, id) => Math.max(m, id === 'front' || id === 'rear' ? params.length : params.width), 0)),
-        stressUtil: 0,
-        utilisation: 0,
-        status: 'ok',
-        detail: `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)} resisted by the closed ${sys.shearWalls.join(' + ')} wall${sys.shearWalls.length > 1 ? 's' : ''} as shear wall${sys.shearWalls.length > 1 ? 's' : ''} (${fmt(shear, 2)} kN/m² of boarding). Board / panel fixing not verified – use ≥ 18 mm boarding or OSB nailed at ≤ 150 mm.`,
-      });
-    } else {
-      const s = swayUtil[axis];
-      const canBrace = sys.rows.length > 0;
-      const hMax = Math.max(...postRows.map((r) => r.height));
-      const Mframe = (Hd * hMax) / 1000; // kNm, overturning moment all bases share
-      const pinned = baseType !== 'h-anchor';
-      const hBase = baseMoment(axis, 'h-anchor');
-      const baseUtil = pinned ? 0 : Mframe / Math.max(hBase.sum, 1e-6);
-      // A pinned base gives the post no fixity at all: the frame is a mechanism in this direction
-      const utilisation = pinned ? Math.max(s.util, 1) : Math.max(s.util, baseUtil);
-      const status = pinned ? 'fail' : statusOf(utilisation);
-      const brace = canBrace ? 'Enable knee braces in this direction (or close a wall in this plane)' : 'Close a wall in this plane (shear wall)';
-      let recommendation: string | undefined;
-      if (pinned) {
-        recommendation =
-          Mframe <= hBase.sum * OK_LIMIT && s.util <= OK_LIMIT
-            ? `Adjustable post bases are hinges. ${brace}, or use cast-in H post bases (Σ M_Rd = ${fmt(hBase.sum, 2)} kNm ≥ ${fmt(Mframe, 2)} kNm).`
-            : `Adjustable post bases are hinges. ${brace} – cast-in H post bases (Σ M_Rd = ${fmt(hBase.sum, 2)} kNm < ${fmt(Mframe, 2)} kNm) are not enough.`;
-      } else if (status !== 'ok') {
-        recommendation =
-          baseUtil >= s.util
-            ? `${brace} – the H post bases (Σ M_Rd = ${fmt(hBase.sum, 2)} kNm) cannot fix the posts.`
-            : canBrace
-              ? 'Enable knee braces in this direction (or close a wall in this plane), or use larger posts.'
-              : 'Close a wall in this plane (shear wall) or use larger posts.';
-      }
-      const mechanism = hBase.weak === hBase.n ? 'flanges bent sideways' : `${hBase.governing === 'bolts' ? 'couple of the 2 × M12 bolts' : 'flanges bent in their plane'}${hBase.weak > 0 ? `, ${hBase.weak} of them with flanges bent sideways` : ''}`;
-      const baseDetail = pinned
-        ? 'Adjustable post bases are hinges (no base moment) – the posts have no lateral stability in this direction.'
-        : `H post bases: H_d·h = ${fmt(Mframe, 2)} kNm vs. Σ M_Rd = ${fmt(hBase.sum, 2)} kNm of ${hBase.n} bases (${mechanism}) (${pct(baseUtil)}).`;
-      checks.push({
-        ...base,
-        element: `Sway posts ${AXIS_LABEL[axis]}`,
-        elementDe: 'Eingespannte Pfosten',
-        section: timber.post,
-        span: Math.round(hMax),
-        stressUtil: s.util,
+        span: Math.round(sys.shearWalls.reduce((m, w) => Math.max(m, w.id === 'front' || w.id === 'rear' ? params.length : params.width), 0)),
+        stressUtil: utilisation,
         utilisation,
         status,
-        recommendation,
-        detail: `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)}. No knee braces or boarded wall act in this direction – the posts cantilever from their bases (buckling length 2·h). ${s.detail} ${baseDetail}`,
+        recommendation: recommendation ?? (status !== 'ok' ? 'Brace a second wall in this plane or add knee braces.' : undefined),
+        detail: `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)} on ${sys.shearWalls.length} braced walls (${kn(Hwall)} each). ${parts.join(' ')}${boardsNote}`,
+      });
+    } else {
+      const canBrace = sys.rows.length > 0 || WALLS_ALONG[axis].some((id) => project.walls[id]?.closed || project.walls[id]?.screen || project.walls[id]?.rail);
+      checks.push({
+        ...base,
+        element: `No bracing ${AXIS_LABEL[axis]}`,
+        elementDe: 'Keine Aussteifung',
+        section: timber.post,
+        span: Math.round(Math.max(...postRows.map((r) => r.height))),
+        stressUtil: 1,
+        utilisation: 1,
+        status: 'fail',
+        recommendation: canBrace
+          ? 'Add knee braces (Kopfbänder) in this direction, or brace a closed wall in this plane with crossed Windrispenband / sheet panels.'
+          : 'Put a rail (Rähm) on an open side and brace it with knee braces, or close and brace a wall in this plane.',
+        detail: `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)} without a bracing system. The post bases are pinned (no fixity), so without knee braces or a braced wall the frame has no lateral stability in this direction.${boardsNote}`,
       });
     }
   }
+
+  // ── Wall studs and screen battens in wind ───────────────────────────────
+  checks.push(...studWindChecks(project, framing.members, q, mat, kmodShort));
 
   // ── Headers over openings (non-loadbearing infill walls) ─────────────────
   const claddingLoad = 0.15; // kN/m² boards incl. battens
@@ -989,123 +1088,56 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     });
   }
 
-  // ── Roof uplift → anchor tension ─────────────────────────────────────────
+  // ── Roof uplift: the load path from the sheet down to the concrete, link by link ─────────
   {
-    // Post self-weight (kN) hangs on the anchor too: section area × tallest post of the row.
     const postSelf = (height: number): number => (ctx.density * Apost * height) / 1e9;
-    // Concrete footing the post is cast into: its weight holds the post down as well
-    // (skin friction with the soil and soil cones are ignored – conservative).
-    const footingDepth = Math.max(0, loads.postFootingDepth ?? 0);
-    const footingDiameter = Math.max(0, loads.postFootingDiameter ?? 0);
-    const footingArea = (Math.PI * footingDiameter ** 2) / 4;
-    const footingG = (CONCRETE_WEIGHT * footingArea * footingDepth) / 1e9;
-    let worstRow = purlinLoads[0];
-    let worstUtil = 0;
-    let worstNet = 0;
-    let worstG = 0;
-    let worstPostG = 0;
-    for (const post of postRows) {
-      const load = post.load;
-      const { span: gap, cantilever: gapCantilever } = load.row.supports;
-      const spanM = (gap + gapCantilever) / 1000;
-      const up = GAMMA_Q * load.qvUp * spanM;
-      const roofG = load.qvG * spanM;
-      const postG = postSelf(post.height);
-      const down = GAMMA_G_FAVOURABLE * (roofG + postG + footingG);
-      const util = down > 0 ? up / down : 0;
-      if (util > worstUtil) {
-        worstUtil = util;
-        worstRow = load;
-        worstNet = up - down;
-        worstG = down;
-        worstPostG = postG;
-      }
-    }
-    const spanM = (worstRow.row.supports.span + worstRow.row.supports.cantilever) / 1000;
-    const footing = footingG > 0 ? `Ø${Math.round(footingDiameter)} × ${Math.round(footingDepth)} mm` : '';
-    // Footing (depth ≥ 800 mm, diameter in 50 mm steps up to 600 mm) whose extra weight closes the net uplift
-    const bigger = (() => {
-      if (worstUtil <= 1) return undefined;
-      const depth = Math.max(footingDepth, 800);
-      for (let d = 200; d <= 600; d += 50) {
-        const g = (CONCRETE_WEIGHT * ((Math.PI * d ** 2) / 4) * depth) / 1e9;
-        if (GAMMA_G_FAVOURABLE * (g - footingG) >= worstNet) return { depth, d };
-      }
-      return undefined;
-    })();
-    // H post base: the cast-in flanges need footing depth, the post has to fit between the flanges,
-    // and the two bolts hand the net tension down to the footing
-    const hAnchor = baseType === 'h-anchor';
-    const tensionRd = hAnchor ? Math.min(...(bases.length > 0 ? bases.map((b) => b.width) : [pw]).map((t) => postBaseCapacity('h-anchor', mat, t, kmodShort).tension)) : 0;
-    const shallow = hAnchor && footingDepth < H_ANCHOR_MIN_FOOTING;
-    const tooWide = hAnchor && (bases.length > 0 ? bases.some((b) => b.width > H_ANCHOR.clearWidth) : pw > H_ANCHOR.clearWidth);
-    const overTension = hAnchor && worstNet > tensionRd;
-    const baseIssues = [
-      shallow ? `The H post base needs a concrete footing at least ${H_ANCHOR_MIN_FOOTING} mm deep (${H_ANCHOR.concreteEmbed} mm cast in).` : '',
-      tooWide ? `Posts wider than ${H_ANCHOR.clearWidth} mm do not fit between the flanges of the H post base – use 140 mm posts.` : '',
-      overTension ? `Net tension ${kn(worstNet)} exceeds the 2 × M12 bolts of the H post base (${kn(tensionRd)}) – add footing weight or knee braces / roof ties.` : '',
-    ].filter(Boolean);
-    const baseNote = hAnchor
-      ? ` H post base cast ${H_ANCHOR.concreteEmbed} mm into the footing: its weight counts in full${worstUtil > 1 ? `; 2 × M12 bolts carry ${kn(tensionRd)} tension (${pct(worstNet / tensionRd)}).` : '.'}`
-      : footingG > 0
-        ? ' The footing only counts when the post base is cast into it (H-anchor or threaded rods).'
-        : '';
-    const parts = `roof + purlin ${kn(GAMMA_G_FAVOURABLE * worstRow.qvG * spanM)}, post ${kn(GAMMA_G_FAVOURABLE * worstPostG)}${footing ? `, concrete footing ${footing} ${kn(GAMMA_G_FAVOURABLE * footingG)}` : ''}`;
-    checks.push({
-      id: 'uplift',
-      kind: 'uplift',
-      element: 'Roof uplift / anchoring',
-      elementDe: 'Abhebesicherung',
-      section: timber.post,
-      span: Math.round(spanM * 1000),
-      loadUls: GAMMA_Q * worstRow.qvUp * spanM,
-      loadSls: worstRow.qvUp * spanM,
-      stressUtil: worstUtil,
-      deflectionUtil: 0,
-      deflection: 0,
-      deflectionLimit: 0,
-      utilisation: worstUtil,
-      status: worstUtil > 1 || baseIssues.length > 0 ? 'warning' : 'ok',
-      recommendation:
-        [
-          ...baseIssues,
-          worstUtil > 1
-            ? `Every post anchor and purlin-to-post joint must resist ${kn(worstNet)} tension (net uplift). Use tension-rated post shoes and screw / bolt the purlins and rafters down.${bigger ? ` Or set the posts in concrete footings of at least Ø${bigger.d} × ${bigger.depth} mm.` : ''}`
-            : '',
-        ]
-          .filter(Boolean)
-          .join(' ') || undefined,
-      detail: `Canopy suction c_f = ${fmt(ctx.canopy.up, 2)} → ${fmt(windUp, 2)} kN/m² plan (q_p = ${fmt(q, 2)} kN/m²). ${worstRow.row.label}: uplift 1.5·W = ${kn(GAMMA_Q * worstRow.qvUp * spanM)} vs. dead load 1.0·G = ${kn(worstG)} per post (${parts}) (${pct(worstUtil)}). ${worstUtil > 1 ? `Net ${kn(worstNet)} tension per post.` : 'Dead load holds the roof down; anchors take shear only.'}${baseNote} Light coverings (${ROOF_COVERING_LOAD[loads.roofCovering].label}) are governed by uplift, not snow.`,
-    });
+    const sheetOnBattens = !slopedPurlins; // rafters run down the slope: battens across carry the sheet
+    const batten = params.build.battenSection;
+    checks.push(
+      ...upliftChainChecks({
+        mat,
+        kmodShort,
+        mode: params.connectionMode,
+        timber,
+        build: params.build,
+        postBase: loads.postBase ?? 'adjustable',
+        q,
+        local: ctx.local,
+        canopyUp: ctx.canopy.up,
+        coveringLoad: ROOF_COVERING_LOAD[loads.roofCovering].load,
+        deadLoad,
+        rafterSpacing: roof.rafterSpacing,
+        rafterSeatHeight: timber.rafter.height - (slopedPurlins ? 0 : roof.birdsmouthDepth),
+        sheetSupportDepth: sheetOnBattens ? Math.min(batten.width, batten.height) : timber.rafter.height,
+        sheetSupportLabel: sheetOnBattens ? `${batten.width}×${batten.height} mm battens` : `${timber.rafter.width}×${timber.rafter.height} mm rafters`,
+        bearings: purlinRows.map((row, idx) => ({ label: row.label, trib: row.trib, inner: idx > 0 && idx < last })),
+        posts: postRows.map((post) => {
+          const spanM = postShareM(post.load.row.supports);
+          return { label: post.label, uplift: post.load.qvUp * spanM, roofDead: post.load.qvG * spanM, postDead: postSelf(post.height) };
+        }),
+        footingDepth: Math.max(0, loads.postFootingDepth ?? 0),
+        footingSize: Math.max(0, loads.postFootingDiameter ?? 0),
+      }),
+    );
   }
 
-  // ── Joints: rafter bearings, purlin-to-post, knee brace ends ─────────────
+  // ── Knee brace ends ─────────────────────────────────────────────────────
   checks.push(
     ...connectionChecks({
       mat,
       strengthClass: timber.strengthClass,
       kmodShort,
       mode: params.connectionMode,
+      braceConnector: params.build.braceConnector,
       timber,
-      q,
-      local: ctx.local,
-      deadLoad,
-      rafterSpacing: roof.rafterSpacing,
-      rafterSeatHeight: timber.rafter.height - (slopedPurlins ? 0 : roof.birdsmouthDepth),
-      planLength: params.length + overhangs.left + overhangs.right,
-      planWidth: params.width + overhangs.front + overhangs.rear,
-      bearings: purlinRows.map((row, idx) => ({ label: row.label, trib: row.trib, inner: idx > 0 && idx < last })),
-      postJoints: postRows.map((post) => {
-        const spanM = (post.load.row.supports.span + post.load.row.supports.cantilever) / 1000;
-        return { label: post.label, uplift: post.load.qvUp * spanM, dead: post.load.qvG * spanM };
-      }),
       braces: (['x', 'z'] as Axis[])
         .filter((axis) => ctx.lateral[axis].kind === 'braces')
         .map((axis) => {
           const sys = ctx.lateral[axis];
           const Hd = Math.max(H[axis].windLead, H[axis].snowLead);
-          const fewest = Math.min(...sys.bracedRows.map((r) => r.active));
-          return { key: axis, axis: AXIS_LABEL[axis], Nd: (Hd / sys.bracedRows.length / fewest) * SQRT2 };
+          const totalPosts = sys.lines.reduce((n, l) => n + l.posts, 0);
+          const Nd = Math.max(...sys.lines.map((l) => ((Hd * l.posts) / totalPosts / l.active) * SQRT2));
+          return { key: axis, axis: AXIS_LABEL[axis], Nd };
         }),
     }),
   );
@@ -1233,9 +1265,26 @@ function computeFoundationChecks(ctx: Context, checks: StaticsCheck[]): StaticsC
     soil: loads.soil ?? 'non-cohesive',
     depth: Math.max(0, loads.postFootingDepth ?? 0),
     diameter: Math.max(0, loads.postFootingDiameter ?? 0),
+    shape: ctx.params.build.footingShape,
     post: timber.post,
     worstPost: { label: worstPost.element, Nd: worstPost.loadUls },
   });
+}
+
+/** Everything this pre-design leaves to the structural engineer, for the summary and the report. */
+function notChecked(ctx: Context): string[] {
+  const { loads, build } = ctx.params;
+  const list = [
+    'Soil bearing on site: table values of DIN 1054 without a soil investigation; settlement and groundwater are not checked.',
+    'Connection details not modelled: purlin splices, headers and sills, stud and plate screws, cladding and trim fixings.',
+    `Product values from ETAs taken as inputs, not verified: Sparrenpfettenanker R_k = ${build.rafterAnchorRk} kN, angle bracket R_k = ${build.angleBracketRk} kN${(loads.postBase ?? 'adjustable') === 'adjustable' ? ', adjustable post base and its anchor' : ''}.`,
+    'The roof sheet as a diaphragm that shares the wind between the braced lines, and second-order effects.',
+    'Fire resistance, snow drifts against higher neighbouring buildings, and accidental impact (vehicles).',
+  ];
+  if (Object.values(ctx.project.walls).some((w) => w.closed && (w.bracing === 'strap' || w.bracing === 'panels'))) {
+    list.push('Hold-down anchors at the ends of braced walls: the tension is given, the anchor into the base is not designed.');
+  }
+  return list;
 }
 
 export function computeStatics(project: ProjectState, framing: FramingResult): StaticsResult {
@@ -1247,8 +1296,8 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
   const { deadLoad, snowLoadRoof, params } = ctx;
   const { loads } = params;
   return {
-    // Uplift anchoring and joints are hardware advisories (they name the fasteners needed), not member failures
-    status: worst(checks.filter((c) => c.kind !== 'uplift' && c.kind !== 'connection').map((c) => c.status)),
+    // Every row counts: members, bracing, the uplift chain, joints and footings
+    status: worst(checks.map((c) => c.status)),
     checks,
     loads: {
       deadLoad,
@@ -1269,5 +1318,6 @@ export function computeStatics(project: ProjectState, framing: FramingResult): S
     },
     collapseGustSpeed: collapse ? pressureToGustSpeed(collapse.q) : undefined,
     collapseElement: collapse?.element,
+    notChecked: notChecked(ctx),
   };
 }

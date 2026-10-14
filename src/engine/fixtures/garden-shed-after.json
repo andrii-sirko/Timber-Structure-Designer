@@ -1,0 +1,258 @@
+{
+  "app": "timber-structure-designer",
+  "version": 1,
+  "exportedAt": "2026-10-13T21:34:39.031Z",
+  "project": {
+    "id": "775bffdc-6a5b-40ed-a876-806750c18065",
+    "name": "Garden shed 6 × 4 m",
+    "params": {
+      "length": 6000,
+      "width": 4000,
+      "frontHeight": 2800,
+      "rearHeight": 2600,
+      "roofDirection": "rear",
+      "roofScheme": "classic",
+      "overhangs": {
+        "front": 400,
+        "rear": 0,
+        "left": 300,
+        "right": 300
+      },
+      "maxPostSpacing": 5100,
+      "postsPerRow": null,
+      "maxRafterSpacing": 700,
+      "maxRafterLength": 6000,
+      "midPurlinPositions": [
+        2420,
+        2620
+      ],
+      "maxStudSpacing": 1000,
+      "maxStockLength": 6000,
+      "braces": false,
+      "braceLeg": 600,
+      "braceDirection": "both",
+      "connectionMode": "hardware",
+      "timber": {
+        "post": {
+          "width": 120,
+          "height": 120
+        },
+        "beam": {
+          "width": 120,
+          "height": 140
+        },
+        "rafter": {
+          "width": 60,
+          "height": 160
+        },
+        "stud": {
+          "width": 60,
+          "height": 80
+        },
+        "brace": {
+          "width": 80,
+          "height": 100
+        },
+        "strengthClass": "C24"
+      },
+      "lockedSections": [
+        "post"
+      ],
+      "loads": {
+        "snowLoad": 0.85,
+        "roofCovering": "trapezoidal-sheet",
+        "serviceClass": 2,
+        "windLoad": 0.65,
+        "postFootingDepth": 800,
+        "postFootingDiameter": 500,
+        "snowZone": "2",
+        "altitude": 50,
+        "exceptionalSnow": true,
+        "soil": "non-cohesive",
+        "postBase": "h-anchor"
+      },
+      "floor": {
+        "enabled": false,
+        "support": "slab",
+        "joist": {
+          "width": 60,
+          "height": 80
+        },
+        "bearer": {
+          "width": 100,
+          "height": 100
+        },
+        "maxJoistSpacing": 600,
+        "maxBearerSpacing": 1500,
+        "maxSupportSpacing": 1350,
+        "decking": "osb",
+        "liveLoad": 2
+      },
+      "insulation": {
+        "enabled": false,
+        "walls": {
+          "material": "mineral-wool",
+          "thickness": 120
+        },
+        "roof": {
+          "material": "mineral-wool",
+          "thickness": 160
+        },
+        "floor": {
+          "material": "mineral-wool",
+          "thickness": 120
+        }
+      },
+      "build": {
+        "site": "Borkheide, Brandenburg",
+        "windZone": "2 (inland)",
+        "terrainCategory": "II–III",
+        "baseGap": 50,
+        "cutReserve": 80,
+        "footingShape": "square",
+        "wallBase": "curb",
+        "curbWidth": 100,
+        "curbHeight": 250,
+        "curbTop": 150,
+        "rafterAnchorsPerBearing": 2,
+        "installGap": 12,
+        "facadeMembrane": true,
+        "vents": 2,
+        "floorBuildUp": true,
+        "existingPavingM2": 30
+      }
+    },
+    "walls": {
+      "front": {
+        "id": "front",
+        "closed": true,
+        "openings": [
+          {
+            "id": "e2ebe780-d474-4c08-85b7-fec36c2d051d",
+            "type": "door",
+            "x": 3180,
+            "y": 0,
+            "width": 1774,
+            "height": 2012,
+            "label": "Double door 1750×2000 1",
+            "preset": "door-double-1750",
+            "hinge": "left",
+            "swing": "out"
+          }
+        ],
+        "bracing": "strap"
+      },
+      "rear": {
+        "id": "rear",
+        "closed": true,
+        "openings": [],
+        "bracing": "strap"
+      },
+      "left": {
+        "id": "left",
+        "closed": true,
+        "openings": [
+          {
+            "id": "8419ce82-5cf6-4728-abf7-7c38d698b4a5",
+            "type": "window",
+            "x": 1190,
+            "y": 1010,
+            "width": 1024,
+            "height": 1024,
+            "label": "Turn-tilt window 1000×1000 1",
+            "preset": "window-turntilt-1000x1000"
+          }
+        ],
+        "bracing": "strap"
+      },
+      "right": {
+        "id": "right",
+        "closed": true,
+        "openings": [],
+        "bracing": "strap"
+      }
+    },
+    "partitions": [],
+    "vehicles": [
+      {
+        "id": "7c9f6958-d770-4006-a306-46764dc15100",
+        "modelId": "mower-push",
+        "x": 1050,
+        "z": 1220,
+        "rotationDeg": 180,
+        "color": "#b91c1c"
+      },
+      {
+        "id": "a53b07d9-b8fb-4bf7-b330-170177312283",
+        "modelId": "wheelbarrow",
+        "x": 940,
+        "z": 480,
+        "rotationDeg": 180,
+        "color": "#e5e7eb"
+      },
+      {
+        "id": "74f5b7e6-8f4d-4e99-933e-0878301c9b58",
+        "modelId": "wheelbarrow",
+        "x": 1100,
+        "z": 1840,
+        "rotationDeg": 0,
+        "color": "#111827"
+      },
+      {
+        "id": "a2685518-51d0-469b-a021-4b845184ceba",
+        "modelId": "bicycle",
+        "x": 1070,
+        "z": 3310,
+        "rotationDeg": 180,
+        "color": "#9ca3af"
+      },
+      {
+        "id": "4dadff6d-213b-44ef-96f0-65222badf240",
+        "modelId": "shelf-tools",
+        "x": 5650,
+        "z": 3200,
+        "rotationDeg": 90,
+        "color": "#166534",
+        "size": {
+          "length": 1000,
+          "width": 400,
+          "height": 1800
+        }
+      },
+      {
+        "id": "aae8e09a-4fb4-4872-9c23-31ef38fe901a",
+        "modelId": "bicycle",
+        "x": 1110,
+        "z": 2580,
+        "rotationDeg": 180,
+        "color": "#d97706"
+      },
+      {
+        "id": "33506f59-30c6-4223-87bd-b0e52bc855e3",
+        "modelId": "workbench",
+        "x": 5470,
+        "z": 1710,
+        "rotationDeg": 90,
+        "color": "#0e7490",
+        "size": {
+          "length": 1500,
+          "width": 700,
+          "height": 900
+        }
+      }
+    ],
+    "pavedAreas": [],
+    "postOverrides": {
+      "front:2": {
+        "position": 7740
+      },
+      "front:1": {
+        "position": 3000
+      },
+      "front:0": {
+        "position": -1200
+      }
+    },
+    "freePosts": []
+  }
+}

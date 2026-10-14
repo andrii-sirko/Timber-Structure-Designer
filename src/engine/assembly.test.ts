@@ -100,7 +100,7 @@ test('hardware is shared out over the steps that use it', () => {
   const model = buildModel(project);
   const steps = buildAssemblySteps(model, project);
   const shares = stepHardwareShares(steps, model.connections.hardware);
-  const bases = (key: string): number | undefined => shares.get(key)?.find((h) => h.item.id === 'post-base')?.quantity;
+  const bases = (key: string): number | undefined => shares.get(key)?.find((h) => h.item.id === 'post-base-h')?.quantity;
   assert.equal(bases('posts:front'), 3);
   assert.equal(bases('posts:rear'), 3);
   assert.equal(bases('rafters'), undefined);

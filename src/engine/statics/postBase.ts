@@ -2,23 +2,20 @@ import type { PostBaseType } from '@/types';
 import type { MaterialProps } from './materials';
 
 /**
- * H post base (Alberts H-Pfostenträger, ETA-10/0210): two flat bars 80 × 8 mm, 800 mm long,
- * 141 mm apart. The upper 400 mm take the post (Pfosteneinstand), the lower 400 mm are cast
- * into the footing. Two M12 bolts pass through post and both flanges.
+ * H post base (H-Pfostenanker), cast into the point foundation: two flat bars, clear width =
+ * post width + 1 mm (121 mm for 120 posts, 141 mm for 140 posts), 2 × M12 bolts through post and
+ * both flanges. Treated as PINNED: the bolts and flanges are not counted for a base moment.
+ * The reinforced version only differs in the flat steel (heavier for tall / heavily loaded posts).
  */
 export const H_ANCHOR = {
-  clearWidth: 141,
-  length: 800,
-  /** Height of the post inside the flanges (mm) */
+  /** Flat steel of the standard / reinforced anchor (mm) */
+  flat: { 'h-anchor': '800/80/8', 'h-anchor-reinforced': '800/100/10' },
+  /** Post embedment between the flanges (mm) */
   postEmbed: 400,
   /** Flange length cast into the footing (mm) */
   concreteEmbed: 400,
-  flangeWidth: 80,
-  flangeThickness: 8,
   bolts: 2,
   boltDiameter: 12,
-  /** Assumed vertical distance between the two bolts (mm) – lever of the bolt couple */
-  boltLever: 200,
 } as const;
 
 /** Concrete cover kept below the cast-in flanges (mm) */
@@ -26,22 +23,16 @@ const FOOTING_COVER = 50;
 /** Minimum footing depth that takes the cast-in part of the H post base (mm) */
 export const H_ANCHOR_MIN_FOOTING = H_ANCHOR.concreteEmbed + FOOTING_COVER;
 
-const STEEL_FY = 235; // S235, N/mm²
-const GAMMA_M0 = 1.0;
 const BOLT_FUK = 400; // property class 4.6, N/mm²
 const GAMMA_M_CONNECTION = 1.3;
 
-export interface PostBaseCapacity {
-  type: PostBaseType;
-  /** Design base moment (kNm) when wind bends the flanges in their own plane (strong axis) */
-  momentStrong: number;
-  /** Design base moment (kNm) when wind pushes the flanges sideways (weak axis) */
-  momentWeak: number;
-  /** Design tension (kN) the base connection can hand down to the footing, 0 = not verified */
-  tension: number;
-  /** Governing mechanism of the strong-axis moment */
-  strongGoverning: 'bolts' | 'flanges';
-}
+export const isHAnchor = (type: PostBaseType): boolean => type === 'h-anchor' || type === 'h-anchor-reinforced';
+
+/** Clear width between the flanges for a post (mm). */
+export const hAnchorWidth = (postWidth: number): number => postWidth + 1;
+
+/** Bolt length for the post: through the post plus both flanges, nut and washers (M12 × 160 / 180). */
+export const postBoltLength = (postWidth: number): number => (postWidth >= 140 ? 180 : 160);
 
 /**
  * Load-carrying capacity of one M12 bolt in double shear through the post between two thin
@@ -56,22 +47,8 @@ function boltCapacity(mat: MaterialProps, postThickness: number, perpendicular: 
   return 2 * perPlane;
 }
 
-/** Design resistances of the post base under a post `postThickness` mm thick between the flanges. */
-export function postBaseCapacity(type: PostBaseType, mat: MaterialProps, postThickness: number, kmodShort: number): PostBaseCapacity {
-  if (type !== 'h-anchor') return { type, momentStrong: 0, momentWeak: 0, tension: 0, strongGoverning: 'bolts' };
-  const { flangeWidth: b, flangeThickness: t, bolts, boltLever } = H_ANCHOR;
-  // Plastic section moduli of the two flanges at the top of the footing (mm³)
-  const flangesStrong = (2 * STEEL_FY * ((t * b * b) / 4)) / GAMMA_M0 / 1e6;
-  const flangesWeak = (2 * STEEL_FY * ((b * t * t) / 4)) / GAMMA_M0 / 1e6;
-  const factor = kmodShort / GAMMA_M_CONNECTION;
-  // In-plane moment reaches the flanges as a horizontal couple of the two bolts (load across the grain)
-  const boltCouple = (boltCapacity(mat, postThickness, true) * factor * (boltLever / 1000)) / 1000;
-  const tension = (bolts * boltCapacity(mat, postThickness, false) * factor) / 1000;
-  return {
-    type,
-    momentStrong: Math.min(flangesStrong, boltCouple),
-    momentWeak: flangesWeak,
-    tension,
-    strongGoverning: boltCouple < flangesStrong ? 'bolts' : 'flanges',
-  };
+/** Design tension (kN) the 2 × M12 bolts hand from the post into the H anchor; 0 for other bases (ETA value). */
+export function postBaseTensionRd(type: PostBaseType, mat: MaterialProps, postThickness: number, kmodShort: number): number {
+  if (!isHAnchor(type)) return 0;
+  return (H_ANCHOR.bolts * boltCapacity(mat, postThickness, false) * kmodShort) / GAMMA_M_CONNECTION / 1000;
 }

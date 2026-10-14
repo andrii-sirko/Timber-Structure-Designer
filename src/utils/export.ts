@@ -96,11 +96,12 @@ export async function exportCutListPdf(project: ProjectState, model: DerivedMode
   if (font === UNICODE_FONT) await embedUnicodeFont(doc);
   const p = project.params;
   const lang = getLang();
-  // Helvetica's WinAnsi encoding has no '≈'; a single unsupported glyph garbles the whole cell
-  const pdfText = (s: string): string => (font === UNICODE_FONT ? s : s.replace(/≈/g, '~'));
+  // Helvetica's WinAnsi encoding has no '≈', '→', '≤', '≥'; a single unsupported glyph garbles the whole cell
+  const pdfText = (s: string): string =>
+    font === UNICODE_FONT ? s : s.replace(/≈/g, '~').replace(/→/g, '>').replace(/≤/g, '<=').replace(/≥/g, '>=');
   // `name (nameDe)` cell: the German term stays a secondary parenthetical unless the UI itself is German.
   const nameCell = (name: string, nameDe: string): string =>
-    lang === 'de' ? nameDe : `${tx(name)} (${nameDe})`;
+    pdfText(lang === 'de' ? nameDe : `${tx(name)} (${nameDe})`);
 
   doc.setFontSize(16);
   doc.text(t('{name} – Cutting list & BOM', { name: project.name }), 14, 14);
@@ -132,13 +133,13 @@ export async function exportCutListPdf(project: ProjectState, model: DerivedMode
   const groupHeadStyle = { fontStyle: 'bold' as const, fillColor: [238, 228, 214] as [number, number, number] };
   autoTable(doc, {
     startY: 14,
-    head: [[t('Pos'), t('Name'), t('Section'), t('Length'), t('Cut start °'), t('Cut end °'), t('Qty'), t('Notes')]],
+    head: [[t('Pos'), t('Name'), t('Section'), t('Target length'), t('Order length'), t('Cut start °'), t('Cut end °'), t('Qty'), t('Notes')]],
     body: [...cutGroups.values()].flatMap((items) => {
       const pieces = items.reduce((s, c) => s + c.quantity, 0);
       const totalM = items.reduce((s, c) => s + c.quantity * c.length, 0) / 1000;
       return [
         [
-          { content: `${tx(items[0].group)} · ${sectionOf(items[0])}`, colSpan: 6, styles: groupHeadStyle },
+          { content: `${tx(items[0].group)} · ${sectionOf(items[0])}`, colSpan: 7, styles: groupHeadStyle },
           { content: pieces, styles: groupHeadStyle },
           { content: `${t('Total')} ${totalM.toFixed(2)} m`, styles: groupHeadStyle },
         ],
@@ -147,6 +148,7 @@ export async function exportCutListPdf(project: ProjectState, model: DerivedMode
           nameCell(c.name, c.nameDe),
           sectionOf(c),
           `${roundMm(c.length)} mm`,
+          c.orderLength ? `${roundMm(c.orderLength)} mm` : '',
           `${c.cuts.start}°`,
           `${c.cuts.end}°`,
           c.quantity,
@@ -159,42 +161,81 @@ export async function exportCutListPdf(project: ProjectState, model: DerivedMode
   });
 
   const afterCut = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-  doc.setFontSize(12);
-  doc.text(t('Bill of materials'), 14, afterCut + 10);
+  const lastY = () => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  const heading = (text: string, y: number): number => {
+    let at = y;
+    if (at > 185) {
+      doc.addPage();
+      at = 14;
+    }
+    doc.setFontSize(12);
+    doc.text(text, 14, at);
+    return at + 3;
+  };
+
+  // ── Timber: one order at the timber yard (framing by section in stock lengths, cladding boards) ──
   autoTable(doc, {
-    startY: afterCut + 13,
-    head: [[t('Category'), t('Section'), t('Pieces'), t('Length'), t('Area'), t('Volume'), t('Mass')]],
+    startY: heading(t('Timber – one supplier order'), afterCut + 10),
+    head: [[t('Section'), t('Order lengths'), t('Pieces'), t('Volume'), t('Offcut')]],
     body: [
-      ...bom.lines.flatMap((l) => [
-        [
-          nameCell(l.label, l.labelDe),
-          l.section ? `${l.section.width}×${l.section.height}` : '–',
-          l.count,
-          l.totalLengthM ? `${l.totalLengthM.toFixed(2)} m` : '–',
-          l.areaM2 ? `${l.areaM2.toFixed(2)} m²` : '–',
-          `${l.volumeM3.toFixed(3)} m³`,
-          `${Math.round(l.massKg)} kg`,
-        ],
-        ...(l.stockBoards?.length
-          ? [[{ content: stockBoardsText(l.stockBoards), colSpan: 7, styles: { fontSize: 7, textColor: [90, 90, 90] as [number, number, number] } }]]
-          : []),
+      ...bom.timberOrder.map((o) => [
+        `${o.section.width}×${o.section.height}${o.glulam ? ' BSH' : ''}`,
+        [...o.stock.map((st) => `${st.count} × ${(st.lengthMm / 1000).toFixed(1)} m`), ...o.special.map((l) => `1 × ${(l / 1000).toFixed(1)} m ${t('to length')}`)].join(' + '),
+        o.pieces.length,
+        `${o.volumeM3.toFixed(3)} m³`,
+        `${o.offcutPct.toFixed(1)} %`,
       ]),
-      [t('Total'), '', '', `${bom.totalLengthM.toFixed(1)} m`, '', `${bom.totalVolumeM3.toFixed(3)} m³`, `${Math.round(bom.totalMassKg)} kg`],
+      ...bom.lines
+        .filter((l) => l.category === 'sheathing' || l.category === 'flooring')
+        .flatMap((l) => [
+          [nameCell(l.label, l.labelDe), l.stockBoards?.length ? stockBoardsText(l.stockBoards) : l.areaM2 ? `${l.areaM2.toFixed(2)} m²` : '', l.count, `${l.volumeM3.toFixed(3)} m³`, ''],
+        ]),
+      [t('Total'), '', '', `${(bom.timberOrder.reduce((sum, o) => sum + o.volumeM3, 0) + bom.lines.filter((l) => l.category === 'sheathing' || l.category === 'flooring').reduce((sum, l) => sum + l.volumeM3, 0)).toFixed(3)} m³`, ''],
+    ],
+    styles: { fontSize: 8, font },
+    headStyles: { fillColor: [92, 61, 28] },
+  });
+
+  // ── Roof covering ──
+  const roofing = bom.lines.find((l) => l.category === 'roofing');
+  if (roofing) {
+    autoTable(doc, {
+      startY: heading(t('Roof covering'), lastY() + 10),
+      head: [[t('Item'), t('Spec'), t('Qty')]],
+      body: [
+        [
+          nameCell(roofing.label, roofing.labelDe),
+          roofing.sheets
+            ? t('{count} sheets × {length} mm, cover width {cover} mm, ribs along the fall line, one piece per run (no cross joint), anti-condensation coating', { count: roofing.sheets.count, length: roofing.sheets.length, cover: roofing.sheets.coverWidth })
+            : `${(roofing.areaM2 ?? 0).toFixed(2)} m²`,
+          roofing.sheets ? `${roofing.sheets.count} ${t('pcs')}` : `${(roofing.areaM2 ?? 0).toFixed(2)} m²`,
+        ],
+      ],
+      styles: { fontSize: 8, font },
+      headStyles: { fillColor: [92, 61, 28] },
+    });
+  }
+
+  // ── Fittings & small parts ──
+  autoTable(doc, {
+    startY: heading(t('Fittings & small parts'), lastY() + 10),
+    head: [[t('Item'), t('Spec'), t('Qty'), t('Note')]],
+    body: [
+      ...connections.hardware.map((h) => [nameCell(h.name, h.nameDe), pdfText(tx(h.spec)), `${h.unit === 'm' ? h.quantity.toFixed(1) : h.quantity} ${t(h.unit)}`, h.note ? pdfText(tx(h.note)) : '']),
+      ...connections.joinery.map((j) => [nameCell(j.name, j.nameDe), t('joint'), j.quantity, j.note ? pdfText(tx(j.note)) : '']),
     ],
     styles: { fontSize: 8, font },
     headStyles: { fillColor: [92, 61, 28] },
   });
 
   if (bom.materials.length > 0) {
-    const afterBom = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-    doc.text(t('Other materials'), 14, afterBom + 10);
     autoTable(doc, {
-      startY: afterBom + 13,
+      startY: heading(t('Other materials'), lastY() + 10),
       head: [[t('Item'), t('Spec'), t('Qty'), t('Note')]],
       body: bom.materials.map((m) => [
         nameCell(m.name, m.nameDe),
         tx(m.spec),
-        `${m.quantity.toFixed(m.unit === 'pcs' ? 0 : 2)} ${t(m.unit)}`,
+        `${m.quantity.toFixed(m.unit === 'pcs' ? 0 : m.unit === 'm³' ? 3 : 2)} ${t(m.unit)}`,
         m.note ? pdfText(tx(m.note)) : '',
       ]),
       styles: { fontSize: 8, font },
@@ -211,7 +252,7 @@ export async function exportCutListPdf(project: ProjectState, model: DerivedMode
     body: statics.checks.map((c) => [
       nameCell(c.element, c.elementDe),
       `${c.section.width}×${c.section.height}`,
-      `${c.span} mm`,
+      c.span && c.kind !== 'uplift' && c.kind !== 'connection' ? `${c.span} mm` : '–',
       `${c.loadUls.toFixed(2)} kN/m`,
       `${Math.round(c.stressUtil * 100)} %`,
       c.deflectionLimit ? `${c.deflection.toFixed(1)} / ${c.deflectionLimit.toFixed(1)} mm` : '–',
@@ -221,19 +262,10 @@ export async function exportCutListPdf(project: ProjectState, model: DerivedMode
     styles: { fontSize: 8, font },
     headStyles: { fillColor: [92, 61, 28] },
   });
-  const afterStatics = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
-  doc.text(
-    t('Connections ({mode})', { mode: connections.mode === 'hardware' ? t('mechanical connectors') : t('traditional joinery') }),
-    14,
-    afterStatics + 10,
-  );
   autoTable(doc, {
-    startY: afterStatics + 13,
-    head: [[t('Item'), t('Spec'), t('Qty'), t('Note')]],
-    body: [
-      ...connections.hardware.map((h) => [nameCell(h.name, h.nameDe), tx(h.spec), h.quantity, h.note ? pdfText(tx(h.note)) : '']),
-      ...connections.joinery.map((j) => [nameCell(j.name, j.nameDe), t('joint'), j.quantity, j.note ? pdfText(tx(j.note)) : '']),
-    ],
+    startY: lastY() + 8,
+    head: [[t('Not checked')]],
+    body: statics.notChecked.map((n) => [`• ${pdfText(tx(n))}`]),
     styles: { fontSize: 8, font },
     headStyles: { fillColor: [92, 61, 28] },
   });

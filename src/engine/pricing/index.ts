@@ -70,6 +70,10 @@ export const DEFAULT_MATERIAL_PRICE_PER_UNIT: Record<string, number> = {
   'vapour-barrier': 2.5, // Vapour retarder sd ≥ 2 m per m²
   'vapour-tape': 0.6, // Airtightness tape 60mm per m
   'wind-membrane': 2, // Breathable wind membrane per m²
+  'concrete-m3': 320, // C20/25 from 25 kg ready-mix bags (≈ 80 bags per m³)
+  'vent-grille': 6, // Ventilation grille with insect mesh
+  'pe-film': 0.6, // PE film 0.2 mm per m²
+  'concrete-slab': 2.2, // Concrete slab 600 × 400 × 45 mm
 };
 
 /** Doors & windows, EUR per piece by preset id; custom sizes in EUR per m² of frame outer size. */
@@ -123,7 +127,7 @@ export const DEFAULT_HARDWARE_PRICE_PER_UNIT: Record<string, number> = {
   'splice-bolt': 2.2,
   'splice-plate': 4.5,
   'cladding-screws': 0.12,
-  'roof-screws': 0.15,
+  'roof-screws': 0.2, // Roofing screws 6.5 × 65 with timber thread and EPDM washer
   'roof-nails': 0.02,
   'deck-screws': 0.08,
   'rafter-screw': 1.1,
@@ -137,6 +141,17 @@ export const DEFAULT_HARDWARE_PRICE_PER_UNIT: Record<string, number> = {
   'decking-screws-a2': 0.12,
   'door-fitting-kit': 35,
   'window-fitting-kit': 55,
+  'post-base-h-reinforced': 65, // H post anchor, reinforced flat steel
+  'purlin-screws': 1.6, // Fully threaded screws 8 × 300
+  'purlin-strap': 2.8, // Perforated strap 40 × 2 per m
+  'purlin-strap-nails': 0.03,
+  'brace-bolt': 1.5, // M12 hex bolt, nut, 2 washers
+  'plate-spacer': 0.4, // Plastic spacer pad under the bottom plate
+  'stud-foot-holder': 2.5, // Angle holding a hung stud sideways
+  'wind-strap': 1.6, // Windrispenband 40 × 2 per m
+  'wind-strap-tensioner': 6.5,
+  'wind-strap-nails': 0.03,
+  'batten-screws': 0.12, // Batten screws 6 × 100
 };
 
 export function createDefaultPrices(): MaterialPrices {

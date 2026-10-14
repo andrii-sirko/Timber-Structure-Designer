@@ -1,0 +1,258 @@
+{
+  "app": "timber-structure-designer",
+  "version": 1,
+  "exportedAt": "2026-10-13T21:25:23.526Z",
+  "project": {
+    "id": "de4fe9f2-e4a5-4aeb-a4fb-c1fe5ae2315b",
+    "name": "Carport 8 × 6 m",
+    "params": {
+      "length": 8750,
+      "width": 5800,
+      "frontHeight": 2750,
+      "rearHeight": 2450,
+      "roofDirection": "rear",
+      "roofScheme": "sloped-purlins",
+      "overhangs": {
+        "front": 100,
+        "rear": 100,
+        "left": 0,
+        "right": 0
+      },
+      "maxPostSpacing": 4000,
+      "postsPerRow": null,
+      "maxRafterSpacing": 725,
+      "maxRafterLength": 4000,
+      "midPurlinPositions": [
+        3770,
+        7010
+      ],
+      "maxStudSpacing": 1000,
+      "maxStockLength": 8000,
+      "braces": true,
+      "braceLeg": 650,
+      "braceDirection": "both",
+      "connectionMode": "hardware",
+      "timber": {
+        "post": {
+          "width": 140,
+          "height": 140
+        },
+        "beam": {
+          "width": 120,
+          "height": 320
+        },
+        "rafter": {
+          "width": 40,
+          "height": 160
+        },
+        "stud": {
+          "width": 60,
+          "height": 80
+        },
+        "brace": {
+          "width": 100,
+          "height": 100
+        },
+        "strengthClass": "C24"
+      },
+      "lockedSections": [
+        "post"
+      ],
+      "loads": {
+        "snowLoad": 0.65,
+        "roofCovering": "trapezoidal-sheet",
+        "serviceClass": 2,
+        "windLoad": 0.65,
+        "postFootingDepth": 800,
+        "postFootingDiameter": 550,
+        "snowZone": "2",
+        "altitude": 50,
+        "exceptionalSnow": true,
+        "soil": "non-cohesive",
+        "postBase": "h-anchor-reinforced"
+      },
+      "floor": {
+        "enabled": false,
+        "support": "bearers",
+        "joist": {
+          "width": 60,
+          "height": 120
+        },
+        "bearer": {
+          "width": 100,
+          "height": 100
+        },
+        "maxJoistSpacing": 600,
+        "maxBearerSpacing": 1500,
+        "maxSupportSpacing": 1200,
+        "decking": "spruce-boards",
+        "liveLoad": 2
+      },
+      "insulation": {
+        "enabled": false,
+        "walls": {
+          "material": "mineral-wool",
+          "thickness": 120
+        },
+        "roof": {
+          "material": "mineral-wool",
+          "thickness": 160
+        },
+        "floor": {
+          "material": "mineral-wool",
+          "thickness": 120
+        }
+      },
+      "build": {
+        "site": "Borkheide, Brandenburg",
+        "windZone": "2 (inland)",
+        "terrainCategory": "II–III",
+        "baseGap": 50,
+        "cutReserve": 80,
+        "footingShape": "square",
+        "wallBase": "spacers",
+        "plateSpacer": 20,
+        "claddingSpecies": "spruce",
+        "braceConnector": "bolt",
+        "purlinPostConnector": "angle-brackets",
+        "rafterAnchorsPerBearing": 2
+      }
+    },
+    "walls": {
+      "front": {
+        "id": "front",
+        "closed": true,
+        "openings": [],
+        "start": 0,
+        "end": 1750,
+        "cladding": {
+          "orientation": "horizontal",
+          "boardWidth": 95,
+          "gap": 30
+        },
+        "rail": true
+      },
+      "rear": {
+        "id": "rear",
+        "closed": true,
+        "openings": [],
+        "start": 0,
+        "end": 7430,
+        "cladding": {
+          "orientation": "horizontal",
+          "boardWidth": 95,
+          "gap": 30
+        }
+      },
+      "left": {
+        "id": "left",
+        "closed": false,
+        "openings": []
+      },
+      "right": {
+        "id": "right",
+        "closed": true,
+        "openings": [],
+        "cladding": {
+          "orientation": "horizontal",
+          "boardWidth": 95,
+          "gap": 30
+        }
+      }
+    },
+    "partitions": [],
+    "vehicles": [
+      {
+        "id": "5f77ec86-cd6f-4291-9960-79f2d58dd339",
+        "modelId": "motorcycle",
+        "x": 1760,
+        "z": 4090,
+        "rotationDeg": 90,
+        "color": "#e5e7eb"
+      },
+      {
+        "id": "5a5bc318-630b-42d3-83bd-8f6c54fe1a00",
+        "modelId": "bin-120",
+        "x": 530,
+        "z": 3340,
+        "rotationDeg": 0,
+        "color": "#9ca3af"
+      },
+      {
+        "id": "4058cc79-2331-4863-9eb4-2bd88a294aa7",
+        "modelId": "bin-240",
+        "x": 600,
+        "z": 5100,
+        "rotationDeg": 0,
+        "color": "#1d4ed8"
+      },
+      {
+        "id": "ed2e02b8-9d76-4914-a1a5-7bdc8304b1d4",
+        "modelId": "bin-240",
+        "x": 600,
+        "z": 4440,
+        "rotationDeg": 0,
+        "color": "#d97706"
+      },
+      {
+        "id": "3f2db622-5810-4608-8013-4575f1dc5585",
+        "modelId": "bin-120",
+        "x": 480,
+        "z": 3860,
+        "rotationDeg": 0,
+        "color": "#166534"
+      },
+      {
+        "id": "692aafa6-d3ea-4ce9-a8b7-afc7b3dff7c9",
+        "modelId": "bicycle",
+        "x": 1470,
+        "z": 1240,
+        "rotationDeg": 90,
+        "color": "#0e7490"
+      },
+      {
+        "id": "bace2fd2-6456-490d-b544-4c3e4c8292d8",
+        "modelId": "bicycle",
+        "x": 720,
+        "z": 1240,
+        "rotationDeg": 90,
+        "color": "#b91c1c"
+      },
+      {
+        "id": "aebf3c55-919d-48cf-b6d6-a1eb2f608937",
+        "modelId": "cupra-formentor",
+        "x": 3680,
+        "z": 2870,
+        "rotationDeg": 90,
+        "color": "#0e7490"
+      },
+      {
+        "id": "cad227f0-7d4b-4fb2-aec5-d829e7a73fd3",
+        "modelId": "opel-astra-k-sports-tourer",
+        "x": 6330,
+        "z": 3100,
+        "rotationDeg": 90,
+        "color": "#b91c1c"
+      }
+    ],
+    "pavedAreas": [],
+    "postOverrides": {
+      "mid0:1": {
+        "removed": true
+      },
+      "rear:1": {
+        "removed": true
+      },
+      "mid1:1": {
+        "removed": true
+      },
+      "left:1": {
+        "removed": true
+      },
+      "right:1": {
+        "removed": true
+      }
+    },
+    "freePosts": []
+  }
+}

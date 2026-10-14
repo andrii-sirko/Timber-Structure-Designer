@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { postBottomLevel } from './build.ts';
 import test from 'node:test';
 import { groundAt, sanitizeGroundSlope, slopeDegToPercent, worldGroundPlane } from './groundSlope.ts';
 import { buildFraming } from './framing/index.ts';
@@ -41,9 +42,10 @@ test('sanitizes out-of-range input', () => {
   assert.equal(sanitizeGroundSlope({ percent: 99 }).percent, 15);
 });
 
-test('a level site keeps every post on ±0', () => {
-  const posts = buildFraming(createDefaultProject()).members.filter((m) => m.category === 'post');
-  assert.ok(posts.every((m) => m.start.y === 0));
+test('a level site keeps every post foot at the post bottom level (base gap above ±0)', () => {
+  const project = createDefaultProject();
+  const posts = buildFraming(project).members.filter((m) => m.category === 'post');
+  assert.ok(posts.every((m) => m.start.y === postBottomLevel(project.params)));
 });
 
 test('posts down the fall get longer by the ground drop at their foot, tops stay put', () => {
@@ -54,7 +56,7 @@ test('posts down the fall get longer by the ground drop at their foot, tops stay
     assert.equal(sloped.length, level.length);
     sloped.forEach((m, i) => {
       const foot = groundAt(g, m.start.x, m.start.z);
-      close(m.start.y, foot);
+      close(m.start.y, foot + level[i].start.y);
       close(m.length - level[i].length, -foot);
     });
     const feet = sloped.map((m) => m.start.y);

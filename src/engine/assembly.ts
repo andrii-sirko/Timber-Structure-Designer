@@ -68,17 +68,17 @@ const STAGES: Record<AssemblyStage, StageInfo> = {
   posts: {
     title: 'Posts – {where}',
     instruction: 'Set out the post positions, fix the post bases, then stand the posts plumb and hold each one with two temporary diagonal props.',
-    hardwareIds: ['post-base', 'post-base-h', 'anchor', 'post-bolt'],
+    hardwareIds: ['post-base', 'post-base-h', 'post-base-h-reinforced', 'anchor', 'post-bolt'],
   },
   purlin: {
     title: 'Purlin – {where}',
     instruction: 'Lift the purlin onto the post heads, check it is level along the row and fix it to every post. Join purlin pieces over a post.',
-    hardwareIds: ['bracket', 'bracket-nails', 'splice-bolt', 'splice-plate'],
+    hardwareIds: ['bracket', 'bracket-nails', 'purlin-screws', 'purlin-strap', 'purlin-strap-nails', 'splice-bolt', 'splice-plate'],
   },
   braces: {
     title: 'Knee braces – {where}',
     instruction: 'Fit the knee braces between post and purlin while the posts are still propped plumb. The temporary props of this row can come off afterwards.',
-    hardwareIds: ['brace-screws'],
+    hardwareIds: ['brace-screws', 'brace-bolt'],
   },
   rafters: {
     title: 'Rafters',
@@ -88,17 +88,17 @@ const STAGES: Record<AssemblyStage, StageInfo> = {
   roof: {
     title: 'Roof covering',
     instruction: 'Lay the roof deck and covering from the eave upwards. Close the roof before building the walls so the timber stays dry.',
-    hardwareIds: ['roof-screws', 'roof-nails', 'deck-screws', 'batten-nails'],
+    hardwareIds: ['batten-screws', 'roof-screws', 'roof-nails', 'deck-screws', 'batten-nails'],
   },
   'wall-base': {
     title: 'Bottom plate – {where}',
     instruction: 'Lay the bottom plate on a damp-proof strip between the posts, check it is straight and anchor it to the base.',
-    hardwareIds: ['plate-anchor'],
+    hardwareIds: ['plate-anchor', 'plate-spacer', 'stud-foot-holder'],
   },
   'wall-studs': {
     title: 'Studs – {where}',
     instruction: 'Stand the end studs against the posts first, then the studs at their marked spacing and the full-height studs beside each opening. Check every stud for plumb before fixing.',
-    hardwareIds: ['stud-screws', 'end-stud-bracket'],
+    hardwareIds: ['stud-screws', 'end-stud-bracket', 'wind-strap', 'wind-strap-tensioner', 'wind-strap-nails'],
   },
   'wall-top': {
     title: 'Top rail – {where}',
@@ -235,7 +235,8 @@ export function buildAssemblySteps(model: DerivedModel, project: ProjectState): 
   push('braces:other', 'braces', 'remaining', braces.filter((m) => !taken.has(m.id)));
 
   push('rafters', 'rafters', undefined, structural.filter((m) => m.category === 'rafter'));
-  push('roof', 'roof', undefined, [], panels.filter((p) => p.kind === 'roof').map((p) => p.id));
+  // roof battens go on with the covering they carry
+  push('roof', 'roof', undefined, structural.filter((m) => m.group.startsWith('Roof batten')), panels.filter((p) => p.kind === 'roof').map((p) => p.id));
 
   for (const wallId of WALL_IDS) {
     const wallMembers = structural.filter((m) => m.wallId === wallId && !taken.has(m.id) && m.category !== 'rafter' && m.category !== 'joist' && m.category !== 'bearer');

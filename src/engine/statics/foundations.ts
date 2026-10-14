@@ -1,4 +1,4 @@
-import type { SoilType, StaticsCheck, StaticsStatus, TimberSection } from '@/types';
+import type { FootingShape, SoilType, StaticsCheck, StaticsStatus, TimberSection } from '@/types';
 
 /**
  * Post footing checks in the soil (simplified, no site investigation):
@@ -43,21 +43,24 @@ const statusOf = (util: number): StaticsStatus => (util > 1 ? 'fail' : util > OK
 
 export interface FoundationInput {
   soil: SoilType;
-  /** Footing depth / diameter (mm); 0 = posts stand on a slab or bare anchors */
+  /** Footing depth / size (side or Ø, mm); 0 = posts stand on a slab or bare anchors */
   depth: number;
   diameter: number;
+  shape: FootingShape;
   post: TimberSection;
   /** Most loaded post: design axial force G + S (kN) */
   worstPost: { label: string; Nd: number };
 }
 
 export function foundationChecks(input: FoundationInput): StaticsCheck[] {
-  const { soil, depth, diameter, post, worstPost } = input;
+  const { soil, depth, diameter, post, worstPost, shape } = input;
   if (depth <= 0 || diameter <= 0) return [];
   const soilProps = SOILS[soil];
   const D = diameter / 1000;
   const L = depth / 1000;
-  const area = (Math.PI * D * D) / 4;
+  const areaOf = (size: number) => (shape === 'round' ? (Math.PI * size * size) / 4 : size * size);
+  const area = areaOf(D);
+  const name = (size: number) => (shape === 'round' ? `Ø${Math.round(size)}` : `${Math.round(size)} × ${Math.round(size)}`);
   const Gf = CONCRETE_WEIGHT * area * L;
   const Nd = worstPost.Nd + GAMMA_G * Gf;
   const sigma = Nd / area;
@@ -68,13 +71,13 @@ export function foundationChecks(input: FoundationInput): StaticsCheck[] {
   // Smallest diameter (50 mm steps) that brings the pressure down to the status limit
   const needed = (() => {
     for (let d = Math.ceil(diameter / 50) * 50 + 50; d <= 1000; d += 50) {
-      const a = (Math.PI * (d / 1000) ** 2) / 4;
+      const a = areaOf(d / 1000);
       if ((worstPost.Nd + GAMMA_G * CONCRETE_WEIGHT * a * L) / a <= OK_LIMIT * sigmaRd) return d;
     }
     return undefined;
   })();
   const recommendation = [
-    util > OK_LIMIT ? (needed ? `Enlarge the footings to Ø${needed} mm (or found deeper / on a pad).` : 'Use a pad footing or a slab – a round footing up to Ø1000 mm is not enough.') : '',
+    util > OK_LIMIT ? (needed ? `Enlarge the footings to ${name(needed)} mm (or found deeper).` : 'Use a strip foundation or a slab – a single footing up to 1000 mm is not enough.') : '',
     shallow ? `Found at least ${FROST_DEPTH} mm deep (frost-free).` : '',
   ]
     .filter(Boolean)
@@ -96,7 +99,7 @@ export function foundationChecks(input: FoundationInput): StaticsCheck[] {
       utilisation: util,
       status,
       recommendation: recommendation || undefined,
-      detail: `${worstPost.label}: N_d = ${kn(worstPost.Nd)} + 1.35 × footing Ø${Math.round(diameter)} × ${Math.round(depth)} mm ${kn(Gf)} = ${kn(Nd)} on ${fmt(area, 3)} m²: σ_d = ${Math.round(sigma)} ≤ σ_R,d = ${Math.round(sigmaRd)} kN/m² (${soilProps.label}, DIN 1054 Annex A) (${pct(util)}).${diameter < 500 ? ' The table values are given for footings ≥ 0.5 m wide – have the soil confirmed on site.' : ''}`,
+      detail: `${worstPost.label}: N_d = ${kn(worstPost.Nd)} + 1.35 × footing ${name(diameter)} × ${Math.round(depth)} mm ${kn(Gf)} = ${kn(Nd)} on ${fmt(area, 3)} m²: σ_d = ${Math.round(sigma)} ≤ σ_R,d = ${Math.round(sigmaRd)} kN/m² (${soilProps.label}, DIN 1054 Annex A) (${pct(util)}).${diameter < 500 ? ' The table values are given for footings ≥ 0.5 m wide – have the soil confirmed on site.' : ''}`,
     },
   ];
 }

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval';
 import type {
+  BuildSettings,
+  WallBracing,
   CameraPreset,
   HighlightMode,
   LayerVisibility,
@@ -30,7 +32,7 @@ import type {
   WallCladding,
 } from '@/types';
 import { isOuterWall } from '@/types';
-import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, MIN_WALL_LENGTH, openingFromPreset, OPENING_DEFAULTS, hasWallPosts, resolveCladding, resolveScreenCladding, sizeChanged, wallExtent } from '@/engine';
+import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, MIN_WALL_LENGTH, openingFromPreset, relabelForPreset, OPENING_DEFAULTS, hasWallPosts, resolveCladding, resolveScreenCladding, sizeChanged, wallExtent } from '@/engine';
 import { defaultObjectSize, findVehicleSpot, getVehicleModel, VEHICLE_COLORS } from '@/engine/vehicles';
 import { defaultPavedArea, insertVertex, PAVING_COLORS, resizePolygon, translatePolygon } from '@/engine/paving';
 import { clampFreePost, freePostMemberId } from '@/engine/freePosts';
@@ -121,6 +123,12 @@ interface ProjectStoreBase {
   setFloor: (patch: Partial<FloorSettings>) => void;
   /** Patch the insulation settings */
   setInsulation: (patch: Partial<InsulationSettings>) => void;
+  /** Patch the build & site assumptions */
+  setBuild: (patch: Partial<BuildSettings>) => void;
+  /** Bracing of a closed wall (straps / sheet panels make it a shear wall) */
+  setWallBracing: (id: WallId, bracing: WallBracing) => void;
+  /** A rail (Rähm) along an outer wall that carries knee braces across the rows */
+  setWallRail: (id: WallId, rail: boolean) => void;
 
   setWallClosed: (id: WallId, closed: boolean) => void;
   /** Shorten a closed outer wall: closed stretch along the wall (mm from its start corner) */
@@ -317,6 +325,21 @@ export const useProjectStore = create<ProjectStore>()(
           return { project: clampAllOpenings({ ...s.project, walls: { ...s.project.walls, [id]: { ...wall, closed } } }) };
         }),
 
+      setBuild: (patch) =>
+        set((s) => ({ project: { ...s.project, params: { ...s.project.params, build: { ...s.project.params.build, ...patch } } } })),
+
+      setWallBracing: (id, bracing) =>
+        set((s) => {
+          const { bracing: _old, ...wall } = s.project.walls[id];
+          return { project: { ...s.project, walls: { ...s.project.walls, [id]: bracing === 'none' ? wall : { ...wall, bracing } } } };
+        }),
+
+      setWallRail: (id, rail) =>
+        set((s) => {
+          const { rail: _old, ...wall } = s.project.walls[id];
+          return { project: { ...s.project, walls: { ...s.project.walls, [id]: rail ? { ...wall, rail: true } : wall } } };
+        }),
+
       setWallScreen: (id, screen) =>
         set((s) => {
           const { screen: _screen, ...wall } = s.project.walls[id];
@@ -384,7 +407,7 @@ export const useProjectStore = create<ProjectStore>()(
         const id = uuid();
         set((s) => {
           const existing = hostOpenings(s.project, wallKey);
-          const base = openingFromPreset(preset);
+          const base = openingFromPreset(preset, s.project.params.build.installGap);
           const count = existing.filter((o) => o.type === base.type).length + 1;
           const last = existing.reduce((m, o) => Math.max(m, o.x + o.width), 0);
           const x = last > 0 ? last + 400 : Math.max(300, hostLength(s.project, wallKey) / 3 - base.width / 2);
@@ -404,8 +427,9 @@ export const useProjectStore = create<ProjectStore>()(
             openings.map((o) => {
               if (o.id !== id) return o;
               if (!preset) return { ...o, preset: undefined };
-              const { label: _label, ...fields } = openingFromPreset(preset);
-              const merged: Opening = { ...o, ...fields, hinge: o.hinge ?? fields.hinge, swing: o.swing ?? fields.swing };
+              const { label: _label, ...fields } = openingFromPreset(preset, s.project.params.build.installGap);
+              // the old preset's name in the label follows the new preset (custom labels stay)
+              const merged: Opening = { ...o, ...fields, label: relabelForPreset(o.label, preset), hinge: o.hinge ?? fields.hinge, swing: o.swing ?? fields.swing };
               return clampOpening(frame, merged, s.project.params);
             }),
           );

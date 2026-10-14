@@ -117,10 +117,122 @@ export type SnowZone = '1' | '1a' | '2' | '2a' | '3';
 export type SoilType = 'non-cohesive' | 'cohesive-stiff' | 'cohesive-semi-firm';
 
 /**
- * adjustable = height-adjustable post base on a heavy-duty anchor (pinned, no base moment);
- * h-anchor = H post base 141 mm, flat steel 800/80/8, cast 400 mm into the footing (partly moment-fixed).
+ * Post base hardware. Every type is treated as PINNED in the statics (no Einspannung):
+ * adjustable = height-adjustable post base on a heavy-duty anchor;
+ * h-anchor = H post base cast into the footing, clear width = post width + 1 mm (121 / 141 mm);
+ * h-anchor-reinforced = the heavy version of the same anchor (thicker flat steel).
  */
-export type PostBaseType = 'adjustable' | 'h-anchor';
+export type PostBaseType = 'adjustable' | 'h-anchor' | 'h-anchor-reinforced';
+export const POST_BASE_TYPES: readonly PostBaseType[] = ['h-anchor', 'h-anchor-reinforced', 'adjustable'] as const;
+
+/** Shape of the post point foundations: square pad (side = size) or cylinder (Ø = size). */
+export type FootingShape = 'square' | 'round';
+
+/** How a purlin is tied down to its post against uplift. */
+export type PurlinPostConnector = 'angle-brackets' | 'screws' | 'strap';
+export const PURLIN_POST_CONNECTORS: readonly PurlinPostConnector[] = ['angle-brackets', 'screws', 'strap'] as const;
+
+/** Fastener at each end of a knee brace. */
+export type BraceConnector = 'screws' | 'bolt';
+
+/** What makes a closed wall a shear wall: nothing (board cladding alone does not), crossed steel straps, or sheet panels. */
+export type WallBracing = 'none' | 'strap' | 'panels';
+export const WALL_BRACINGS: readonly WallBracing[] = ['none', 'strap', 'panels'] as const;
+
+/** Timber species of the façade boards. */
+export type CladdingSpecies = 'spruce' | 'larch';
+
+/** What the bottom plates of the walls stand on. */
+export type WallBase = 'slab' | 'curb' | 'spacers' | 'hung';
+export const WALL_BASES: readonly WallBase[] = ['slab', 'curb', 'spacers', 'hung'] as const;
+
+/**
+ * Every build and site assumption the checks, quantities and report rely on – all editable and
+ * printed in the statics report. Levels are mm above ±0 (finished floor / paving).
+ */
+export interface BuildSettings {
+  /** Site description printed in the report */
+  site: string;
+  /** Wind zone and terrain category as text for the report (q_p itself is loads.windLoad) */
+  windZone: string;
+  terrainCategory: string;
+  // ── Post bases & footings ──
+  /** Concrete top → post bottom (mm) */
+  baseGap: Millimeters;
+  /** Extra length ordered on every post, cut on site after levelling (mm) */
+  cutReserve: Millimeters;
+  /** Post bottom level above ±0; null = concrete top at ±0, post bottom at baseGap */
+  postBottomLevel: Millimeters | null;
+  /** Point foundation shape; its size is loads.postFootingDiameter (side or Ø), depth loads.postFootingDepth */
+  footingShape: FootingShape;
+  // ── Uplift chain ──
+  /** Sparrenpfettenanker per rafter bearing */
+  rafterAnchorsPerBearing: 1 | 2;
+  /** Characteristic uplift resistance of one Sparrenpfettenanker per its ETA (kN) */
+  rafterAnchorRk: number;
+  purlinPostConnector: PurlinPostConnector;
+  /** Characteristic uplift resistance of one angle bracket 90×90×65 per its ETA (kN) */
+  angleBracketRk: number;
+  /** Concrete yield of one 25 kg bag of ready-mix concrete (litres) */
+  concreteBagLitres: number;
+  // ── Bracing ──
+  braceConnector: BraceConnector;
+  // ── Wall studs & screen battens in wind ──
+  /** Screen battens of slat screens: width along the wall × depth in the wind direction */
+  screenBatten: TimberSection;
+  /** Largest batten spacing of a slat screen with horizontal slats (mm) */
+  screenBattenSpacing: Millimeters;
+  /** Pressure coefficient of a porous screen / boards with gaps for the stud bending check */
+  screenCp: number;
+  /** Net pressure coefficient of closed boarding for the stud bending check */
+  wallCp: number;
+  /** Deflection limit L/x of studs and battens under wind */
+  studDeflectionLimit: number;
+  // ── Roof sheeting ──
+  /** Cover width of one trapezoidal sheet (mm) */
+  sheetCoverWidth: Millimeters;
+  /** Profile height of the sheet (mm) */
+  sheetProfileHeight: Millimeters;
+  /** Longest sheet the supplier delivers (mm) */
+  maxSheetLength: Millimeters;
+  /** Largest support spacing the profile may span (mm) */
+  sheetMaxSpan: Millimeters;
+  /** Roof battens across the fall line where the rafters run down the slope */
+  battenSection: TimberSection;
+  /** Roofing screw diameter × length (mm), timber thread with EPDM washer */
+  roofScrewDiameter: number;
+  roofScrewLength: Millimeters;
+  /** Roofing screws per m² in the field and in the edge / corner zones */
+  roofScrewsField: number;
+  roofScrewsEdge: number;
+  /** Smallest pitch the sheet is laid at, and the tolerance kept above it (°) */
+  minSlope: number;
+  slopeTolerance: number;
+  // ── Walls ──
+  wallBase: WallBase;
+  /** Concrete curb under the walls (wallBase 'curb'): width × height, top above ±0 */
+  curbWidth: Millimeters;
+  curbHeight: Millimeters;
+  curbTop: Millimeters;
+  /** Gap under the bottom plate on spacers (wallBase 'spacers') */
+  plateSpacer: Millimeters;
+  /** Installation gap per side between a door / window frame and the rough opening */
+  installGap: Millimeters;
+  claddingSpecies: CladdingSpecies;
+  // ── Planning & ordering ──
+  /** BGF threshold for procedure-free carports / outbuildings (m²) */
+  bgfLimit: number;
+  /** Stock lengths the timber yard sells (mm) */
+  stockLengths: Millimeters[];
+  /** Sections the timber yard sells – auto-fix only picks these, others raise a warning */
+  stockSections: TimberSection[];
+  // ── Optional material lines ──
+  facadeMembrane: boolean;
+  vents: number;
+  floorBuildUp: boolean;
+  /** Paving slabs already in stock, subtracted from the floor build-up (m²) */
+  existingPavingM2: number;
+}
 
 export type OpeningType = 'door' | 'window' | 'passage';
 
@@ -167,6 +279,10 @@ export interface Wall {
   cladding?: WallCladding;
   /** Open wall only: slat screen fixed to the posts (wall posts, rail and battens, no studs) */
   screen?: boolean;
+  /** Bracing that makes the wall a shear wall; omitted → none (boards alone never count) */
+  bracing?: WallBracing;
+  /** Open wall only: a rail (Rähm) between the purlin rows without studs or cladding – carries knee braces across */
+  rail?: boolean;
 }
 
 export type PartitionAxis = 'x' | 'z';
@@ -191,6 +307,7 @@ export interface OpeningHost {
   openings: Opening[];
   cladding?: WallCladding;
   screen?: boolean;
+  rail?: boolean;
 }
 
 /** Selects either an outer wall (one of WALL_IDS) or a partition wall (its id). */
@@ -431,6 +548,7 @@ export interface StructureParams {
   groundSlope: GroundSlope;
   floor: FloorSettings;
   insulation: InsulationSettings;
+  build: BuildSettings;
 }
 
 export interface ProjectState {
@@ -774,6 +892,8 @@ export interface StaticsResult {
   collapseGustSpeed?: number;
   /** Element that gives way first as the wind increases */
   collapseElement?: string;
+  /** What this pre-design does not check – listed explicitly instead of an overall "OK" */
+  notChecked: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -795,6 +915,24 @@ export interface BomLine {
   massKg: number;
   /** Cladding lines: stock boards to buy for the pieces, one option per stock length */
   stockBoards?: StockBoardOption[];
+  /** Trapezoidal sheet roofing: the sheet list – one piece per run along the fall line */
+  sheets?: { count: number; length: Millimeters; coverWidth: Millimeters };
+}
+
+/** Timber of one section as one supplier order: the pieces packed into stock lengths. */
+export interface TimberOrderLine {
+  section: TimberSection;
+  /** Made-to-order glulam (deeper than stock KVH) */
+  glulam: boolean;
+  /** Cut pieces incl. the cut reserve on posts (mm) */
+  pieces: Millimeters[];
+  /** Stock lengths to buy */
+  stock: { lengthMm: Millimeters; count: number }[];
+  /** Pieces longer than the longest stock length, ordered to length (rounded up to 0.5 m) */
+  special: Millimeters[];
+  volumeM3: number;
+  /** Offcut, % of the bought length */
+  offcutPct: number;
 }
 
 /** Stock boards of one length that the cladding pieces are cut from. */
@@ -842,6 +980,8 @@ export interface MaterialItem {
 
 export interface BomResult {
   lines: BomLine[];
+  /** All framing timber by section, packed into the yard's stock lengths */
+  timberOrder: TimberOrderLine[];
   /** Doors and windows to buy (not part of the timber lines) */
   fixtures: FixtureLine[];
   /** Other materials (roof battens, membranes, flashing, paving build-up) */
@@ -864,6 +1004,8 @@ export interface CutListItem {
   memberIds: string[];
   /** Walls the grouped pieces belong to (for display) */
   walls?: string[];
+  /** Posts: length to order (Bestelllänge) = target length (Sollmaß) + cut reserve, cut on site after levelling */
+  orderLength?: Millimeters;
 }
 
 export interface HardwareItem {

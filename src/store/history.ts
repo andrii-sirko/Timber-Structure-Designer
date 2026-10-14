@@ -63,6 +63,7 @@ const FIELD_NAMES: Record<string, string> = {
 };
 const TIMBER_NAMES: Record<string, string> = { post: 'Post', beam: 'Purlin', rafter: 'Rafter', stud: 'Stud', brace: 'Knee brace' };
 const LOAD_NAMES: Record<string, string> = { snowLoad: 'Snow load', roofCovering: 'Roof covering', serviceClass: 'Service class', windLoad: 'Wind load', postBase: 'Post base', snowZone: 'Snow load zone', altitude: 'Site altitude', exceptionalSnow: 'Exceptional snow', soil: 'Soil' };
+const BUILD_NAMES: Record<string, string> = { baseGap: 'Base gap', cutReserve: 'Cut reserve', footingShape: 'Foundation shape', wallBase: 'Wall base', stockLengths: 'Stock lengths' };
 const SIDE_NAMES: Record<string, string> = { front: 'Front', rear: 'Rear', left: 'Left', right: 'Right' };
 const OPENING_NAMES: Record<string, string> = { door: 'Door', window: 'Window', passage: 'Passage' };
 
@@ -100,6 +101,9 @@ const LABELS: Record<string, (...args: never[]) => string> = {
   removeFreePost: () => t('Remove post'),
   setAssemblyOrder: (order: string[] | null) => (order ? t('Reorder assembly steps') : t('Reset assembly order')),
   setInsulation: () => t('Change insulation'),
+  setBuild: (patch: Record<string, unknown>) => t('Change {field}', { field: fieldName(BUILD_NAMES, Object.keys(patch)[0] ?? 'build') }),
+  setWallBracing: (id: string) => t('Change {field} wall bracing', { field: fieldName(SIDE_NAMES, id) }),
+  setWallRail: (id: string) => t('Change {field} wall rail', { field: fieldName(SIDE_NAMES, id) }),
   addPavedArea: () => t('Add paved floor'),
   updatePavedArea: () => t('Edit paved floor'),
   removePavedArea: () => t('Remove paved floor'),
@@ -124,6 +128,7 @@ const COALESCE: Record<string, (...args: never[]) => string> = {
   setParam: (key: string) => `param:${key}`,
   setOverhang: (side: string) => `overhang:${side}`,
   setLoad: (key: string) => `load:${key}`,
+  setBuild: (patch: Record<string, unknown>) => `build:${Object.keys(patch).join(',')}`,
   updateOpening: (_wall: string, id: string) => `opening:${id}`,
   updatePartition: (id: string) => `partition:${id}`,
   setWallExtent: (id: string) => `wallExtent:${id}`,

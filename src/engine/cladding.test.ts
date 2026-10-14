@@ -78,13 +78,13 @@ test('a gap turns the wall cladding into separate boards on every roof direction
 test('the BOM counts cladding boards and their running metres per board width', () => {
   const model = buildModel(withCladding({ orientation: 'horizontal', boardWidth: 100, gap: 0 }));
   const sheathing = model.bom.lines.filter((l) => l.category === 'sheathing');
-  const narrow = sheathing.find((l) => l.label === 'Wall cladding boards 20 × 100 mm')!;
+  const narrow = sheathing.find((l) => l.label.startsWith('Wall cladding boards 20 × 100 mm'))!;
   const front = model.framing.panels.find((p) => p.kind === 'cladding' && p.wallId === 'front')!;
   const boards = claddingBoards(front.outline!.outer, front.outline!.holes, front.cladding!);
   assert.equal(narrow.count, boards.length);
   // closed boarding: running metres × board width ≈ the wall face (sloped tops add a little)
   assert.ok(Math.abs(narrow.totalLengthM * 0.1 - narrow.areaM2!) < narrow.areaM2! * 0.1, `${narrow.totalLengthM} m vs ${narrow.areaM2} m²`);
-  assert.ok(sheathing.some((l) => l.label === 'Wall cladding boards 20 × 120 mm' && l.count > 0 && l.totalLengthM > 0), 'other walls keep the default 120 mm boards');
+  assert.ok(sheathing.some((l) => l.label.startsWith('Wall cladding boards 20 × 120 mm') && l.count > 0 && l.totalLengthM > 0), 'other walls keep the default 120 mm boards');
   assert.equal(model.bom.totalLengthM, model.bom.lines.reduce((s, l) => s + (l.section ? l.totalLengthM : 0), 0));
   assert.ok(hasTranslation(narrow.label, 'uk'));
 });
@@ -182,10 +182,11 @@ test('a door in a slat screen is cut out of the slats and framed with jambs and 
     const battens = model.framing.members.filter((m) => m.wallId === 'left' && m.category === 'batten');
     // world Z of a member along the left wall = its u
     const at = (u: number) => battens.filter((m) => m.direction.y === 1 && Math.abs(m.start.z - u) < 1);
-    assert.equal(at(door.x - 30).length, 1, `${orientation}: jamb left of the door`);
-    assert.equal(at(door.x + door.width + 30).length, 1, `${orientation}: jamb right of the door`);
+    const half = p.params.build.screenBatten.width / 2; // battens: width along the wall
+    assert.equal(at(door.x - half).length, 1, `${orientation}: jamb left of the door`);
+    assert.equal(at(door.x + door.width + half).length, 1, `${orientation}: jamb right of the door`);
     const rails = battens.filter((m) => m.direction.y === 0);
-    assert.ok(rails.some((m) => Math.abs(m.start.y - (door.height + 30)) < 1), `${orientation}: header rail`);
+    assert.ok(rails.some((m) => Math.abs(m.start.y - (door.height + half)) < 1), `${orientation}: header rail`);
     const bottom = rails.filter((m) => m.group.startsWith('Screen bottom rail'));
     for (const m of bottom) {
       const [a, b] = [m.start.z, m.start.z + m.direction.z * m.length].sort((x, y) => x - y);

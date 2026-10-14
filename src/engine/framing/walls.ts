@@ -5,6 +5,7 @@ import { floorLayout } from './floor';
 import { headerHeight, validateOpenings } from './openings';
 import type { RoofLines } from './roofLines';
 import { hasWallPosts, wallBays, type WallFrame } from './wallFrame';
+import { plateBottomLevel } from '../build';
 
 export const CLADDING_THICKNESS = 20;
 const MIN_CRIPPLE = 80;
@@ -30,12 +31,17 @@ export function generateWallFraming(
 ): WallBuild {
   const warnings = validateOpenings(frame, wall, params);
   const screen = !wall.closed && Boolean(wall.screen);
-  if (!wall.closed && !screen) return { members: [], warnings };
+  const railOnly = !wall.closed && !screen && Boolean(wall.rail) && frame.kind !== 'partition';
+  if (!wall.closed && !screen && !railOnly) return { members: [], warnings };
 
   const { timber } = params;
   const sw = timber.stud.width; // along the wall
   const sd = timber.stud.height; // wall depth
-  const sillTop = sw; // bottom plate laid flat
+  // Outer walls stand on their base: slab (±0), concrete curb, spacers above the paving, or hung
+  // from the roof without a bottom plate (held at the foot laterally only)
+  const base = frame.kind === 'partition' ? 0 : plateBottomLevel(params);
+  const hung = frame.kind !== 'partition' && params.build.wallBase === 'hung';
+  const sillTop = hung ? base : base + sw; // bottom plate laid flat
   const pitch = frame.sloped ? roof.pitchDeg : 0;
   const tan = frame.sloped ? roof.tan : 0;
   const members: Member[] = [];
@@ -104,7 +110,11 @@ export function generateWallFraming(
     });
   };
 
-  if (screen) members.push(...screenBattens(frame, resolveScreenCladding(wall.cladding), wall.openings, roof));
+  if (railOnly) {
+    members.push(...sideRails());
+    return { members, warnings };
+  }
+  if (screen) members.push(...screenBattens(frame, resolveScreenCladding(wall.cladding), wall.openings, roof, params.build.screenBatten, params.build.screenBattenSpacing));
   else {
     // Partition end studs (against the outer wall / post) and its top plate
     if (isPartition) {
@@ -154,10 +164,10 @@ export function generateWallFraming(
       const cuts = openings.filter((o) => o.type !== 'window').map((o) => [o.x, o.x + o.width] as const);
       let cursor = plateStart;
       for (const [a, b] of cuts) {
-        horizontal(cursor, Math.min(a, plateEnd), sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
+        if (!hung) horizontal(cursor, Math.min(a, plateEnd), base + sw / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
         cursor = Math.max(cursor, b);
       }
-      horizontal(cursor, plateEnd, sillTop / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
+      if (!hung) horizontal(cursor, plateEnd, base + sw / 2, sw, 'plate', `Bottom plate ${wallLabel}`, 'Schwelle', 'Bottom plate (Schwelle)');
       // With a timber floor the plate gap would leave a hole through the wall: fill it up to the finished floor
       if (floor) {
         const top = Math.round(floor.deckTop);
@@ -240,21 +250,29 @@ export function generateWallFraming(
     }
   }
 
-  // Rail (Rähm) on outer walls without a purlin – one piece per purlin bay.
-  // classic: sloped along the side walls between the purlins; sloped-purlins: level along the
-  // front / rear walls between the purlin rows.
-  if (!isPartition && !frame.hasPurlin) {
+  if (!isPartition) members.push(...sideRails());
+
+  /**
+   * Rail (Rähm) on outer walls without a purlin – one piece per purlin bay.
+   * classic: sloped along the side walls between the purlins; sloped-purlins: level along the
+   * front / rear walls between the purlin rows.
+   */
+  function sideRails(): Member[] {
+    const rails: Member[] = [];
+    if (frame.hasPurlin) return rails;
     const bw = timber.beam.width;
     const bh = timber.beam.height;
     const rowU = frame.sloped ? roof.purlins.map((p) => p.z) : [frame.postU[0], ...roof.midPurlinX, frame.postU[frame.postU.length - 1]];
+    // an explicit rail runs the full wall length, even past a shortened closed stretch
+    const ext = wall.rail ? { start: -Infinity, end: Infinity } : frame.extent;
     for (let k = 0; k < rowU.length - 1; k++) {
-      const uA = Math.max(rowU[k] + bw / 2, frame.extent.start);
-      const uB = Math.min(rowU[k + 1] - bw / 2, frame.extent.end);
+      const uA = Math.max(rowU[k] + bw / 2, ext.start);
+      const uB = Math.min(rowU[k + 1] - bw / 2, ext.end);
       if (uB - uA <= 100) continue;
       const name = rowU.length > 2 ? `Side rail ${wallLabel} (part ${k + 1})` : `Side rail ${wallLabel}`;
       if (!frame.sloped) {
         const length = uB - uA;
-        members.push({
+        rails.push({
           id: nextId('rail'),
           category: 'beam',
           name,
@@ -274,7 +292,7 @@ export function generateWallFraming(
       }
       const axisLength = (uB - uA) / roof.cos;
       const startWorld = frame.toWorld(uA, roof.bottomAt(uA) - bh / 2 / roof.cos);
-      members.push({
+      rails.push({
         id: nextId('rail'),
         category: 'beam',
         name,
@@ -291,6 +309,7 @@ export function generateWallFraming(
         notes: 'Plumb cuts against purlins',
       });
     }
+    return rails;
   }
 
   // Cladding panel
@@ -304,7 +323,7 @@ export function generateWallFraming(
     if (uStart <= 0.5 && reaches(walls.front)) uStart = -th;
     if (uEnd >= frame.length - 0.5 && reaches(walls.rear)) uEnd = frame.length + th;
   }
-  const bottom = screen ? SCREEN_GROUND_GAP : 0;
+  const bottom = screen ? SCREEN_GROUND_GAP : base;
   const outer: ProfilePoint[] = [
     { u: uStart, v: bottom },
     { u: uEnd, v: bottom },

@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildModel, autoFixStatics, costOptimizeStatics, OPENING_PRESETS, VEHICLE_CATALOG } from '@/engine';
-import { PROJECT_TEMPLATES } from '@/store/defaults';
+import { readFileSync } from 'node:fs';
+import { normalizeProject, PROJECT_TEMPLATES } from '@/store/defaults';
 import type { ProjectState, RoofDirection } from '@/types';
 import { DICTIONARY_PARTS } from './dict';
 import { hasTranslation, t, tx } from './core';
@@ -22,7 +23,7 @@ function collect(value: unknown, out: Set<string>, key = ''): void {
 
 
 /** Words that legitimately survive translation: German trade terms in parentheses, symbols, brands, units. */
-const KEEP = /^(mm|kN|kNm|max|min|incl|span|beam|stoß|kerve|hakenblatt|pfette|pfosten|sparren|epdm|osb|din|wpc|dpc|vs|minimum|option|crossover|pickup|trekking|stulp|moment|sedan|grill)$/i;
+const KEEP = /^(mm|kN|kNm|max|min|incl|inst|span|beam|stoß|kerve|hakenblatt|pfette|pfosten|sparren|epdm|osb|din|wpc|dpc|vs|minimum|option|crossover|pickup|trekking|stulp|moment|sedan|grill)$/i;
 
 /** English words (4+ letters) of the source still present in the translation, ignoring (…) asides and brand names. */
 function leftoverEnglish(source: string, translated: string): string[] {
@@ -65,6 +66,10 @@ function variants(): ProjectState[] {
       warm.params.insulation = { enabled: true, walls: { material: 'pir', thickness: 400 }, roof: { material: 'wood-fibre', thickness: 400 }, floor: { material: 'xps', thickness: 400 } };
       out.push(warm);
     }
+  }
+  // the three structures of the 13/10/2026 review, as configured to the spec (straps, curb, rails, H anchors)
+  for (const name of ['carport-after', 'entrance-roof-after', 'garden-shed-after']) {
+    out.push(normalizeProject(JSON.parse(readFileSync(new URL(`../engine/fixtures/${name}.json`, import.meta.url), 'utf8')).project));
   }
   return out;
 }

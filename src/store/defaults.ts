@@ -1,5 +1,5 @@
 import type { BraceDirection, FreePost, LayerVisibility, ObjectSize, Opening, Partition, PavedArea, ProjectState, RoofDirection, RoofScheme, StructureParams, Vehicle, ViewSettings, Wall, WallId } from '@/types';
-import { BRACE_DIRECTIONS, ROOF_SCHEMES, TIMBER_KEYS, WALL_IDS } from '@/types';
+import { BRACE_DIRECTIONS, ROOF_SCHEMES, TIMBER_KEYS, WALL_BRACINGS, WALL_IDS } from '@/types';
 import { uuid } from '@/engine/geometry';
 import { VEHICLE_CATALOG, VEHICLE_COLORS } from '@/engine/vehicles';
 import { NEIGHBOUR_DEFAULTS } from '@/engine/neighbours';
@@ -8,6 +8,8 @@ import { FLOOR_DEFAULTS, sanitizeFloor } from '@/engine/framing/floor';
 import { INSULATION_DEFAULTS, sanitizeInsulation } from '@/engine/framing/insulation';
 import { resolveCladding } from '@/engine/framing/cladding';
 import { GROUND_SLOPE_DEFAULTS, sanitizeGroundSlope } from '@/engine/groundSlope';
+import { findPreset, legacyPresetRough, presetRough, relabelForPreset } from '@/engine/framing/openingCatalog';
+import { BUILD_DEFAULTS, isPostBaseType, sanitizeBuild } from '@/engine/build';
 
 export const DEFAULT_PARAMS: StructureParams = {
   length: 6000,
@@ -37,10 +39,22 @@ export const DEFAULT_PARAMS: StructureParams = {
     strengthClass: 'C24',
   },
   lockedSections: [],
-  loads: { snowLoad: 0.85, roofCovering: 'trapezoidal-sheet', serviceClass: 2, windLoad: 0.65, postFootingDepth: 800, postFootingDiameter: 200 },
+  loads: {
+    snowLoad: 0.85,
+    roofCovering: 'trapezoidal-sheet',
+    serviceClass: 2,
+    windLoad: 0.65,
+    postFootingDepth: 800,
+    postFootingDiameter: 500,
+    postBase: 'h-anchor',
+    snowZone: '2',
+    altitude: 50,
+    exceptionalSnow: true,
+  },
   groundSlope: { ...GROUND_SLOPE_DEFAULTS },
   floor: structuredClone(FLOOR_DEFAULTS),
   insulation: structuredClone(INSULATION_DEFAULTS),
+  build: structuredClone(BUILD_DEFAULTS),
 };
 
 export function emptyWalls(closed = false): Record<WallId, Wall> {
@@ -188,8 +202,8 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Closed stud walls with door and window, bitumen shingle roof',
     build: () => {
       const walls = emptyWalls(true);
-      walls.front.openings.push({ id: uuid(), type: 'door', x: 600, y: 0, width: 890, height: 2010, label: 'Boarded door 875×2000', preset: 'door-boarded-875', hinge: 'left', swing: 'out' });
-      walls.right.openings.push({ id: uuid(), type: 'window', x: 900, y: 1000, width: 820, height: 820, label: 'Turn-tilt window 800×800', preset: 'window-turntilt-800x800' });
+      walls.front.openings.push({ id: uuid(), type: 'door', x: 600, y: 0, width: 899, height: 2012, label: 'Boarded door 875×2000', preset: 'door-boarded-875', hinge: 'left', swing: 'out' });
+      walls.right.openings.push({ id: uuid(), type: 'window', x: 900, y: 1000, width: 824, height: 824, label: 'Turn-tilt window 800×800', preset: 'window-turntilt-800x800' });
       return {
         id: uuid(),
         name: 'Garden shed 4 × 3 m',
@@ -260,10 +274,12 @@ export function normalizeProject(input: unknown): ProjectState {
       brace: { ...base.params.timber.brace, ...(p.timber?.brace ?? {}) },
     },
     lockedSections: Array.isArray(p.lockedSections) ? TIMBER_KEYS.filter((k) => p.lockedSections!.includes(k)) : [],
-    loads: { ...base.params.loads, ...(p.loads ?? {}) },
+    // a file without a post base predates the H post bases: it was built on adjustable bases
+    loads: { ...base.params.loads, ...(p.loads ?? {}), postBase: isPostBaseType(p.loads?.postBase) ? p.loads!.postBase : p.loads ? 'adjustable' : base.params.loads.postBase },
     groundSlope: sanitizeGroundSlope(p.groundSlope),
     floor: sanitizeFloor(p.floor),
     insulation: sanitizeInsulation(p.insulation),
+    build: sanitizeBuild(p.build),
     midPurlinPositions: Array.isArray(p.midPurlinPositions) ? p.midPurlinPositions.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)) : [],
     roofDirection: (WALL_IDS as readonly string[]).includes(p.roofDirection as string) ? (p.roofDirection as RoofDirection) : 'rear',
     roofScheme: (ROOF_SCHEMES as readonly string[]).includes(p.roofScheme as string) ? (p.roofScheme as RoofScheme) : 'classic',
@@ -277,11 +293,13 @@ export function normalizeProject(input: unknown): ProjectState {
     walls[id] = {
       id,
       closed: Boolean(w.closed),
-      openings: normalizeOpenings(w.openings),
+      openings: normalizeOpenings(w.openings, params.build.installGap),
       ...(typeof w.start === 'number' && Number.isFinite(w.start) ? { start: w.start } : {}),
       ...(typeof w.end === 'number' && Number.isFinite(w.end) ? { end: w.end } : {}),
       ...(w.cladding && typeof w.cladding === 'object' ? { cladding: resolveCladding(w.cladding) } : {}),
       ...(w.screen === true && !w.closed ? { screen: true } : {}),
+      ...(WALL_BRACINGS.includes(w.bracing as never) && w.bracing !== 'none' ? { bracing: w.bracing } : {}),
+      ...(w.rail === true ? { rail: true } : {}),
     };
   }
   const partitions: Partition[] = Array.isArray(src.partitions)
@@ -294,7 +312,7 @@ export function normalizeProject(input: unknown): ProjectState {
           offset: Number.isFinite(Number(p.offset)) ? Number(p.offset) : (p.axis === 'x' ? params.width : params.length) / 2,
           start: Number.isFinite(Number(p.start)) ? Number(p.start) : 0,
           end: Number.isFinite(Number(p.end)) ? Number(p.end) : p.axis === 'x' ? params.length : params.width,
-          openings: normalizeOpenings(p.openings),
+          openings: normalizeOpenings(p.openings, params.build.installGap),
         }))
     : [];
   const normalizeObjectSize = (raw: unknown): { size?: ObjectSize } => {
@@ -370,20 +388,31 @@ export function normalizeProject(input: unknown): ProjectState {
   };
 }
 
-function normalizeOpenings(input: unknown): Opening[] {
+function normalizeOpenings(input: unknown, gap: number): Opening[] {
   if (!Array.isArray(input)) return [];
   return (input as Partial<Opening>[])
     .filter((o) => o && typeof o === 'object')
-    .map((o) => ({
-      id: typeof o.id === 'string' ? o.id : uuid(),
-      type: o.type === 'window' || o.type === 'passage' ? o.type : 'door',
-      x: Number(o.x) || 0,
-      y: Number(o.y) || 0,
-      width: Number(o.width) || 900,
-      height: Number(o.height) || 2000,
-      label: typeof o.label === 'string' ? o.label : undefined,
-      preset: typeof o.preset === 'string' ? o.preset : undefined,
-      hinge: o.hinge === 'right' ? 'right' : o.hinge === 'left' ? 'left' : undefined,
-      swing: o.swing === 'in' ? 'in' : o.swing === 'out' ? 'out' : undefined,
-    }));
+    .map((o) => {
+      const opening: Opening = {
+        id: typeof o.id === 'string' ? o.id : uuid(),
+        type: o.type === 'window' || o.type === 'passage' ? o.type : 'door',
+        x: Number(o.x) || 0,
+        y: Number(o.y) || 0,
+        width: Number(o.width) || 900,
+        height: Number(o.height) || 2000,
+        label: typeof o.label === 'string' ? o.label : undefined,
+        preset: typeof o.preset === 'string' ? o.preset : undefined,
+        hinge: o.hinge === 'right' ? 'right' : o.hinge === 'left' ? 'left' : undefined,
+        swing: o.swing === 'in' ? 'in' : o.swing === 'out' ? 'out' : undefined,
+      };
+      const preset = findPreset(opening.preset);
+      if (!preset) return opening;
+      // the label carries the preset's name: a stale name from an earlier preset follows the current one
+      const label = opening.label ? relabelForPreset(opening.label, preset) : opening.label;
+      // rough sizes from the catalogue before the installation gap was a setting move to the current rule
+      const legacy = legacyPresetRough(preset);
+      const rough = presetRough(preset, gap);
+      const migrate = opening.width === legacy.width && opening.height === legacy.height;
+      return { ...opening, label, ...(migrate ? { width: rough.width, height: rough.height } : {}) };
+    });
 }

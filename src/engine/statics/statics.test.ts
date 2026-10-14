@@ -35,26 +35,41 @@ test('bracedPurlinSpan credits only braces leaning into the bay', () => {
   assert.deepEqual(both, { span: 2400, braces: 2, rawSpan: 3000 });
 });
 
-test('knee braces provide the lateral system along the purlin rows, posts sway across', () => {
+test('pinned post bases: knee braces carry the wind along the rows, nothing holds the frame across', () => {
   const s = statics(project());
   const x = s.checks.find((c) => c.id === 'bracing-x')!;
   const z = s.checks.find((c) => c.id === 'bracing-z')!;
   assert.ok(x.element.startsWith('Knee braces'));
-  assert.ok(z.element.startsWith('Sway posts'));
-  assert.ok(x.utilisation > 0 && z.utilisation > 0);
+  assert.ok(z.element.startsWith('No bracing'));
+  assert.equal(z.status, 'fail');
+  assert.match(z.detail, /pinned/);
+  assert.ok(s.checks.some((c) => c.id === 'brace-post-x'), 'the brace bending of the posts is checked');
   const off = statics(project({ braces: false }));
-  assert.ok(off.checks.find((c) => c.id === 'bracing-x')!.element.startsWith('Sway posts'));
-  // with the transverse direction held by a boarded wall, knee braces shorten the in-row buckling length
-  const postBraced = byId(project({}, { left: true }), 'post-front');
-  const postFree = byId(project({ braces: false }, { left: true }), 'post-front');
-  assert.ok(postFree.span > postBraced.span);
-  assert.ok(postFree.utilisation > postBraced.utilisation);
+  assert.ok(off.checks.find((c) => c.id === 'bracing-x')!.element.startsWith('No bracing'));
+  // knee braces shorten the in-row buckling length
+  const inRow = (c: StaticsCheck) => Number(/in row (\d+)/.exec(c.detail)![1]);
+  assert.ok(inRow(byId(project({ braces: false }), 'post-front')) > inRow(byId(project(), 'post-front')));
 });
 
-test('a closed wall in the plane acts as a shear wall', () => {
-  const z = byId(project({}, { left: true }), 'bracing-z');
-  assert.ok(z.element.startsWith('Boarded wall'));
-  assert.equal(z.status, 'ok');
+test('a rail on an open side carries knee braces across the rows', () => {
+  const p = project();
+  p.walls.left = { ...p.walls.left, rail: true };
+  p.walls.right = { ...p.walls.right, rail: true };
+  const z = byId(p, 'bracing-z');
+  assert.ok(z.element.startsWith('Knee braces'), z.element);
+  assert.ok(buildFraming(p).members.some((m) => m.group.startsWith('Side rail')));
+});
+
+test('board cladding alone is no shear wall; crossed straps make it one', () => {
+  // without knee braces (a closed wall's rail would carry them across)
+  const boards = byId(project({ braces: false }, { left: true }), 'bracing-z');
+  assert.ok(boards.element.startsWith('No bracing'));
+  assert.match(boards.detail, /not a shear wall/);
+  const p = project({ braces: false }, { left: true });
+  p.walls.left = { ...p.walls.left, bracing: 'strap' };
+  const strapped = byId(p, 'bracing-z');
+  assert.ok(strapped.element.startsWith('Braced wall'));
+  assert.match(strapped.detail, /Windrispenband/);
 });
 
 test('wind pressure scales the lateral checks and a hurricane fails the structure', () => {
@@ -77,17 +92,17 @@ test('collapse gust speed is where the first check reaches 100 %', () => {
   assert.ok(below.checks.every((c) => !member(c) || c.utilisation < 1));
 });
 
-test('uplift is an advisory: it never drives the overall status', () => {
-  const s = statics(project({}, { left: true }));
-  assert.equal(s.checks.find((c) => c.id === 'uplift')!.status, 'warning');
-  assert.equal(s.status, 'ok');
+test('uplift is checked link by link from the sheet to the concrete', () => {
+  const s = statics(project());
+  const ids = s.checks.filter((c) => c.kind === 'uplift').map((c) => c.id);
+  assert.deepEqual(ids, ['uplift-sheet', 'uplift-rafter', 'uplift-purlin', 'uplift-post', 'uplift-foundation']);
 });
 
-test('light roofs report net uplift that needs tension anchors', () => {
-  const light = byId(project({ loads: { ...createDefaultProject().params.loads, roofCovering: 'polycarbonate' } }), 'uplift');
-  const heavy = byId(project({ loads: { ...createDefaultProject().params.loads, roofCovering: 'roof-tiles' } }), 'uplift');
-  assert.equal(light.status, 'warning');
-  assert.match(light.recommendation ?? '', /tension/);
+test('light roofs pull on the purlin–post joint, heavy ones keep it in compression', () => {
+  const light = byId(project({ loads: { ...createDefaultProject().params.loads, roofCovering: 'polycarbonate' } }), 'uplift-purlin');
+  const heavy = byId(project({ loads: { ...createDefaultProject().params.loads, roofCovering: 'roof-tiles' } }), 'uplift-purlin');
+  assert.ok(light.loadUls > 0);
+  assert.equal(heavy.loadUls, 0);
   assert.equal(heavy.status, 'ok');
 });
 
@@ -141,8 +156,6 @@ test('a free post under a rafter is checked for the rafter reaction', () => {
   const post = s.checks.find((c) => c.id === 'post-free-f0')!;
   assert.ok(post.loadUls > 0);
   assert.match(post.detail, /carries 1\.42 m² of roof/); // 0.79 m × 0.625 × (1440 + 1440)
-  // it shares the sway load: one more post than the six of the grid
-  assert.match(s.checks.find((c) => c.id === 'bracing-z')!.detail, /7 posts share/);
 });
 
 test('a free post between two rafters carries nothing and is flagged', () => {
@@ -158,26 +171,18 @@ test('freePostTributary: continuous-beam share inside, full overhang at the ends
   assert.equal(freePostTributary(3000, [0, 3000], -500, 3500), 0.625 * 3000 + 500);
 });
 
-const sway = (p: ProjectState) => statics(p).checks.find((c) => c.element.startsWith('Sway posts'))!;
-
-test('adjustable post bases are hinges: unbraced posts are a mechanism', () => {
-  const check = sway(project({ loads: { ...createDefaultProject().params.loads, postBase: 'adjustable' } }));
-  assert.equal(check.status, 'fail');
-  assert.match(check.detail, /hinges/);
+test('post bases are pinned: H anchors take the uplift with their bolts, adjustable bases need an ETA', () => {
+  const light = { ...createDefaultProject().params.loads, roofCovering: 'polycarbonate' as const };
+  const h = byId(project({ loads: { ...light, postBase: 'h-anchor' } }), 'uplift-post');
+  assert.match(h.detail, /M12 bolts/);
+  const adjustable = byId(project({ loads: { ...light, postBase: 'adjustable' } }), 'uplift-post');
+  if (adjustable.loadUls > 0) assert.equal(adjustable.status, 'warning');
+  // the bracing does not depend on the base: both leave the unbraced direction as a mechanism
+  for (const postBase of ['h-anchor', 'adjustable'] as const) assert.equal(byId(project({ loads: { ...light, postBase } }), 'bracing-z').status, 'fail');
 });
 
-test('cast-in H post bases fix the posts up to the summed base moment resistance', () => {
-  const calm = { ...createDefaultProject().params.loads, postBase: 'h-anchor' as const, windLoad: 0.2 };
-  const ok = sway(project({ loads: calm }));
-  assert.equal(ok.status, 'ok');
-  assert.match(ok.detail, /Σ M_Rd = \d/);
-  const stormy = sway(project({ loads: { ...calm, windLoad: 1.2 } }));
-  assert.ok(stormy.utilisation > ok.utilisation);
-  assert.equal(stormy.status, 'fail');
-});
-
-test('H post bases need a footing deep enough to cast them in', () => {
-  const shallow = byId(project({ loads: { ...createDefaultProject().params.loads, postBase: 'h-anchor', postFootingDepth: 300 } }), 'uplift');
-  assert.equal(shallow.status, 'warning');
+test('H post anchors need a foundation deep enough to cast them in', () => {
+  const shallow = byId(project({ loads: { ...createDefaultProject().params.loads, postBase: 'h-anchor', postFootingDepth: 300 } }), 'uplift-foundation');
+  assert.equal(shallow.status, 'fail');
   assert.match(shallow.recommendation ?? '', /at least 450 mm deep/);
 });

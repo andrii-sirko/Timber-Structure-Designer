@@ -1,4 +1,10 @@
-import type { ConnectionsResult, FramingResult, HardwareItem, JoineryItem, ProjectState } from '@/types';
+import type { ConnectionsResult, FramingResult, HardwareItem, JoineryItem, ProjectState, WallId } from '@/types';
+import { WALL_IDS } from '@/types';
+import { H_ANCHOR, hAnchorWidth, isHAnchor, postBoltLength } from '../statics/postBase';
+import { wallStraps } from '../framing/straps';
+
+/** Kammnägel at each end of a Windrispenband diagonal */
+const STRAP_NAILS_PER_END = 8;
 import { endStudBrackets, plateAnchors } from './anchors';
 import { hasWallPosts } from '../framing/wallFrame';
 
@@ -36,29 +42,64 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   const hw = (id: string, name: string, nameDe: string, spec: string, quantity: number, note?: string): void => {
     if (quantity > 0) hardware.push({ id, name, nameDe, spec, quantity: Math.ceil(quantity), unit: 'pcs', note });
   };
+  const hwm = (id: string, name: string, nameDe: string, spec: string, metres: number, note?: string): void => {
+    if (metres > 0) hardware.push({ id, name, nameDe, spec, quantity: Math.ceil(metres * 10) / 10, unit: 'm', note });
+  };
   const jn = (id: string, name: string, nameDe: string, quantity: number, note?: string): void => {
     if (quantity > 0) joinery.push({ id, name, nameDe, quantity: Math.ceil(quantity), note });
   };
 
-  // Post bases are needed in both modes (timber must not touch concrete)
-  if (params.loads.postBase === 'h-anchor') {
-    hw('post-base-h', 'H post base, cast-in, hot-dip galvanised', 'H-Pfostenträger einbetonierbar', '141 mm, 800/80/8 mm, post embedment 400 mm', nPosts, '400 mm cast into the footing');
+  const build = params.build;
+  const postBase = params.loads.postBase ?? 'adjustable';
+  const pw = Math.min(timber.post.width, timber.post.height);
+
+  // ── Post bases (both modes; timber must not touch concrete) – pinned in every check ──
+  if (isHAnchor(postBase)) {
+    const reinforced = postBase === 'h-anchor-reinforced';
+    hw(
+      reinforced ? 'post-base-h-reinforced' : 'post-base-h',
+      reinforced ? 'H post anchor, reinforced, cast-in, hot-dip galvanised' : 'H post anchor, cast-in, hot-dip galvanised',
+      reinforced ? 'H-Pfostenanker verstärkt, zum Einbetonieren' : 'H-Pfostenanker zum Einbetonieren',
+      `${hAnchorWidth(pw)} mm clear, flat steel ${H_ANCHOR.flat[reinforced ? 'h-anchor-reinforced' : 'h-anchor']}`,
+      nPosts,
+      `${H_ANCHOR.concreteEmbed} mm cast into the foundation, post ${build.baseGap} mm above the concrete`,
+    );
+    hw('post-bolt', 'Hex bolt with nut and 2 washers', 'Sechskantschraube mit Mutter und 2 Scheiben', `M12 × ${postBoltLength(pw)} mm`, nPosts * 2, '2 per post anchor');
   } else {
     hw('post-base', 'Adjustable post base, hot-dip galvanised', 'Pfostenträger höhenverstellbar', `for ${timber.post.width}×${timber.post.height} mm`, nPosts);
     hw('anchor', 'Heavy-duty concrete anchor', 'Schwerlastanker', 'M16 × 145 mm', nPosts, '1 per post base, min. 100 mm embedment');
+    hw('post-bolt', 'Hex bolt with nut and 2 washers', 'Sechskantschraube mit Mutter und 2 Scheiben', `M12 × ${postBoltLength(pw)} mm`, nPosts * 2, '2 per post base');
   }
-  hw('post-bolt', 'Hex bolt with nut & washers', 'Sechskantschraube', `M12 × ${timber.post.width + 40} mm`, nPosts * 2, '2 per post base');
 
+  // ── Uplift chain: rafter → purlin, purlin → post ──
   if (params.connectionMode === 'hardware') {
-    hw('bracket', 'Angle bracket with rib 90×90×65', 'Winkelverbinder mit Rippe', '90×90×65×2.5 mm', nRowPosts * 2, '2 per post–purlin connection');
-    hw('bracket-nails', 'Connector nails', 'Kammnägel', '4.0 × 40 mm', nRowPosts * 2 * 20);
-    hw('rafter-anchor', 'Rafter–purlin anchor', 'Sparrenpfettenanker', '170 mm, left/right alternating', nBearings, '1 per rafter bearing');
-    hw('rafter-anchor-nails', 'Connector nails', 'Kammnägel', '4.0 × 50 mm', nBearings * 12);
-    hw('brace-screws', 'Structural screws, countersunk', 'Konstruktionsschrauben', '8 × 240 mm', nBraces * 4, '2 per brace end');
+    const perBearing = build.rafterAnchorsPerBearing;
+    hw('rafter-anchor', 'Rafter–purlin anchor', 'Sparrenpfettenanker', '170 mm, left/right alternating', nBearings * perBearing, `${perBearing} per rafter bearing`);
+    hw('rafter-anchor-nails', 'Connector nails', 'Kammnägel', '4.0 × 50 mm', nBearings * perBearing * 12, '12 per anchor');
+  } else {
+    hw('rafter-screw', slopedPurlins ? 'Rafter screws (secures seat)' : 'Rafter screws (secures birdsmouth)', 'Sparrenschrauben', '8 × 280 mm', nBearings, '1 per rafter bearing');
+  }
+  if (build.purlinPostConnector === 'angle-brackets') {
+    hw('bracket', 'Angle bracket with rib 90×90×65', 'Winkelverbinder mit Rippe', '90×90×65×2.5 mm', nRowPosts * 2, '2 per post–purlin joint');
+    hw('bracket-nails', 'Connector nails', 'Kammnägel', '4.0 × 40 mm', nRowPosts * 2 * 20, '20 per bracket');
+  } else if (build.purlinPostConnector === 'screws') {
+    hw('purlin-screws', 'Fully threaded screws, purlin → post', 'Vollgewindeschrauben Pfette → Pfosten', '8 × 300 mm', nRowPosts * 2, '2 per post–purlin joint, from the purlin top');
+  } else {
+    const strapLength = (2 * 300 + timber.beam.width + 2 * timber.beam.height) / 1000;
+    hwm('purlin-strap', 'Perforated steel strap over the purlin', 'Lochband über die Pfette', '40 × 2 mm, galvanised', nRowPosts * strapLength * 1.1, '1 per post–purlin joint, nailed to both post faces');
+    hw('purlin-strap-nails', 'Connector nails', 'Kammnägel', '4.0 × 40 mm', nRowPosts * 12, '6 per strap leg');
+  }
+
+  // ── Knee braces ──
+  if (params.connectionMode === 'hardware') {
+    if (build.braceConnector === 'bolt') {
+      hw('brace-bolt', 'Hex bolt with nut and 2 washers (knee brace)', 'Sechskantschraube mit Mutter und 2 Scheiben (Kopfband)', `M12 × ${Math.ceil((timber.brace.width + pw + 30) / 10) * 10} mm`, nBraces * 2, '1 per brace end');
+    } else {
+      hw('brace-screws', 'Structural screws, countersunk', 'Konstruktionsschrauben', '8 × 200 mm', nBraces * 4, '2 per brace end');
+    }
     hw('side-post-screws', 'Structural screws (side posts → rail)', 'Konstruktionsschrauben', '8 × 200 mm', nSidePosts * 2 + nRails * 4);
     hw('stud-screws', 'Wood screws (toe-screwed studs)', 'Holzbauschrauben', '6 × 140 mm', nStuds * 4, '2 per stud end');
     hw('header-screws', 'Structural screws (headers & sills)', 'Konstruktionsschrauben', '8 × 200 mm', nHeaders * 6 + nSills * 4);
-    hw('plate-anchor', 'Frame anchors (bottom plate → slab)', 'Rahmendübel', '10 × 135 mm', nPlateAnchors, 'Max. 800 mm apart, 150 mm from plate ends');
     hw('splice-bolt', 'Splice bolts with washers', 'Stoßverschraubung', 'M12 × 200 mm', nSplices * 2);
     hw('splice-plate', 'Flat connector plates', 'Flachverbinder', '300 × 40 × 3 mm', nSplices * 2);
   } else {
@@ -71,21 +112,70 @@ export function computeConnections(project: ProjectState, framing: FramingResult
     jn('lap-rail', 'Half-lap side rail → post', 'Überblattung Rähm–Pfosten', nRails * 2 + nSidePosts);
     jn('stud-tenon', 'Stud tenons into plate & rail', 'Ständerzapfen', nStuds * 2);
     jn('housing', 'Housed headers & sills', 'Eingelassene Stürze/Riegel', nHeaders * 2 + nSills * 2);
-    hw('rafter-screw', slopedPurlins ? 'Rafter screws (secures seat)' : 'Rafter screws (secures birdsmouth)', 'Sparrenschrauben', '8 × 280 mm', nBearings, '1 per rafter bearing');
     hw('splice-bolt', 'Scarf joint bolts', 'Stoßverschraubung', 'M12 × 200 mm', nSplices * 2);
-    hw('plate-anchor', 'Frame anchors (bottom plate → slab)', 'Rahmendübel', '10 × 135 mm', nPlateAnchors, 'Max. 800 mm apart, 150 mm from plate ends');
   }
 
-  // Free wall ends (both modes)
-  hw('end-stud-bracket', 'Angle brackets with concrete screws (end stud → slab)', 'Winkelverbinder mit Betonschrauben', '70×70×55 mm', nEndStudBrackets, '1 per free wall end, on the open stud face');
+  // ── Wall base (both modes): concrete screws through the bottom plate, or lateral holders for hung studs ──
+  if (build.wallBase === 'hung') {
+    hw('stud-foot-holder', 'Angle bracket holding the stud foot sideways (no tension)', 'Winkel als seitliche Fußhalterung', '70×70×55 mm + concrete screws', nStuds, '1 per stud, studs hang from the rail');
+  } else {
+    hw(
+      'plate-anchor',
+      'Concrete screws (bottom plate → base)',
+      'Betonschrauben',
+      `7.5 × ${build.wallBase === 'spacers' ? 100 + build.plateSpacer : 100} mm`,
+      nPlateAnchors,
+      `Max. 800 mm apart, 150 mm from plate ends${build.wallBase === 'spacers' ? `, through ${build.plateSpacer} mm spacers` : ''}`,
+    );
+    hw('plate-spacer', 'Plastic spacer pads under the bottom plate', 'Kunststoff-Unterlegplatten', `${build.plateSpacer} mm`, build.wallBase === 'spacers' ? nPlateAnchors : 0, '1 at every concrete screw');
+  }
+  hw('end-stud-bracket', 'Angle brackets with concrete screws (end stud → base)', 'Winkelverbinder mit Betonschrauben', '70×70×55 mm', nEndStudBrackets, '1 per free wall end, on the open stud face');
 
-  // Cladding & roofing fixings (both modes)
+  // ── Crossed steel straps of braced walls ──
+  let strapLength = 0;
+  let diagonals = 0;
+  let strapNails = 0;
+  for (const id of WALL_IDS) {
+    const straps = wallStraps(id, project.walls[id], params);
+    if (!straps) continue;
+    strapLength += straps.totalLength;
+    for (const c of straps.crosses) {
+      diagonals += 2;
+      const crossings = Math.max(0, Math.ceil((c.end - c.start) / Math.max(params.maxStudSpacing, 200)) - 1);
+      strapNails += 2 * (2 * STRAP_NAILS_PER_END + 2 * crossings);
+    }
+  }
+  hwm('wind-strap', 'Wind bracing strap (Windrispenband), crossed diagonals', 'Windrispenband', '40 × 2 mm, galvanised', (strapLength / 1000) * 1.1, `${diagonals} diagonals + 10 %`);
+  hw('wind-strap-tensioner', 'Strap tensioner', 'Windrispenband-Spanner', 'for 40 × 2 mm', diagonals, '1 per diagonal');
+  hw('wind-strap-nails', 'Connector nails', 'Kammnägel', '4.0 × 40 mm', strapNails, `${STRAP_NAILS_PER_END} per strap end + 2 per stud crossing`);
+
+  // ── Cladding (both modes): 2 stainless screws at every stud / batten crossing ──
+  const claddingCrossings = framing.panels
+    .filter((p) => p.kind === 'cladding' && p.cladding)
+    .reduce((sum, p) => {
+      const c = p.cladding!;
+      const spacing = p.boards && project.walls[p.wallId as WallId]?.screen ? build.screenBattenSpacing : Math.max(params.maxStudSpacing, 200);
+      if (c.orientation !== 'horizontal') return sum + p.areaM2 * 12.5; // vertical boards: ≈ 25 screws per m² on the rails
+      const boards = p.boards ?? [];
+      const along = (b: { u: number }[]) => Math.max(...b.map((q) => q.u)) - Math.min(...b.map((q) => q.u));
+      return sum + (boards.length > 0 ? boards.reduce((n, b) => n + along(b) / spacing + 1, 0) : (p.areaM2 / ((c.boardWidth + c.gap) / 1000)) / spacing * 1000);
+    }, 0);
   if (claddingArea > 0) {
-    hw('cladding-screws', 'Stainless cladding screws', 'Fassadenschrauben A2', '4.5 × 50 mm', claddingArea * 25, '≈ 25 per m²');
+    hw('cladding-screws', 'Stainless cladding screws', 'Fassadenschrauben A2', '4.5 × 50 mm', claddingCrossings * 2, '2 per stud / batten crossing');
   }
+
+  // ── Roofing (both modes) ──
   if (roofArea > 0) {
     if (params.loads.roofCovering === 'trapezoidal-sheet') {
-      hw('roof-screws', 'Self-drilling sheet screws with EPDM washer', 'Bohrschrauben mit Dichtscheibe', '6.3 × 45 mm', roofArea * 8, '≈ 8 per m²');
+      // edge and corner zones: strips one tenth of the roof dimension along every edge (36 % of the area)
+      const edgeArea = roofArea * 0.36;
+      const fieldArea = roofArea - edgeArea;
+      hw('roof-screws', 'Roofing screws with timber thread and EPDM washer', 'Dachschrauben mit Holzgewinde und EPDM-Dichtscheibe', `${build.roofScrewDiameter} × ${build.roofScrewLength} mm`, fieldArea * build.roofScrewsField + edgeArea * build.roofScrewsEdge, `${build.roofScrewsField} per m² in the field, ${build.roofScrewsEdge} per m² in the edge and corner zones`);
+      const battenRows = members.filter((m) => m.group.startsWith('Roof batten')).length;
+      if (battenRows > 0) {
+        const bh = Math.min(build.battenSection.width, build.battenSection.height);
+        hw('batten-screws', 'Batten screws (batten → rafter)', 'Holzbauschrauben Lattung', `6 × ${Math.ceil((bh + 60) / 10) * 10} mm`, framing.roof.rafterCount * new Set(members.filter((m) => m.group.startsWith('Roof batten')).map((m) => Math.round(m.start.z))).size, '1 per batten–rafter crossing');
+      }
     } else if (params.loads.roofCovering === 'polycarbonate') {
       hw('roof-screws', 'Panel fixings with sealing caps', 'Stegplatten-Befestiger', '5 × 60 mm', roofArea * 6, '≈ 6 per m²');
     } else if (params.loads.roofCovering === 'bitumen-shingles') {

@@ -77,9 +77,13 @@ export function generateRoof(params: StructureParams, roof: RoofLines, warnings:
     });
   }
 
+  const battens = roofBattens(params, roof, z0, rafterLength, rafters.map((r) => r.start.x));
+  rafters.push(...battens.members);
+
   const covering = ROOF_COVERING_LOAD[params.loads.roofCovering];
   const zMid = (z0 + z1) / 2;
-  const topMid = roof.topAt(zMid);
+  // the sheet lies on the battens where there are any
+  const topMid = roof.topAt(zMid) + battens.thickness / roof.cos;
   const th = covering.thickness;
   const panel: Panel = {
     id: 'roof-deck',
@@ -107,7 +111,7 @@ export function generateRoof(params: StructureParams, roof: RoofLines, warnings:
     midPurlinCount: roof.midPurlinZ.length,
     rafterPieces: pieces.length,
     rafterPieceLength: Math.round(rafterPieceLength),
-    ridgeHeight: Math.round(roof.topAt(z0) + th / roof.cos),
+    ridgeHeight: Math.round(roof.topAt(z0) + (th + battens.thickness) / roof.cos),
     eaveHeight: Math.round(roof.bottomAt(z1)),
     areaM2: panel.areaM2,
   };
@@ -278,4 +282,58 @@ function buildRafterProfile(
 
 function round1(value: number): number {
   return Math.round(Math.abs(value) * 10) / 10;
+}
+
+/**
+ * Roof battens (Dachlatten) across the fall line on top of rafters that run down the slope – the
+ * supports of a trapezoidal sheet. Spacing along the slope ≤ the profile's max span, one row
+ * 50 mm in from each edge; battens longer than stock are joined over a rafter.
+ */
+function roofBattens(params: StructureParams, roof: RoofLines, z0: number, slopeLength: number, rafterX: number[]): { members: Member[]; thickness: number } {
+  if (params.loads.roofCovering !== 'trapezoidal-sheet') return { members: [], thickness: 0 };
+  const sec = params.build.battenSection;
+  const bh = Math.min(sec.width, sec.height); // laid flat
+  const bw = Math.max(sec.width, sec.height);
+  const { overhangs } = params;
+  const xa = -overhangs.left;
+  const xb = params.length + overhangs.right;
+  const first = 50 + bw / 2;
+  const last = slopeLength - 50 - bw / 2;
+  const rows = Math.max(2, Math.ceil((last - first) / Math.max(params.build.sheetMaxSpan, 100)) + 1);
+  const up = { x: 0, y: roof.cos, z: roof.sin };
+  const members: Member[] = [];
+  const xs = [...new Set(rafterX.map((x) => Math.round(x)))].sort((a, b) => a - b);
+  for (let i = 0; i < rows; i++) {
+    const sAlong = first + ((last - first) * i) / (rows - 1);
+    const z = z0 + sAlong * roof.cos;
+    const yTop = roof.topAt(z);
+    // joints over a rafter when a batten is longer than stock
+    const cuts: number[] = [xa];
+    let cursor = xa;
+    while (xb - cursor > params.maxStockLength) {
+      const over = xs.filter((x) => x > cursor + 300 && x - cursor <= params.maxStockLength);
+      cursor = over.length > 0 ? over[over.length - 1] : cursor + params.maxStockLength;
+      cuts.push(cursor);
+    }
+    cuts.push(xb);
+    for (let k = 0; k < cuts.length - 1; k++) {
+      const length = cuts[k + 1] - cuts[k];
+      members.push({
+        id: nextId('batten'),
+        category: 'batten',
+        name: `Roof batten ${i + 1}${cuts.length > 2 ? ` (part ${k + 1})` : ''}`,
+        nameDe: 'Dachlatte',
+        group: 'Roof batten (Dachlatte)',
+        section: { width: bw, height: bh },
+        length: Math.round(length),
+        start: { x: cuts[k], y: yTop + (up.y * bh) / 2, z: z + (up.z * bh) / 2 },
+        direction: X_AXIS,
+        up,
+        cuts: { start: 0, end: 0 },
+        profile: rectProfile(length, bh),
+        notes: cuts.length > 2 ? 'Across the fall line, joined over a rafter' : 'Across the fall line',
+      });
+    }
+  }
+  return { members, thickness: bh };
 }

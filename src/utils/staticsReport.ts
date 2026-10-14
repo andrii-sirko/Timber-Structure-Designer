@@ -3,6 +3,10 @@ import { getLang, t, tx } from '@/i18n';
 import { sanitizeParams } from '@/engine/framing';
 import { MATERIALS, ROOF_COVERING_LOAD } from '@/engine/statics/materials';
 import { SOILS } from '@/engine/statics/foundations';
+import { hAnchorWidth, isHAnchor } from '@/engine/statics/postBase';
+import { concreteTopLevel, plateBottomLevel, postBottomLevel } from '@/engine/build';
+import type { jsPDF } from 'jspdf';
+import { WALL_IDS, type PostBaseType, type PurlinPostConnector, type WallBase, type WallBracing, type WallId } from '@/types';
 import { addFinishedRender, safeName } from '@/utils/export';
 import { embedUnicodeFont, UNICODE_FONT } from '@/utils/pdfFont';
 
@@ -11,12 +15,18 @@ const SAND: [number, number, number] = [238, 228, 214];
 const GREY: [number, number, number] = [90, 90, 90];
 const STATUS_COLOR = { ok: [22, 128, 61], warning: [180, 110, 0], fail: [190, 30, 45] } as const;
 const STATUS_WORD = { ok: 'Sufficient', warning: 'Near limit', fail: 'Overloaded' } as const;
+const POST_BASE_LABEL: Record<PostBaseType, string> = { 'h-anchor': 'H post anchor, cast-in', 'h-anchor-reinforced': 'H post anchor, reinforced, cast-in', adjustable: 'Adjustable post base' };
+const CONNECTOR_LABEL: Record<PurlinPostConnector, string> = { 'angle-brackets': '2 angle brackets 90×90×65', screws: '2 fully threaded screws 8 × 300', strap: 'Perforated strap (Lochband) over the purlin' };
+const WALL_BASE_LABEL: Record<WallBase, string> = { slab: 'On the slab (±0)', curb: 'On a concrete curb', spacers: 'Bottom plate on spacers', hung: 'Studs hung from the rail, feet held sideways' };
+const BRACING_LABEL: Record<WallBracing, string> = { none: 'boards only (no shear wall)', strap: 'crossed steel straps', panels: 'sheet panels' };
+const SIDE_LABEL: Record<WallId, string> = { front: 'Front', rear: 'Rear', left: 'Left', right: 'Right' };
+
 
 /** Order and headings of the verification chapters */
 const GROUPS: { kinds: StaticsCheckKind[]; title: string }[] = [
   { kinds: ['vertical'], title: 'Members under vertical load' },
   { kinds: ['lateral'], title: 'Bracing and lateral stability' },
-  { kinds: ['uplift', 'connection'], title: 'Anchoring and joints' },
+  { kinds: ['uplift', 'connection'], title: 'Uplift load path and joints' },
   { kinds: ['foundation'], title: 'Footings' },
 ];
 
@@ -74,6 +84,14 @@ export async function exportStaticsReportPdf(project: ProjectState, model: Deriv
   // ── 1 System ────────────────────────────────────────────────────────────────────────
   const sec = (s: { width: number; height: number }) => `${s.width}×${s.height} mm`;
   const footing = (p.loads.postFootingDepth ?? 0) > 0 && (p.loads.postFootingDiameter ?? 0) > 0;
+  const b = p.build;
+  const wallSummary = WALL_IDS.filter((id) => project.walls[id].closed || project.walls[id].screen || project.walls[id].rail)
+    .map((id) => {
+      const w = project.walls[id];
+      const kind = w.closed ? t(BRACING_LABEL[w.bracing ?? 'none']) : w.screen ? t('slat screen') : t('rail only');
+      return `${t(SIDE_LABEL[id])}: ${kind}${w.rail ? `, ${t('rail for knee braces')}` : ''}`;
+    })
+    .join('; ');
   autoTable(doc, {
     ...tableStyle,
     startY: afterRender + 6,
@@ -87,12 +105,14 @@ export async function exportStaticsReportPdf(project: ProjectState, model: Deriv
         `${name('Post', 'Pfosten')} ${sec(p.timber.post)}, ${name('Purlin', 'Pfette')} ${sec(p.timber.beam)}, ${name('Rafter', 'Sparren')} ${sec(p.timber.rafter)} @ ${framing.roof.rafterSpacing} mm${p.braces ? `, ${name('Knee brace', 'Kopfband')} ${sec(p.timber.brace)}` : ''}`,
       ],
       [t('Joints'), p.connectionMode === 'hardware' ? t('Mechanical connectors (brackets, anchors, screws)') : t('Traditional joinery (Zapfen, Kerve, Hakenblatt)')],
+      [t('Post base'), `${t(POST_BASE_LABEL[p.loads.postBase ?? 'adjustable'])}${isHAnchor(p.loads.postBase ?? 'adjustable') ? `, ${hAnchorWidth(Math.min(p.timber.post.width, p.timber.post.height))} mm` : ''} – ${t('pinned in every check')}`],
       [
         t('Footings'),
         footing
-          ? `Ø${p.loads.postFootingDiameter} × ${p.loads.postFootingDepth} mm, ${tx(SOILS[p.loads.soil ?? 'non-cohesive'].label)}`
+          ? `${b.footingShape === 'round' ? `Ø${p.loads.postFootingDiameter}` : `${p.loads.postFootingDiameter} × ${p.loads.postFootingDiameter}`} × ${p.loads.postFootingDepth} mm, ${tx(SOILS[p.loads.soil ?? 'non-cohesive'].label)}`
           : t('none (posts on a slab or bare anchors)'),
       ],
+      [t('Walls'), wallSummary || t('none')],
     ],
     columnStyles: { 0: { cellWidth: 38, fontStyle: 'bold' } },
   });
@@ -107,6 +127,7 @@ export async function exportStaticsReportPdf(project: ProjectState, model: Deriv
     head: [[{ content: t('2 Load assumptions (characteristic)'), colSpan: 2 }]],
     body: [
       [t('Dead load g'), `${tx(covering.label)} ${f2(covering.load)} kN/m² ${t('roof surface')} + ${t('rafters')} → ${f2(L.deadLoad)} kN/m² ${t('plan')}`],
+      [t('Site'), `${b.site} · ${t('wind zone')} ${b.windZone}, ${t('terrain category')} ${b.terrainCategory}`],
       [t('Snow s'), `s_k = ${f2(L.groundSnowLoad)} kN/m² (${snowSite}, DIN EN 1991-1-3/NA), μ₁ = ${f2(L.snowShape)} → s = ${f2(L.snowLoadRoof)} kN/m²`],
       ...(L.exceptionalSnow !== undefined
         ? [[t('Exceptional snow'), `s_Ad = 2.3 · s_k = ${f2(L.exceptionalSnow)} kN/m² ${t('(North German Plain, accidental combination)')}`]]
@@ -126,14 +147,36 @@ export async function exportStaticsReportPdf(project: ProjectState, model: Deriv
     columnStyles: { 0: { cellWidth: 38, fontStyle: 'bold' } },
   });
 
-  // ── 3 Positions ─────────────────────────────────────────────────────────────────────
+  // ── 3 Build assumptions (every input the checks and quantities rely on) ────────────
+  const mm = (v: number) => `${v} mm`;
+  const secTxt = (s: { width: number; height: number }) => `${s.width}×${s.height} mm`;
+  autoTable(doc, {
+    ...tableStyle,
+    startY: finalY() + 5,
+    head: [[{ content: t('3 Build assumptions'), colSpan: 2 }]],
+    rowPageBreak: 'avoid',
+    body: [
+      [t('Levels'), `${t('concrete top')} ${mm(concreteTopLevel(p))}, ${t('post bottom')} ${mm(postBottomLevel(p))} (${t('base gap')} ${mm(b.baseGap)}), ${t('bottom plate')} ${mm(plateBottomLevel(p))} – ${t('above ±0 (finished floor / paving)')}`],
+      [t('Posts'), `${t('order length = target length +')} ${mm(b.cutReserve)} ${t('cut reserve, cut on site after levelling')}`],
+      [t('Uplift chain'), `${b.rafterAnchorsPerBearing} × ${t('Sparrenpfettenanker per bearing')}, R_k ${b.rafterAnchorRk} kN; ${t('purlin → post')}: ${t(CONNECTOR_LABEL[b.purlinPostConnector])}${b.purlinPostConnector === 'angle-brackets' ? `, R_k ${b.angleBracketRk} kN` : ''}`],
+      [t('Knee braces'), `${secTxt(p.timber.brace)}, 45°, ${t('leg')} ${mm(p.braceLeg)}, ${t(b.braceConnector === 'bolt' ? '1 bolt M12' : '2 structural screws 8 × 200')} ${t('per end')}`],
+      [t('Walls'), `${t(WALL_BASE_LABEL[b.wallBase])}${b.wallBase === 'curb' ? ` ${b.curbWidth} × ${b.curbHeight} mm, ${t('top')} +${b.curbTop}` : b.wallBase === 'spacers' || b.wallBase === 'hung' ? ` ${mm(b.plateSpacer)}` : ''}; ${t('installation gap')} ${mm(b.installGap)} ${t('per side')}; ${t('facade boards')}: ${t(b.claddingSpecies === 'larch' ? 'Larch' : 'Spruce')}`],
+      [t('Studs & battens in wind'), `c_p ${t('screen')} ${b.screenCp}, c_p ${t('closed wall')} ${b.wallCp}, w ≤ L/${b.studDeflectionLimit}; ${t('screen battens')} ${secTxt(b.screenBatten)} @ ≤ ${mm(b.screenBattenSpacing)}`],
+      [t('Roof sheeting'), `${t('cover width')} ${mm(b.sheetCoverWidth)}, ${t('profile')} ${mm(b.sheetProfileHeight)}, ${t('longest sheet')} ${mm(b.maxSheetLength)}, ${t('max. span')} ${mm(b.sheetMaxSpan)}; ${t('battens')} ${secTxt(b.battenSection)}; ${t('screws')} ${b.roofScrewDiameter} × ${b.roofScrewLength} mm, ${b.roofScrewsField} / ${b.roofScrewsEdge} ${t('per m² (field / edges)')}; ${t('min. slope')} ${b.minSlope}° + ${b.slopeTolerance}°`],
+      [t('Ordering'), `${t('stock lengths')} ${b.stockLengths.map((l) => l / 1000).join(' / ')} m; ${t('BGF threshold')} ${b.bgfLimit} m²; ${t('concrete')} ${b.concreteBagLitres} l ${t('per 25 kg bag')}`],
+    ],
+    columnStyles: { 0: { cellWidth: 38, fontStyle: 'bold' } },
+  });
+  drawLevels(doc, font, margin, finalY() + 6, project, t);
+
+  // ── 4 Positions ─────────────────────────────────────────────────────────────────────
   let pos = 0;
   const positions: { pos: number; check: StaticsCheck }[] = [];
   for (const group of GROUPS) for (const check of statics.checks.filter((c) => group.kinds.includes(c.kind))) positions.push({ pos: ++pos, check });
   doc.addPage();
   doc.setFontSize(12);
   doc.setFont(font, 'bold');
-  doc.text(t('3 Verification by position'), margin, 16);
+  doc.text(t('4 Verification by position'), margin, 16);
   doc.setFont(font, 'normal');
   doc.setFontSize(8);
   doc.text(t('Overall: {status}', { status: t(STATUS_WORD[statics.status]) }), margin, 21);
@@ -170,24 +213,17 @@ export async function exportStaticsReportPdf(project: ProjectState, model: Deriv
     y = finalY() + 4;
   }
 
-  // ── 4 Limits ────────────────────────────────────────────────────────────────────────
-  const limits = doc.splitTextToSize(
-    [
-      t('4 Not covered'),
-      t('Fire resistance, settlement and groundwater, slopes and neighbouring buildings (snow drifts), anchoring of boarded walls to the slab, second-order effects, splices and every product with an ETA (post bases, angle brackets, rafter anchors, frame anchors) – check against the manufacturer data. Footing values come from DIN 1054 tables for undisturbed, at least medium dense / stiff soil without a site investigation.'),
-    ].join('\n'),
-    width,
-  );
-  if (y + limits.length * 4 > 285) {
+  // ── 5 Not checked ───────────────────────────────────────────────────────────────────
+  if (y > 240) {
     doc.addPage();
     y = 16;
   }
-  doc.setFontSize(9);
-  doc.setFont(font, 'bold');
-  doc.text(limits[0], margin, y + 2);
-  doc.setFont(font, 'normal');
-  doc.setFontSize(8);
-  doc.text(limits.slice(1), margin, y + 7);
+  autoTable(doc, {
+    ...tableStyle,
+    startY: y,
+    head: [[t('5 Not checked')]],
+    body: statics.notChecked.map((n) => [`• ${tx(n)}`]),
+  });
 
   const pages = doc.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
@@ -199,4 +235,56 @@ export async function exportStaticsReportPdf(project: ProjectState, model: Deriv
   }
 
   doc.save(`${safeName(project.name)}_statics_${lang}.pdf`);
+}
+
+/**
+ * Section sketch of the levels: ±0, concrete top, post foot, curb / bottom plate, purlin
+ * underside at H2 and H1 – so the reference plane of every height is visible.
+ */
+function drawLevels(doc: jsPDF, font: string, x: number, y: number, project: ProjectState, t: (k: string, p?: Record<string, string | number>) => string): void {
+  const p = project.params;
+  const h = 46;
+  if (y + h + 12 > 285) return;
+  const top = Math.max(p.frontHeight, p.rearHeight);
+  const depth = p.loads.postFootingDepth ?? 0;
+  const lowest = Math.min(concreteTopLevel(p) - depth, 0);
+  const scale = h / (top - lowest);
+  const yAt = (mm: number) => y + 6 + (top - mm) * scale;
+  doc.setFontSize(9);
+  doc.setFont(font, 'bold');
+  doc.text(t('Levels (section)'), x, y + 3);
+  doc.setFont(font, 'normal');
+  doc.setFontSize(7);
+  const gx = x + 30;
+  const lines: { mm: number; label: string }[] = [
+    { mm: 0, label: t('finished floor / paving') },
+    { mm: concreteTopLevel(p), label: t('concrete top') },
+    { mm: postBottomLevel(p), label: t('post bottom') },
+    ...(p.build.wallBase === 'curb' ? [{ mm: p.build.curbTop, label: t('curb top / bottom plate') }] : []),
+    { mm: p.rearHeight - p.timber.beam.height, label: `H2 − ${t('purlin')}` },
+    { mm: p.frontHeight - p.timber.beam.height, label: `H1 − ${t('purlin')}` },
+  ];
+  // ground, footing, post and curb
+  doc.setDrawColor(150, 150, 150);
+  doc.line(gx - 10, yAt(0), gx + 70, yAt(0));
+  doc.setFillColor(210, 210, 210);
+  if (depth > 0) doc.rect(gx + 5, yAt(concreteTopLevel(p)), 14, (depth) * scale, 'F');
+  doc.setFillColor(222, 196, 150);
+  doc.rect(gx + 9, yAt(p.frontHeight - p.timber.beam.height), 6, (p.frontHeight - p.timber.beam.height - postBottomLevel(p)) * scale, 'F');
+  if (p.build.wallBase === 'curb') {
+    doc.setFillColor(210, 210, 210);
+    doc.rect(gx + 40, yAt(p.build.curbTop), 8, p.build.curbHeight * scale, 'F');
+  }
+  // one label per level (equal levels share it), stacked top-down at least 3 mm apart
+  const byLevel = new Map<number, string[]>();
+  for (const l of lines) byLevel.set(Math.round(l.mm), [...(byLevel.get(Math.round(l.mm)) ?? []), l.label]);
+  let lastY = -Infinity;
+  for (const [mmLevel, labels] of [...byLevel.entries()].sort((a, c) => c[0] - a[0])) {
+    const yy = yAt(mmLevel);
+    doc.setDrawColor(92, 61, 28);
+    doc.line(gx - 6, yy, gx + 60, yy);
+    const ly = Math.max(yy + 1, lastY + 3);
+    lastY = ly;
+    doc.text(`${mmLevel > 0 ? '+' : mmLevel < 0 ? '' : '±'}${mmLevel} mm  ${labels.join(' / ')}`, gx + 72, ly);
+  }
 }
