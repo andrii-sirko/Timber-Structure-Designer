@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { DoorOpen, PanelsTopLeft, Plus, RectangleHorizontal, Trash2, Move3d, SplitSquareHorizontal, SplitSquareVertical } from 'lucide-react';
-import type { CladdingOrientation, Opening, OpeningType, WallBracing, WallId } from '@/types';
+import type { CladdingOrientation, Opening, OpeningType, WallBracing, WallCladding, WallId } from '@/types';
 import { isOuterWall, WALL_IDS } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
-import { MIN_PARTITION_LENGTH, OPENING_PRESETS, findPreset, frameSizeFor, openingHost, openingLimits, openingMaterials, partitionLimits, MIN_WALL_LENGTH, presetFits, presetMatches, presetRough, presetsOfType, resolveCladding, resolveScreenCladding, hasWallPosts, CLADDING_LIMITS } from '@/engine';
+import { MIN_PARTITION_LENGTH, OPENING_PRESETS, findPreset, frameSizeFor, openingHost, openingLimits, openingMaterials, partitionLimits, MIN_WALL_LENGTH, presetFits, presetMatches, presetRough, presetsOfType, resolveCladding, resolveScreenCladding, hasWallPosts, CLADDING_LIMITS, screenPartExtent } from '@/engine';
 import type { OpeningPreset } from '@/engine';
 import type { WallFrame } from '@/engine/framing';
 import { useT } from '@/i18n';
@@ -93,28 +93,33 @@ function PresetSummary({ opening, preset }: { opening: Opening; preset: OpeningP
 
 const WALL_LABEL: Record<WallId, string> = { front: 'Front (H1)', rear: 'Rear (H2)', left: 'Left', right: 'Right' };
 
-/** Outer boarding of a closed wall: board direction, width and the gap that lets the frame show through. */
-function CladdingSettings({ wallId }: { wallId: WallId }) {
+/**
+ * Outer boarding of a closed wall: board direction, width and the gap that lets the frame show
+ * through. `part` edits the slats of the screen beside a partly closed wall instead.
+ */
+function CladdingSettings({ wallId, part = false }: { wallId: WallId; part?: boolean }) {
   const { t } = useT();
   const wall = useProjectStore((s) => s.project.walls[wallId]);
-  const cladding = wall.closed ? resolveCladding(wall.cladding) : resolveScreenCladding(wall.cladding);
+  const cladding = part ? resolveScreenCladding(wall.screenPart?.cladding) : wall.closed ? resolveCladding(wall.cladding) : resolveScreenCladding(wall.cladding);
   const setWallCladding = useProjectStore((s) => s.setWallCladding);
+  const setWallScreenPartCladding = useProjectStore((s) => s.setWallScreenPartCladding);
+  const setCladding = (patch: Partial<WallCladding>) => (part ? setWallScreenPartCladding(wallId, patch) : setWallCladding(wallId, patch));
   const open = Math.round((cladding.gap / (cladding.boardWidth + cladding.gap)) * 100);
   return (
     <div className="space-y-2 rounded-md border border-slate-800 bg-slate-900/50 p-2">
-      <span className="text-[10px] font-semibold tracking-wide text-slate-400 uppercase">{wall.closed ? t('Outer cladding boards') : t('Screen slats')}</span>
+      <span className="text-[10px] font-semibold tracking-wide text-slate-400 uppercase">{wall.closed && !part ? t('Outer cladding boards') : t('Screen slats')}</span>
       <div className="grid grid-cols-3 gap-2">
         <SelectField<CladdingOrientation>
           label={t('Direction')}
           value={cladding.orientation}
-          onChange={(orientation) => setWallCladding(wallId, { orientation })}
+          onChange={(orientation) => setCladding({ orientation })}
           options={[
             { value: 'vertical', label: t('Vertical') },
             { value: 'horizontal', label: t('Horizontal') },
           ]}
         />
-        <NumberField label={t('Board width')} value={cladding.boardWidth} min={CLADDING_LIMITS.boardWidth[0]} max={CLADDING_LIMITS.boardWidth[1]} step={5} compact onChange={(boardWidth) => setWallCladding(wallId, { boardWidth })} />
-        <NumberField label={t('Gap')} value={cladding.gap} min={CLADDING_LIMITS.gap[0]} max={CLADDING_LIMITS.gap[1]} step={5} compact onChange={(gap) => setWallCladding(wallId, { gap })} />
+        <NumberField label={t('Board width')} value={cladding.boardWidth} min={CLADDING_LIMITS.boardWidth[0]} max={CLADDING_LIMITS.boardWidth[1]} step={5} compact onChange={(boardWidth) => setCladding({ boardWidth })} />
+        <NumberField label={t('Gap')} value={cladding.gap} min={CLADDING_LIMITS.gap[0]} max={CLADDING_LIMITS.gap[1]} step={5} compact onChange={(gap) => setCladding({ gap })} />
       </div>
       <p className="text-[11px] text-slate-500">
         {cladding.gap > 0 ? t('Spaced boards: {p}% of the wall stays open, the frame shows through.', { p: open }) : t('Closed boarding. Set a gap for open slatted boards.')}
@@ -138,6 +143,8 @@ export function WallEditor() {
   const setWallScreen = useProjectStore((s) => s.setWallScreen);
   const setWallBracing = useProjectStore((s) => s.setWallBracing);
   const setWallRail = useProjectStore((s) => s.setWallRail);
+  const setWallScreenPart = useProjectStore((s) => s.setWallScreenPart);
+  const setWallScreenPartExtent = useProjectStore((s) => s.setWallScreenPartExtent);
   const addOpening = useProjectStore((s) => s.addOpening);
   const addOpeningPreset = useProjectStore((s) => s.addOpeningPreset);
   const applyOpeningPreset = useProjectStore((s) => s.applyOpeningPreset);
@@ -177,7 +184,7 @@ export function WallEditor() {
           >
             <span>{t(WALL_LABEL[id])}</span>
             <span className={cx('rounded px-1 text-[10px]', hasWallPosts(walls[id]) ? 'bg-timber-600/40 text-timber-200' : 'bg-slate-800 text-slate-400')}>
-              {walls[id].closed ? t('closed') : walls[id].screen ? t('screen') : t('open')}
+              {walls[id].closed ? (walls[id].screenPart ? `${t('closed')} + ${t('screen')}` : t('closed')) : walls[id].screen ? t('screen') : t('open')}
               {walls[id].openings.length > 0 ? ` · ${walls[id].openings.length}` : ''}
             </span>
           </button>
@@ -267,6 +274,31 @@ export function WallEditor() {
             </div>
           )}
           {outerId && hasWallPosts(walls[outerId]) && <CladdingSettings wallId={outerId} />}
+          {outerId && wall.closed && (frame.extent.start >= MIN_WALL_LENGTH || frame.length - frame.extent.end >= MIN_WALL_LENGTH) && (
+            <Toggle
+              label={t('Slat screen beside the closed stretch')}
+              description={t('Open slats on battens continue the wall where it is not closed – no studs, they catch less wind and brace nothing')}
+              checked={Boolean(walls[outerId].screenPart)}
+              onChange={(v) => setWallScreenPart(outerId, v)}
+            />
+          )}
+          {outerId && wall.closed && walls[outerId].screenPart && (() => {
+            const ext = screenPartExtent(walls[outerId], frame.length);
+            return (
+              <div className="space-y-2 rounded-md border border-slate-800 bg-slate-900/50 p-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <NumberField label={t('Screen from')} value={ext?.start ?? 0} min={0} max={frame.length - MIN_WALL_LENGTH} step={50} compact onChange={(start) => setWallScreenPartExtent(outerId, { start })} />
+                  <NumberField label={t('Screen to')} value={ext?.end ?? 0} min={MIN_WALL_LENGTH} max={frame.length} step={50} compact onChange={(end) => setWallScreenPartExtent(outerId, { end })} />
+                </div>
+                <p className={cx('text-[11px]', ext ? 'text-slate-500' : 'text-amber-300')}>
+                  {ext
+                    ? t('Screen over {a} mm beside the closed stretch. It stops where the closed stretch begins.', { a: Math.round(ext.end - ext.start) })
+                    : t('The screen overlaps the closed stretch – move it to the open side.')}
+                </p>
+              </div>
+            );
+          })()}
+          {outerId && wall.closed && walls[outerId].screenPart && <CladdingSettings wallId={outerId} part />}
           {partition && lim && (
             <div className="space-y-2 rounded-md border border-slate-800 bg-slate-900/50 p-2">
               <div className="flex items-center gap-2">

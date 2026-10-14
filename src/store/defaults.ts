@@ -6,7 +6,7 @@ import { NEIGHBOUR_DEFAULTS } from '@/engine/neighbours';
 import { PAVING_COLORS, PAVING_DEFAULTS, PAVING_PATTERNS } from '@/engine/paving';
 import { FLOOR_DEFAULTS, sanitizeFloor } from '@/engine/framing/floor';
 import { INSULATION_DEFAULTS, sanitizeInsulation } from '@/engine/framing/insulation';
-import { resolveCladding } from '@/engine/framing/cladding';
+import { resolveCladding, resolveScreenCladding } from '@/engine/framing/cladding';
 import { GROUND_SLOPE_DEFAULTS, sanitizeGroundSlope } from '@/engine/groundSlope';
 import { findPreset, legacyPresetRough, presetRough, relabelForPreset } from '@/engine/framing/openingCatalog';
 import { BUILD_DEFAULTS, isPostBaseType, sanitizeBuild } from '@/engine/build';
@@ -300,6 +300,9 @@ export function normalizeProject(input: unknown): ProjectState {
       ...(w.screen === true && !w.closed ? { screen: true } : {}),
       ...(WALL_BRACINGS.includes(w.bracing as never) && w.bracing !== 'none' ? { bracing: w.bracing } : {}),
       ...(w.rail === true ? { rail: true } : {}),
+      ...(w.closed && w.screenPart && Number.isFinite(w.screenPart.start) && Number.isFinite(w.screenPart.end)
+        ? { screenPart: { start: w.screenPart.start, end: w.screenPart.end, ...(w.screenPart.cladding && typeof w.screenPart.cladding === 'object' ? { cladding: resolveScreenCladding(w.screenPart.cladding) } : {}) } }
+        : {}),
     };
   }
   const partitions: Partition[] = Array.isArray(src.partitions)

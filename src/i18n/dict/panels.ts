@@ -91,6 +91,28 @@ export default {
     de: 'Lamellenwand über {a} von {b} mm. Wo sie zwischen den Pfosten endet, kommt eine Endlatte dazu.',
     pl: 'Ekran na {a} z {b} mm. Tam, gdzie kończy się między słupami, dodawana jest łata końcowa.',
   },
+  'Slat screen beside the closed stretch': {
+    uk: 'Ламельний екран поруч із закритою ділянкою',
+    de: 'Lamellenwand neben dem geschlossenen Abschnitt',
+    pl: 'Ekran lamelowy obok zamkniętego odcinka',
+  },
+  'Open slats on battens continue the wall where it is not closed – no studs, they catch less wind and brace nothing': {
+    uk: 'Ламелі з просвітами на латах продовжують стіну там, де вона не закрита – без стійок, ловлять менше вітру й нічого не зміцнюють',
+    de: 'Offene Lamellen auf Traglatten setzen die Wand fort, wo sie nicht geschlossen ist – ohne Ständer, sie fangen weniger Wind und steifen nichts aus',
+    pl: 'Ażurowe lamele na łatach przedłużają ścianę tam, gdzie nie jest zamknięta – bez słupków, łapią mniej wiatru i niczego nie usztywniają',
+  },
+  'Screen from': { uk: 'Екран від', de: 'Lamellen von', pl: 'Ekran od' },
+  'Screen to': { uk: 'Екран до', de: 'Lamellen bis', pl: 'Ekran do' },
+  'Screen over {a} mm beside the closed stretch. It stops where the closed stretch begins.': {
+    uk: 'Екран на {a} мм поруч із закритою ділянкою. Він закінчується там, де починається закрита ділянка.',
+    de: 'Lamellenwand über {a} mm neben dem geschlossenen Abschnitt. Sie endet, wo der geschlossene Abschnitt beginnt.',
+    pl: 'Ekran na {a} mm obok zamkniętego odcinka. Kończy się tam, gdzie zaczyna się zamknięty odcinek.',
+  },
+  'The screen overlaps the closed stretch – move it to the open side.': {
+    uk: 'Екран перекриває закриту ділянку – перенесіть його на відкритий бік.',
+    de: 'Die Lamellenwand überdeckt den geschlossenen Abschnitt – auf die offene Seite verschieben.',
+    pl: 'Ekran zachodzi na zamknięty odcinek – przesuń go na otwartą stronę.',
+  },
   'Partition': { uk: 'Перегородка', de: 'Trennwand', pl: 'Ściana działowa' },
   'Remove partition': { uk: 'Видалити перегородку', de: 'Trennwand entfernen', pl: 'Usuń ścianę działową' },
   'Position Z': { uk: 'Позиція Z', de: 'Position Z', pl: 'Położenie Z' },

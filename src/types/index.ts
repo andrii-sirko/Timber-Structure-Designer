@@ -283,6 +283,16 @@ export interface Wall {
   bracing?: WallBracing;
   /** Open wall only: a rail (Rähm) between the purlin rows without studs or cladding – carries knee braces across */
   rail?: boolean;
+  /** Closed wall only: a slat screen continuing the wall beside its closed stretch (same u axis as start / end) */
+  screenPart?: WallScreenPart;
+}
+
+/** Slat screen over the open rest of a partly closed wall, with its own slat layout. */
+export interface WallScreenPart {
+  start: Millimeters;
+  end: Millimeters;
+  /** Slat layout; omitted → horizontal slats with open gaps */
+  cladding?: WallCladding;
 }
 
 export type PartitionAxis = 'x' | 'z';
@@ -676,6 +686,8 @@ export interface Panel {
   boards?: ProfilePoint[][];
   /** Cladding panels: the board layout */
   cladding?: WallCladding;
+  /** Cladding of a slat screen (open slats on battens, no studs) */
+  screen?: boolean;
   /** Net area in m² (openings subtracted) */
   areaM2: number;
   /** Floor decks: deck material and the local axis the boards run along */

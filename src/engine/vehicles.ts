@@ -1,6 +1,6 @@
 import type { FramingResult, ObjectCategory, ObjectSize, ProjectState, Vehicle, VehicleFit, VehicleModel, WallId } from '@/types';
 import { WALL_IDS } from '@/types';
-import { hasWallPosts, sanitizeParams, wallExtent } from './framing';
+import { hasWallPosts, sanitizeParams, wallExtent, wallParts } from './framing';
 import { computeRoofLines } from './framing/roofLines';
 import { braceSides } from './framing/structure';
 import { toRad } from './geometry';
@@ -243,9 +243,13 @@ export function checkVehicleFit(vehicle: Vehicle, project: ProjectState, framing
     if (!hasWallPosts(project.walls[id])) continue;
     const [x0, z0, x1, z1] = wallLines[id];
     const alongX = id === 'front' || id === 'rear';
-    const ext = wallExtent(project.walls[id], alongX ? L : W);
-    const line: [number, number, number, number] = alongX ? [ext.start, z0, ext.end, z1] : [x0, ext.start, x1, ext.end];
-    if (crossesLine(...line)) wallCollisions.push(id);
+    // the closed stretch and a slat screen beside it
+    const hit = wallParts(project.walls[id], alongX ? L : W).some((part) => {
+      const ext = wallExtent(part, alongX ? L : W);
+      const line: [number, number, number, number] = alongX ? [ext.start, z0, ext.end, z1] : [x0, ext.start, x1, ext.end];
+      return crossesLine(...line);
+    });
+    if (hit) wallCollisions.push(id);
   }
   for (const p of project.partitions) {
     const line: [number, number, number, number] = p.axis === 'x' ? [p.start, p.offset, p.end, p.offset] : [p.offset, p.start, p.offset, p.end];

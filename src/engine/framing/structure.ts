@@ -3,7 +3,7 @@ import { cutProfile, nextId, rectProfile, toDeg, X_AXIS, Y_AXIS, Z_AXIS } from '
 import { computeRoofLines, type RoofLines } from './roofLines';
 import { resolvePostPositions } from '../postOverrides';
 import { postBottomLevel } from '../build';
-import { computeWallFrame, hasWallPosts, wallExtent } from './wallFrame';
+import { computeWallFrame, hasWallPosts, wallExtent, wallParts } from './wallFrame';
 import { groundAt, groundPlaneOf } from '../groundSlope';
 
 const SQRT2 = Math.SQRT2;
@@ -166,14 +166,14 @@ export function generatePosts(
   const midOffsets = sloped ? roof.midPurlinX : roof.midPurlinZ;
   for (const [id, posts] of Object.entries(grid.wallPosts) as [WallId, WallPosts][]) {
     if (!hasWallPosts(walls[id])) continue;
-    const ext = wallExtent(walls[id], id === 'front' || id === 'rear' ? params.length : params.width);
+    const exts = wallParts(walls[id], id === 'front' || id === 'rear' ? params.length : params.width).map((w) => wallExtent(w, id === 'front' || id === 'rear' ? params.length : params.width));
     const labelDe = `Pfosten ${id === 'left' ? 'links' : id === 'right' ? 'rechts' : id === 'front' ? 'vorne' : 'hinten'}`;
     const fixed = id === 'left' || id === 'front' ? pw / 2 : (id === 'right' ? params.length : params.width) - pw / 2;
     posts.positions.forEach((pos, i) => {
       // a purlin row already places a post where it meets the wall
       if (midOffsets.some((m) => Math.abs(m - pos) < 1)) return;
-      // no rail above posts beyond a shortened wall
-      if (pos < ext.start - pw / 2 || pos > ext.end + pw / 2) return;
+      // no rail above posts beyond a shortened wall (or its screen part)
+      if (!exts.some((ext) => pos >= ext.start - pw / 2 && pos <= ext.end + pw / 2)) return;
       const alongZ = id === 'left' || id === 'right';
       const plan = alongZ ? { x: fixed, z: pos } : { x: pos, z: fixed };
       const foot = groundAt(ground, plan.x, plan.z) + base;
@@ -362,12 +362,15 @@ export function wallRailSpans(id: WallId, params: StructureParams, wall: Wall, r
   const bw = params.timber.beam.width;
   const rowU = frame.sloped ? roof.purlins.map((p) => p.z) : [frame.postU[0], ...roof.midPurlinX, frame.postU[frame.postU.length - 1]];
   const spans: [number, number][] = [];
-  // an explicit rail runs the full wall length, even past a shortened closed stretch
-  const ext = wall.rail ? { start: -Infinity, end: Infinity } : frame.extent;
-  for (let k = 0; k < rowU.length - 1; k++) {
-    const a = Math.max(rowU[k] + bw / 2, ext.start);
-    const b = Math.min(rowU[k + 1] - bw / 2, ext.end);
-    if (b - a > 100) spans.push([a, b]);
+  // an explicit rail runs the full wall length, even past a shortened closed stretch; a screen
+  // part beside the closed stretch has a rail of its own
+  const exts = wall.rail ? [{ start: -Infinity, end: Infinity }] : wallParts(wall, frame.length).map((w) => wallExtent(w, frame.length));
+  for (const ext of exts) {
+    for (let k = 0; k < rowU.length - 1; k++) {
+      const a = Math.max(rowU[k] + bw / 2, ext.start);
+      const b = Math.min(rowU[k + 1] - bw / 2, ext.end);
+      if (b - a > 100) spans.push([a, b]);
+    }
   }
   return spans;
 }

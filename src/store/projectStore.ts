@@ -32,7 +32,7 @@ import type {
   WallCladding,
 } from '@/types';
 import { isOuterWall } from '@/types';
-import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, MIN_WALL_LENGTH, openingFromPreset, relabelForPreset, OPENING_DEFAULTS, hasWallPosts, resolveCladding, resolveScreenCladding, sizeChanged, wallExtent } from '@/engine';
+import { clampOpening, clampPartition, computeAllWallFrames, defaultPartition, findPreset, MIN_WALL_LENGTH, openingFromPreset, relabelForPreset, OPENING_DEFAULTS, hasWallPosts, resolveCladding, resolveScreenCladding, screenPartExtent, sizeChanged, wallExtent } from '@/engine';
 import { defaultObjectSize, findVehicleSpot, getVehicleModel, VEHICLE_COLORS } from '@/engine/vehicles';
 import { defaultPavedArea, insertVertex, PAVING_COLORS, resizePolygon, translatePolygon } from '@/engine/paving';
 import { clampFreePost, freePostMemberId } from '@/engine/freePosts';
@@ -137,6 +137,12 @@ interface ProjectStoreBase {
   setWallCladding: (id: WallId, patch: Partial<WallCladding>) => void;
   /** Slat screen in an open wall (fixed to the posts, no studs) */
   setWallScreen: (id: WallId, screen: boolean) => void;
+  /** Slat screen beside the closed stretch of a partly closed wall (on the longer open side) */
+  setWallScreenPart: (id: WallId, on: boolean) => void;
+  /** Stretch of that screen along the wall (mm from its start corner) */
+  setWallScreenPartExtent: (id: WallId, patch: { start?: number; end?: number }) => void;
+  /** Slat layout of that screen */
+  setWallScreenPartCladding: (id: WallId, patch: Partial<WallCladding>) => void;
   addOpening: (wallKey: WallKey, type: OpeningType) => string;
   /** Add a door / window from the catalogue (OPENING_PRESETS) */
   addOpeningPreset: (wallKey: WallKey, presetId: string) => string | null;
@@ -320,7 +326,8 @@ export const useProjectStore = create<ProjectStore>()(
 
       setWallClosed: (id, closed) =>
         set((s) => {
-          const { screen: _screen, ...wall } = s.project.walls[id];
+          // the screen part belongs to the closed stretch and goes with it
+          const { screen: _screen, screenPart: _part, ...wall } = s.project.walls[id];
           // A closed wall replaces the slat screen; opening it again leaves the bay open
           return { project: clampAllOpenings({ ...s.project, walls: { ...s.project.walls, [id]: { ...wall, closed } } }) };
         }),
@@ -348,6 +355,40 @@ export const useProjectStore = create<ProjectStore>()(
           const { cladding, ...rest } = wall;
           const next = cladding && cladding.gap > 0 ? { ...wall, closed: false, screen: true } : { ...rest, closed: false, screen: true };
           return { project: { ...s.project, walls: { ...s.project.walls, [id]: next } } };
+        }),
+
+      setWallScreenPart: (id, on) =>
+        set((s) => {
+          const { screenPart: _old, ...wall } = s.project.walls[id];
+          if (!on || !wall.closed) return { project: { ...s.project, walls: { ...s.project.walls, [id]: wall } } };
+          const span = id === 'front' || id === 'rear' ? s.project.params.length : s.project.params.width;
+          const ext = wallExtent(wall, span);
+          const part = span - ext.end >= ext.start ? { start: ext.end, end: span } : { start: 0, end: ext.start };
+          if (part.end - part.start < MIN_WALL_LENGTH) return {};
+          return { project: { ...s.project, walls: { ...s.project.walls, [id]: { ...wall, screenPart: part } } } };
+        }),
+
+      setWallScreenPartExtent: (id, patch) =>
+        set((s) => {
+          const wall = s.project.walls[id];
+          if (!wall.screenPart) return {};
+          const span = id === 'front' || id === 'rear' ? s.project.params.length : s.project.params.width;
+          const current = screenPartExtent(wall, span) ?? wallExtent(wall.screenPart, span);
+          const start = patch.start ?? current.start;
+          const end = patch.end ?? current.end;
+          const ext =
+            patch.start !== undefined
+              ? wallExtent({ start, end: Math.max(end, start + MIN_WALL_LENGTH) }, span)
+              : wallExtent({ start: Math.min(start, end - MIN_WALL_LENGTH), end }, span);
+          return { project: { ...s.project, walls: { ...s.project.walls, [id]: { ...wall, screenPart: { ...wall.screenPart, start: ext.start, end: ext.end } } } } };
+        }),
+
+      setWallScreenPartCladding: (id, patch) =>
+        set((s) => {
+          const wall = s.project.walls[id];
+          if (!wall.screenPart) return {};
+          const cladding = resolveScreenCladding({ ...wall.screenPart.cladding, ...patch });
+          return { project: { ...s.project, walls: { ...s.project.walls, [id]: { ...wall, screenPart: { ...wall.screenPart, cladding } } } } };
         }),
 
       setWallExtent: (id, patch) =>

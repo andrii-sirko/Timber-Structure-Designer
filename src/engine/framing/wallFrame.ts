@@ -22,6 +22,32 @@ export function wallExtent(wall: Pick<Wall, 'start' | 'end'>, length: number): W
   return { start, end: Math.min(end, length) };
 }
 
+/**
+ * Stretch of a closed wall's slat screen part, clamped to the wall and kept clear of the closed
+ * stretch on the side its centre lies on; null without a screen part or when too short.
+ */
+export function screenPartExtent(wall: Pick<Wall, 'closed' | 'start' | 'end' | 'screenPart'>, length: number): WallExtent | null {
+  if (!wall.closed || !wall.screenPart) return null;
+  const closed = wallExtent(wall, length);
+  const raw = wallExtent(wall.screenPart, length);
+  const after = (raw.start + raw.end) / 2 >= (closed.start + closed.end) / 2;
+  const ext = after ? { start: Math.max(raw.start, closed.end), end: raw.end } : { start: raw.start, end: Math.min(raw.end, closed.start) };
+  return ext.end - ext.start >= MIN_WALL_LENGTH ? ext : null;
+}
+
+/** The screen part of a closed wall as an open wall carrying a slat screen over its stretch (null without one). */
+export function screenPartWall(wall: Wall, length: number): Wall | null {
+  const ext = screenPartExtent(wall, length);
+  if (!ext) return null;
+  return { id: wall.id, closed: false, screen: true, openings: [], start: ext.start, end: ext.end, ...(wall.screenPart?.cladding ? { cladding: wall.screenPart.cladding } : {}) };
+}
+
+/** The parts of a wall that stand on wall posts: the wall itself plus a closed wall's screen part. */
+export function wallParts(wall: Wall, length: number): Wall[] {
+  const screen = screenPartWall(wall, length);
+  return screen ? [wall, screen] : [wall];
+}
+
 /** Closed walls and slat screens stand on their own intermediate posts under a rail. */
 export function hasWallPosts(wall: Pick<Wall, 'closed' | 'screen'>): boolean {
   return wall.closed || Boolean(wall.screen);

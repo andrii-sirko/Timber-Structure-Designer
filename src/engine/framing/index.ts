@@ -6,7 +6,7 @@ import { planWarnings } from './planChecks';
 import { computeRoofLines } from './roofLines';
 import { computePostGrid, generateBraces, generatePosts, generatePurlins } from './structure';
 import { clampPartition } from './partitions';
-import { computePartitionFrame, computeWallFrame, wallFrameToWorld, type WallFrame } from './wallFrame';
+import { computePartitionFrame, computeWallFrame, screenPartWall, wallFrameToWorld, type WallFrame } from './wallFrame';
 import { generateWallFraming } from './walls';
 import { floorLayout, generateFloor } from './floor';
 import { generateInsulation } from './insulation';
@@ -17,7 +17,7 @@ import { canonicalizeProject, canonicalToWorldMap, canonicalWall, framingToWorld
 export { computeRoofLines } from './roofLines';
 export { claddingBoards, resolveCladding, resolveScreenCladding, CLADDING_LIMITS, DEFAULT_WALL_CLADDING } from './cladding';
 export { computePostGrid, gridPostCount, rowPoint, rowPostTop } from './structure';
-export { computeWallFrame, computePartitionFrame, hasWallPosts, wallBays, wallExtent, MIN_WALL_LENGTH, PARTITION_TOP_GAP } from './wallFrame';
+export { computeWallFrame, computePartitionFrame, hasWallPosts, wallBays, wallExtent, screenPartExtent, screenPartWall, wallParts, MIN_WALL_LENGTH, PARTITION_TOP_GAP } from './wallFrame';
 export { clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH } from './partitions';
 export type { WallFrame, WallBay } from './wallFrame';
 export { clampOpening, openingLimits, headerHeight, OPENING_DEFAULTS, MIN_OPENING_SIZE, OPENING_SNAP } from './openings';
@@ -135,6 +135,14 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
     members.push(...build.members);
     if (build.panel) panels.push(build.panel);
     warnings.push(...build.warnings);
+    // The slat screen beside a partly closed wall: framed like a screen in an open wall
+    const screen = screenPartWall(walls[id], frame.length);
+    if (screen) {
+      const part = generateWallFraming(computeWallFrame(id, params, screen, roof, grid), screen, walls, params, roof);
+      members.push(...part.members);
+      if (part.panel) panels.push({ ...part.panel, id: `${part.panel.id}-screen` });
+      warnings.push(...part.warnings);
+    }
   }
 
   // Interior partition walls

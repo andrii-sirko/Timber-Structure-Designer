@@ -89,7 +89,7 @@ export async function exportStaticsReportPdf(project: ProjectState, model: Deriv
     .map((id) => {
       const w = project.walls[id];
       const kind = w.closed ? t(BRACING_LABEL[w.bracing ?? 'none']) : w.screen ? t('slat screen') : t('rail only');
-      return `${t(SIDE_LABEL[id])}: ${kind}${w.rail ? `, ${t('rail for knee braces')}` : ''}`;
+      return `${t(SIDE_LABEL[id])}: ${kind}${w.closed && w.screenPart ? ` + ${t('slat screen')}` : ''}${w.rail ? `, ${t('rail for knee braces')}` : ''}`;
     })
     .join('; ');
   autoTable(doc, {

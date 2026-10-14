@@ -205,6 +205,7 @@ export function canonicalizeProject(project: ProjectState): ProjectState {
           openings: flipOpenings(wall.openings, wallLength),
           start: wall.end === undefined ? undefined : wallLength - wall.end,
           end: wall.start === undefined ? undefined : wallLength - wall.start,
+          ...(wall.screenPart ? { screenPart: { ...wall.screenPart, start: wallLength - wall.screenPart.end, end: wallLength - wall.screenPart.start } } : {}),
         }
       : { ...wall, id: c };
   }

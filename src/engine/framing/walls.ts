@@ -4,7 +4,7 @@ import { boardsArea, claddingBoards, resolveCladding, resolveScreenCladding, scr
 import { floorLayout } from './floor';
 import { headerHeight, validateOpenings } from './openings';
 import type { RoofLines } from './roofLines';
-import { hasWallPosts, wallBays, type WallFrame } from './wallFrame';
+import { hasWallPosts, wallBays, wallExtent, wallParts, type WallFrame } from './wallFrame';
 import { plateBottomLevel } from '../build';
 
 export const CLADDING_THICKNESS = 20;
@@ -319,7 +319,12 @@ export function generateWallFraming(
   if (frame.sloped && !isPartition) {
     // Side cladding wraps the corner only where the front / rear wall actually reaches it
     const cornerU = frame.wallId === 'left' ? 0 : params.length;
-    const reaches = (w: Wall): boolean => hasWallPosts(w) && (cornerU === 0 ? (w.start ?? 0) <= 0.5 : w.end === undefined || w.end >= params.length - 0.5);
+    const reaches = (w: Wall): boolean =>
+      hasWallPosts(w) &&
+      wallParts(w, params.length).some((part) => {
+        const ext = wallExtent(part, params.length);
+        return cornerU === 0 ? ext.start <= 0.5 : ext.end >= params.length - 0.5;
+      });
     if (uStart <= 0.5 && reaches(walls.front)) uStart = -th;
     if (uEnd >= frame.length - 0.5 && reaches(walls.rear)) uEnd = frame.length + th;
   }
@@ -352,6 +357,7 @@ export function generateWallFraming(
     areaM2: boards ? boardsArea(boards) : Math.max(grossArea - holeArea, 0),
     ...(boards ? { boards } : {}),
     cladding,
+    ...(screen ? { screen: true } : {}),
   };
 
   return { members, panel, warnings };

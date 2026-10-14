@@ -1,4 +1,4 @@
-import type { ConnectionsResult, FramingResult, HardwareItem, JoineryItem, ProjectState, WallId } from '@/types';
+import type { ConnectionsResult, FramingResult, HardwareItem, JoineryItem, ProjectState } from '@/types';
 import { WALL_IDS } from '@/types';
 import { H_ANCHOR, hAnchorWidth, isHAnchor, postBoltLength } from '../statics/postBase';
 import { wallStraps } from '../framing/straps';
@@ -154,7 +154,7 @@ export function computeConnections(project: ProjectState, framing: FramingResult
     .filter((p) => p.kind === 'cladding' && p.cladding)
     .reduce((sum, p) => {
       const c = p.cladding!;
-      const spacing = p.boards && project.walls[p.wallId as WallId]?.screen ? build.screenBattenSpacing : Math.max(params.maxStudSpacing, 200);
+      const spacing = p.boards && p.screen ? build.screenBattenSpacing : Math.max(params.maxStudSpacing, 200);
       if (c.orientation !== 'horizontal') return sum + p.areaM2 * 12.5; // vertical boards: ≈ 25 screws per m² on the rails
       const boards = p.boards ?? [];
       const along = (b: { u: number }[]) => Math.max(...b.map((q) => q.u)) - Math.min(...b.map((q) => q.u));

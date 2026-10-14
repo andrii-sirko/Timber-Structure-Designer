@@ -1,5 +1,5 @@
 import type { FramingResult, PostRow, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection, Wall, WallId } from '@/types';
-import { DECKING, floorLayout, sanitizeParams, wallExtent } from '../framing';
+import { DECKING, floorLayout, sanitizeParams, screenPartWall, wallExtent } from '../framing';
 import { resolveScreenCladding } from '../framing/cladding';
 import { braceLayout, rowPoint, rowPostTop, type BracePlacement } from '../framing/structure';
 import { groundAt, groundPlaneOf } from '../groundSlope';
@@ -406,16 +406,11 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
   const lengthM = (params.length + overhangs.left + overhangs.right) / 1000;
   const widthM = (params.width + overhangs.front + overhangs.rear) / 1000;
   const avgHeight = (params.frontHeight + params.rearHeight) / 2;
-  // A shortened wall only contributes its closed stretch
-  const closedShare = (id: WallId, span: number): number => {
-    const ext = wallExtent(project.walls[id], span);
-    return span > 0 ? (ext.end - ext.start) / span : 1;
-  };
   const faceArea: Record<WallId, number> = {
-    front: ((params.length * params.frontHeight) / 1e6) * closedShare('front', params.length),
-    rear: ((params.length * params.rearHeight) / 1e6) * closedShare('rear', params.length),
-    left: ((params.width * avgHeight) / 1e6) * closedShare('left', params.width),
-    right: ((params.width * avgHeight) / 1e6) * closedShare('right', params.width),
+    front: ((params.length * params.frontHeight) / 1e6) * windShare(project.walls.front, params.length),
+    rear: ((params.length * params.rearHeight) / 1e6) * windShare(project.walls.rear, params.length),
+    left: ((params.width * avgHeight) / 1e6) * windShare(project.walls.left, params.width),
+    right: ((params.width * avgHeight) / 1e6) * windShare(project.walls.right, params.width),
   };
   // post heights are measured from the (possibly falling) ground at each foot
   const ground = groundPlaneOf(params, true);
@@ -457,13 +452,20 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
   };
 }
 
-/** Share of a wall face that takes wind pressure: 1 closed, the board share for a slat screen, 0 open. */
-function windSolidity(wall: Wall | undefined): number {
-  if (!wall) return 0;
-  if (wall.closed) return 1;
-  if (!wall.screen) return 0;
-  const c = resolveScreenCladding(wall.cladding);
-  return c.boardWidth / (c.boardWidth + c.gap);
+/**
+ * Share of a wall face that takes wind pressure: its closed stretch in full, a slat screen (of an
+ * open wall, or beside a partly closed one) with the board share of its stretch, nothing open.
+ */
+function windShare(wall: Wall | undefined, span: number): number {
+  if (!wall || span <= 0) return 0;
+  const share = (ext: { start: number; end: number }) => (ext.end - ext.start) / span;
+  const solidity = (w: Wall) => {
+    const c = resolveScreenCladding(w.cladding);
+    return c.boardWidth / (c.boardWidth + c.gap);
+  };
+  if (!wall.closed) return wall.screen ? share(wallExtent(wall, span)) * solidity(wall) : 0;
+  const screen = screenPartWall(wall, span);
+  return share(wallExtent(wall, span)) + (screen ? share(wallExtent(screen, span)) * solidity(screen) : 0);
 }
 
 /** Characteristic horizontal wind force (kN) on the structure along `axis` for velocity pressure q (kN/m²). */
@@ -471,7 +473,7 @@ function windForce(ctx: Context, axis: Axis, q: number): number {
   const { params, faceArea, edgeBand, planArea, canopy, tan } = ctx;
   const facing = WALLS_ALONG[OTHER[axis]]; // walls standing across the wind direction
   // Closed walls catch the full face, slat screens their board share of it
-  const faces = facing.map((id) => faceArea[id] * windSolidity(ctx.project.walls[id])).filter((a) => a > 0);
+  const faces = facing.map((id) => faceArea[id]).filter((a) => a > 0);
   const o = params.overhangs;
   const extent = axis === 'x' ? params.width + o.front + o.rear : params.length + o.left + o.right;
   const faceM2 = faces.length > 0 ? Math.max(...faces) : (edgeBand * extent) / 1e6;

@@ -1,7 +1,7 @@
 import type { Member, ProjectState, StaticsCheck, StaticsStatus, TimberSection, WallId } from '@/types';
 import { WALL_IDS } from '@/types';
 import { resolveCladding, resolveScreenCladding } from '../framing/cladding';
-import { wallExtent } from '../framing/wallFrame';
+import { wallExtent, wallParts } from '../framing/wallFrame';
 import type { MaterialProps } from './materials';
 
 /**
@@ -56,8 +56,9 @@ export function studWindChecks(project: ProjectState, members: Member[], q: numb
   const { params } = project;
   const build = params.build;
   const checks: StaticsCheck[] = [];
-  for (const id of WALL_IDS) {
-    const wall = project.walls[id];
+  // every wall part on its own: a closed wall, an open wall's slat screen, the screen beside a partly closed wall
+  const parts = WALL_IDS.flatMap((id) => wallParts(project.walls[id], id === 'front' || id === 'rear' ? params.length : params.width).map((wall) => ({ id, wall, beside: wall !== project.walls[id] })));
+  for (const { id, wall, beside } of parts) {
     const screen = !wall.closed && Boolean(wall.screen);
     if (!wall.closed && !screen) continue;
     const verticals = members.filter((m) => m.wallId === id && (screen ? m.category === 'batten' && m.group.startsWith('Screen batten') : m.category === 'stud') && m.direction.y > 0.9);
@@ -102,7 +103,7 @@ export function studWindChecks(project: ProjectState, members: Member[], q: numb
         ? undefined
         : [passing ? `Use ${sec(passing)}` : 'Use a larger section than 80×80 mm', maxSpacing >= 200 ? `or reduce the spacing to ≤ ${maxSpacing} mm` : ''].filter(Boolean).join(' ') + '.';
     checks.push({
-      id: `studs-${id}`,
+      id: beside ? `studs-${id}-screen` : `studs-${id}`,
       kind: 'lateral',
       element: `${what} in wind (${id})`,
       elementDe: whatDe,
