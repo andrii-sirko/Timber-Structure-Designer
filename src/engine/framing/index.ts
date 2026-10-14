@@ -10,6 +10,7 @@ import { generateWallFraming } from './walls';
 import { floorLayout, generateFloor } from './floor';
 import { generateInsulation } from './insulation';
 import { generateFreePosts } from '../freePosts';
+import { groundPlaneOf } from '../groundSlope';
 import { canonicalizeProject, canonicalToWorldMap, canonicalWall, framingToWorld, partitionFlipped, relabelFraming, wallFlipped } from '../orientation';
 
 export { computeRoofLines } from './roofLines';
@@ -195,6 +196,13 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
   }
   if (roofBuild.geometry.eaveHeight < 1900) {
     warnings.push({ level: 'warning', message: `Low eave clearance ${roofBuild.geometry.eaveHeight} mm is below 1.9 m head height.` });
+  }
+  const ground = groundPlaneOf(params, true);
+  if (ground.drop >= 5 && WALL_IDS.some((id) => walls[id].closed)) {
+    warnings.push({
+      level: 'info',
+      message: `Ground falls ${Math.round(ground.drop)} mm across the footprint – closed walls stand level at ±0, fill under the bottom plates by up to ${Math.round(ground.drop)} mm (curb / plinth).`,
+    });
   }
   const rafterOverhang = params.roofScheme === 'sloped-purlins' ? Math.max(params.overhangs.left, params.overhangs.right) : Math.max(params.overhangs.front, params.overhangs.rear);
   const purlinOverhang = params.roofScheme === 'sloped-purlins' ? Math.max(params.overhangs.front, params.overhangs.rear) : Math.max(params.overhangs.left, params.overhangs.right);

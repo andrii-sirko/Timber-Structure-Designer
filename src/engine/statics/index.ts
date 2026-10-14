@@ -1,7 +1,8 @@
 import type { FramingResult, PostBaseType, PostRow, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection, Wall, WallId } from '@/types';
 import { DECKING, floorLayout, sanitizeParams, wallExtent } from '../framing';
 import { resolveScreenCladding } from '../framing/cladding';
-import { braceLayout, rowPostTop, type BracePlacement } from '../framing/structure';
+import { braceLayout, rowPoint, rowPostTop, type BracePlacement } from '../framing/structure';
+import { groundAt, groundPlaneOf } from '../groundSlope';
 import { computeRoofLines, type RoofLines } from '../framing/roofLines';
 import { postBases } from '../joinery/anchors';
 import { clampFreePost, freePostRow, freePostTop } from '../freePosts';
@@ -393,10 +394,12 @@ function buildContext(project: ProjectState, framing: FramingResult): Context {
     left: ((params.width * avgHeight) / 1e6) * closedShare('left', params.width),
     right: ((params.width * avgHeight) / 1e6) * closedShare('right', params.width),
   };
+  // post heights are measured from the (possibly falling) ground at each foot
+  const ground = groundPlaneOf(params, true);
   const freePosts: FreePostSupport[] = project.freePosts.map((post, i) => {
     const p = clampFreePost(post, params, 'canonical');
     const row = freePostRow(p, params, grid);
-    return { id: post.id, n: i + 1, x: p.x, z: p.z, row, along: row?.axis === 'z' ? p.z : p.x, height: freePostTop(p, params, roofLines, grid).centreHeight };
+    return { id: post.id, n: i + 1, x: p.x, z: p.z, row, along: row?.axis === 'z' ? p.z : p.x, height: freePostTop(p, params, roofLines, grid).centreHeight - groundAt(ground, p.x, p.z) };
   });
   const totalPosts =
     grid.rows.reduce((n, r) => n + r.positions.length, 0) + Object.values(grid.wallPosts).reduce((n, w) => n + (w?.positions.length ?? 0), 0) + freePosts.length;
@@ -638,9 +641,14 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
   // ── Posts (the tallest post of each row governs: buckling length + tributary) ──
   const Wpost = (Math.min(pw, timber.post.height) ** 2 * Math.max(pw, timber.post.height)) / 6;
   const Apost = pw * timber.post.height;
+  const ground = groundPlaneOf(params, true);
   const postRows = purlinLoads.map((load) => {
     const row = load.row.row;
-    const tallest = row.positions.length > 0 ? Math.max(...row.positions.map((pos) => rowPostTop(row, roofLines, params, pos))) : rowPostTop(row, roofLines, params, pw / 2);
+    const postHeight = (pos: number): number => {
+      const p = rowPoint(row, pos);
+      return rowPostTop(row, roofLines, params, pos) - groundAt(ground, p.x, p.z);
+    };
+    const tallest = row.positions.length > 0 ? Math.max(...row.positions.map(postHeight)) : postHeight(pw / 2);
     return {
       id: load.row.id.replace('purlin', 'post'),
       label: row.name.replace('Purlin', 'Post'),

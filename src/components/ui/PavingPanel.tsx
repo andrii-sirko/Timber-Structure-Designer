@@ -1,7 +1,8 @@
-import { BrickWall, CornerDownRight, Plus, Trash2, X } from 'lucide-react';
+import { BrickWall, CornerDownRight, MoveDownRight, Plus, Trash2, X } from 'lucide-react';
 import type { DerivedModel, PavingPattern } from '@/types';
 import { useProjectStore } from '@/store';
 import { PAVING_COLORS, PAVING_PATTERNS } from '@/engine/paving';
+import { GROUND_SLOPE_DIRECTIONS, MAX_GROUND_SLOPE, groundPlaneOf, slopeDegToPercent, slopePercentToDeg } from '@/engine/groundSlope';
 import { useT } from '@/i18n';
 import { Button, NumberField, Section, SelectField, cx } from './primitives';
 
@@ -20,6 +21,15 @@ export function PavingPanel({ model }: { model: DerivedModel }) {
   const translatePavedArea = useProjectStore((s) => s.translatePavedArea);
   const resizePavedArea = useProjectStore((s) => s.resizePavedArea);
   const paving = model.paving;
+  const params = useProjectStore((s) => s.project.params);
+  const setParam = useProjectStore((s) => s.setParam);
+  const slope = params.groundSlope;
+  const setSlope = (patch: Partial<typeof slope>) => setParam('groundSlope', { ...slope, ...patch });
+  const drop = groundPlaneOf(params, false).drop;
+  const postLengths = model.framing.members.filter((m) => m.category === 'post').map((m) => m.length);
+  const directionOptions = GROUND_SLOPE_DIRECTIONS.some((d) => d.deg === slope.direction)
+    ? GROUND_SLOPE_DIRECTIONS
+    : [...GROUND_SLOPE_DIRECTIONS, { deg: slope.direction, label: `${slope.direction}°` }];
 
   return (
     <Section
@@ -28,6 +38,42 @@ export function PavingPanel({ model }: { model: DerivedModel }) {
       focusKey="paving"
       badge={areas.length > 0 ? <span className="rounded bg-slate-800 px-1.5 font-mono text-[10px] text-slate-300">{paving.totalAreaM2.toFixed(1)} m²</span> : undefined}
     >
+      <div data-focus-key="paving/slope" className="space-y-2 rounded-md border border-slate-800 bg-slate-900/50 p-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-slate-400 uppercase">
+          <MoveDownRight className="h-3.5 w-3.5" />
+          {t('Ground fall (Gefälle)')}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <NumberField label={t('Fall')} value={Number(slope.percent.toFixed(2))} unit="%" min={0} max={MAX_GROUND_SLOPE} step={0.1} range={[0, 5]} compact onChange={(percent) => setSlope({ percent })} />
+          <NumberField
+            label={t('Angle')}
+            value={Number(slopePercentToDeg(slope.percent).toFixed(2))}
+            unit="°"
+            min={0}
+            max={Number(slopePercentToDeg(MAX_GROUND_SLOPE).toFixed(2))}
+            step={0.05}
+            range={[0, 3]}
+            compact
+            onChange={(deg) => setSlope({ percent: slopeDegToPercent(deg) })}
+          />
+        </div>
+        <SelectField<string>
+          label={t('Falls towards')}
+          value={String(slope.direction)}
+          onChange={(v) => setSlope({ direction: Number(v) })}
+          options={directionOptions.map((d) => ({ value: String(d.deg), label: t(d.label) }))}
+        />
+        <p className="text-[11px] text-slate-500">
+          {drop > 0 && postLengths.length > 0
+            ? t('±0 is the highest corner. Drop across the footprint {d} mm – posts {a}…{b} mm long.', {
+                d: Math.round(drop),
+                a: Math.round(Math.min(...postLengths)),
+                b: Math.round(Math.max(...postLengths)),
+              })
+            : t('Paving is usually laid at 1–2.5 % away from the building. 1 % = 10 mm per metre.')}
+        </p>
+      </div>
+
       <div className="flex items-center gap-2">
         <Button variant="primary" icon={Plus} onClick={() => addPavedArea()} title={t('Add a paved floor under the roof plan')}>
           {t('Add floor')}

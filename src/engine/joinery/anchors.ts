@@ -112,7 +112,8 @@ export function postBases(members: Member[]): PostBase[] {
   const wallDirection = new Map<string, Vec3>();
   for (const plate of members.filter(isBottomPlate)) if (plate.wallId && !wallDirection.has(plate.wallId)) wallDirection.set(plate.wallId, normalize(plate.direction));
   return members
-    .filter((m) => m.category === 'post' && Math.abs(m.start.y) < 1)
+    // every post stands on the ground: ±0, or below it where the ground falls
+    .filter((m) => m.category === 'post' && m.start.y < 1)
     .map((m) => {
       const across = normalize(cross(m.direction, m.up));
       const along = normalize(m.up);

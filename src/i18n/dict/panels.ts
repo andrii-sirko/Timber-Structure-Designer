@@ -152,6 +152,28 @@ export default {
   // --- PavingPanel ---
   'Paved floor (Pflaster)': { uk: 'Мощення (Pflaster)', de: 'Pflasterfläche', pl: 'Nawierzchnia z kostki (Pflaster)' },
   'Add floor': { uk: 'Додати ділянку', de: 'Fläche hinzufügen', pl: 'Dodaj nawierzchnię' },
+  'Ground fall (Gefälle)': { uk: 'Ухил землі (Gefälle)', de: 'Geländegefälle', pl: 'Spadek terenu (Gefälle)' },
+  'Fall': { uk: 'Ухил', de: 'Gefälle', pl: 'Spadek' },
+  'Angle': { uk: 'Кут', de: 'Winkel', pl: 'Kąt' },
+  'Falls towards': { uk: 'Напрямок спуску', de: 'Gefälle in Richtung', pl: 'Spadek w kierunku' },
+  'Towards the front': { uk: 'Вперед', de: 'Nach vorne', pl: 'Do przodu' },
+  'Front right': { uk: 'Вперед праворуч', de: 'Vorne rechts', pl: 'Przód prawo' },
+  'Towards the right': { uk: 'Праворуч', de: 'Nach rechts', pl: 'W prawo' },
+  'Rear right': { uk: 'Назад праворуч', de: 'Hinten rechts', pl: 'Tył prawo' },
+  'Towards the rear': { uk: 'Назад', de: 'Nach hinten', pl: 'Do tyłu' },
+  'Rear left': { uk: 'Назад ліворуч', de: 'Hinten links', pl: 'Tył lewo' },
+  'Towards the left': { uk: 'Ліворуч', de: 'Nach links', pl: 'W lewo' },
+  'Front left': { uk: 'Вперед ліворуч', de: 'Vorne links', pl: 'Przód lewo' },
+  '±0 is the highest corner. Drop across the footprint {d} mm – posts {a}…{b} mm long.': {
+    uk: '±0 – найвищий кут. Перепад у межах контуру {d} мм – стовпи завдовжки {a}…{b} мм.',
+    de: '±0 ist die höchste Ecke. Höhenunterschied über den Grundriss {d} mm – Pfosten {a}…{b} mm lang.',
+    pl: '±0 to najwyższy narożnik. Różnica wysokości w obrysie {d} mm – słupy o długości {a}…{b} mm.',
+  },
+  'Paving is usually laid at 1–2.5 % away from the building. 1 % = 10 mm per metre.': {
+    uk: 'Бруківку зазвичай кладуть з ухилом 1–2,5 % від будівлі. 1 % = 10 мм на метр.',
+    de: 'Pflaster wird meist mit 1–2,5 % Gefälle vom Gebäude weg verlegt. 1 % = 10 mm pro Meter.',
+    pl: 'Kostkę układa się zwykle ze spadkiem 1–2,5 % od budynku. 1 % = 10 mm na metr.',
+  },
   'Add a paved floor under the roof plan': { uk: 'Додати мощену ділянку під контуром даху', de: 'Pflasterfläche unter dem Dachgrundriss hinzufügen', pl: 'Dodaj nawierzchnię z kostki pod rzutem dachu' },
   'Drag the slab to move it, blue corners to reshape, green edge handles move a whole side (Alt-drag adds a corner).': {
     uk: 'Перетягуйте плиту, щоб пересунути її, сині кутові точки — щоб змінити форму, зелені маркери на краях — щоб перемістити цілу сторону (Alt-перетягування додає кут).',

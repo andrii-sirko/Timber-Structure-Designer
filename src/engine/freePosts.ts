@@ -1,6 +1,7 @@
 import type { FreePost, Member, PostGrid, PostRow, StructureParams } from '@/types';
 import { cutProfile, rectProfile, Y_AXIS, Z_AXIS } from './geometry';
 import type { RoofLines } from './framing/roofLines';
+import { groundAt, groundPlaneOf } from './groundSlope';
 
 /** Member id prefix of a freely placed post (`free:<FreePost.id>`). */
 export const FREE_POST_ID_PREFIX = 'free:';
@@ -61,9 +62,13 @@ export function freePostTop(
 /** Free posts as members in the canonical frame. */
 export function generateFreePosts(params: StructureParams, roof: RoofLines, grid: PostGrid, freePosts: FreePost[]): Member[] {
   const section = { width: params.timber.post.width, height: params.timber.post.height };
+  const ground = groundPlaneOf(params, true);
   return freePosts.map((post, i) => {
     const p = clampFreePost(post, params, 'canonical');
-    const { centreHeight, sloped, underPurlin } = freePostTop(p, params, roof, grid);
+    const top = freePostTop(p, params, roof, grid);
+    const { sloped, underPurlin } = top;
+    const foot = groundAt(ground, p.x, p.z);
+    const centreHeight = top.centreHeight - foot;
     const pitch = Math.round(Math.abs(roof.pitchDeg) * 10) / 10;
     return {
       id: freePostMemberId(post.id),
@@ -73,7 +78,7 @@ export function generateFreePosts(params: StructureParams, roof: RoofLines, grid
       group: 'Post (Pfosten)',
       section,
       length: sloped ? centreHeight + (section.height / 2) * roof.tan : centreHeight,
-      start: { x: p.x, y: 0, z: p.z },
+      start: { x: p.x, y: foot, z: p.z },
       direction: Y_AXIS,
       up: Z_AXIS,
       cuts: { start: 0, end: sloped ? pitch : 0 },

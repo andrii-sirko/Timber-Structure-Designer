@@ -3,6 +3,7 @@ import { cutProfile, nextId, rectProfile, toDeg, X_AXIS, Y_AXIS, Z_AXIS } from '
 import { computeRoofLines, type RoofLines } from './roofLines';
 import { resolvePostPositions } from '../postOverrides';
 import { hasWallPosts, wallExtent } from './wallFrame';
+import { groundAt, groundPlaneOf } from '../groundSlope';
 
 const SQRT2 = Math.SQRT2;
 
@@ -126,13 +127,16 @@ export function generatePosts(
   const members: Member[] = [];
   const section = { width: timber.post.width, height: timber.post.height };
   const sloped = grid.scheme === 'sloped-purlins';
+  // posts stand on the (possibly falling) ground: the foot drops, the top stays
+  const ground = groundPlaneOf(params, true);
 
   for (const row of grid.rows) {
     const label = row.name.replace('Purlin', 'Post');
     const labelDe = row.nameDe === 'Mittelpfette' ? 'Pfosten mitte' : row.nameDe.replace('Pfette', 'Pfosten');
     row.positions.forEach((pos, i) => {
-      const top = rowPostTop(row, roof, params, pos);
       const p = rowPoint(row, pos);
+      const foot = groundAt(ground, p.x, p.z);
+      const top = rowPostTop(row, roof, params, pos) - foot;
       // sloped purlin: top cut follows the slope, +Z side is lower
       const profile = sloped ? cutProfile(top, section.height, 0, -roof.pitchDeg) : rectProfile(top, section.height);
       members.push({
@@ -143,7 +147,7 @@ export function generatePosts(
         group: 'Post (Pfosten)',
         section,
         length: sloped ? top + (section.height / 2) * roof.tan : top,
-        start: { x: p.x, y: 0, z: p.z },
+        start: { x: p.x, y: foot, z: p.z },
         direction: Y_AXIS,
         up: Z_AXIS,
         cuts: { start: 0, end: sloped ? roundDeg(roof.pitchDeg) : 0 },
@@ -168,10 +172,12 @@ export function generatePosts(
       // no rail above posts beyond a shortened wall
       if (pos < ext.start - pw / 2 || pos > ext.end + pw / 2) return;
       const alongZ = id === 'left' || id === 'right';
-      const start = alongZ ? { x: fixed, y: 0, z: pos } : { x: pos, y: 0, z: fixed };
+      const plan = alongZ ? { x: fixed, z: pos } : { x: pos, z: fixed };
+      const foot = groundAt(ground, plan.x, plan.z);
+      const start = { ...plan, y: foot };
       if (alongZ) {
         // classic: under the sloped side rail
-        const centreHeight = roof.railBottomAt(pos);
+        const centreHeight = roof.railBottomAt(pos) - foot;
         members.push({
           id: posts.keys[i],
           category: 'post',
@@ -190,7 +196,7 @@ export function generatePosts(
         });
       } else {
         // sloped-purlins: under the level rail of the front / rear wall
-        const top = roof.purlinTopAt(fixed) - bh;
+        const top = roof.purlinTopAt(fixed) - bh - foot;
         members.push({
           id: posts.keys[i],
           category: 'post',

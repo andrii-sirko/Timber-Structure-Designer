@@ -280,6 +280,16 @@ export interface VehicleFit {
   messages: string[];
 }
 
+/**
+ * Fall of the ground / paving (Gefälle). The plane falls `percent` % (1 % = 10 mm per m) towards
+ * the plan azimuth `direction` in degrees: 0 = towards the front, 90 = right, 180 = rear, 270 = left
+ * (world sides). ±0 is the highest corner of the footprint, so posts further down the fall get longer.
+ */
+export interface GroundSlope {
+  percent: number;
+  direction: number;
+}
+
 export type PavingPattern = 'stretcher' | 'stack' | 'herringbone';
 
 /** A 2D point on the ground plane in world X/Z (mm). */
@@ -417,6 +427,8 @@ export interface StructureParams {
   /** Sections the user pinned – statics auto-fix and cost optimization leave them untouched */
   lockedSections: TimberKey[];
   loads: LoadSettings;
+  /** Fall of the ground under the structure */
+  groundSlope: GroundSlope;
   floor: FloorSettings;
   insulation: InsulationSettings;
 }

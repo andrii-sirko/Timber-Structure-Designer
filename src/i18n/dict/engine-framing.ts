@@ -259,6 +259,11 @@ export default {
     de: 'Die Dachneigung {deg}° ist für ein Pultdach-Nebengebäude ungewöhnlich steil.',
     pl: 'Nachylenie dachu {deg}° jest nietypowo strome dla jednospadowego budynku gospodarczego.',
   },
+  'Ground falls {n} mm across the footprint – closed walls stand level at ±0, fill under the bottom plates by up to {m} mm (curb / plinth).': {
+    uk: 'Земля падає на {n} мм у межах контуру – закриті стіни стоять горизонтально на ±0, під нижньою обв’язкою треба підсипати / підбетонувати до {m} мм (бордюр / цоколь).',
+    de: 'Das Gelände fällt über den Grundriss um {n} mm – geschlossene Wände stehen waagerecht auf ±0, unter den Schwellen bis zu {m} mm unterfüttern (Sockel / Bordstein).',
+    pl: 'Teren opada o {n} mm w obrębie obrysu – zamknięte ściany stoją poziomo na ±0, pod podwaliną trzeba wyrównać do {m} mm (krawężnik / cokół).',
+  },
   'Low eave clearance {n} mm is below 1.9 m head height.': {
     uk: 'Низький карниз {n} мм не досягає висоти проходу 1,9 м.',
     de: 'Die niedrige Traufhöhe {n} mm liegt unter der Kopfhöhe von 1,9 m.',

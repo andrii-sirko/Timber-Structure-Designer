@@ -7,6 +7,7 @@ import { PAVING_COLORS, PAVING_DEFAULTS, PAVING_PATTERNS } from '@/engine/paving
 import { FLOOR_DEFAULTS, sanitizeFloor } from '@/engine/framing/floor';
 import { INSULATION_DEFAULTS, sanitizeInsulation } from '@/engine/framing/insulation';
 import { resolveCladding } from '@/engine/framing/cladding';
+import { GROUND_SLOPE_DEFAULTS, sanitizeGroundSlope } from '@/engine/groundSlope';
 
 export const DEFAULT_PARAMS: StructureParams = {
   length: 6000,
@@ -37,6 +38,7 @@ export const DEFAULT_PARAMS: StructureParams = {
   },
   lockedSections: [],
   loads: { snowLoad: 0.85, roofCovering: 'trapezoidal-sheet', serviceClass: 2, windLoad: 0.65, postFootingDepth: 800, postFootingDiameter: 200 },
+  groundSlope: { ...GROUND_SLOPE_DEFAULTS },
   floor: structuredClone(FLOOR_DEFAULTS),
   insulation: structuredClone(INSULATION_DEFAULTS),
 };
@@ -259,6 +261,7 @@ export function normalizeProject(input: unknown): ProjectState {
     },
     lockedSections: Array.isArray(p.lockedSections) ? TIMBER_KEYS.filter((k) => p.lockedSections!.includes(k)) : [],
     loads: { ...base.params.loads, ...(p.loads ?? {}) },
+    groundSlope: sanitizeGroundSlope(p.groundSlope),
     floor: sanitizeFloor(p.floor),
     insulation: sanitizeInsulation(p.insulation),
     midPurlinPositions: Array.isArray(p.midPurlinPositions) ? p.midPurlinPositions.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)) : [],

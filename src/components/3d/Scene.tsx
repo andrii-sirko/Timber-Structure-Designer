@@ -30,6 +30,8 @@ import { PanelMesh } from './PanelMesh';
 import { TimberMember } from './TimberMember';
 import { VehicleMesh } from './VehicleMesh';
 import { PavedAreaMesh } from './PavedAreaMesh';
+import { GroundTilt } from './GroundTilt';
+import { groundPlaneOf } from '@/engine/groundSlope';
 import { RenderLoop } from './renderLoop';
 
 /** Touch devices get a lighter pixel ratio and shadow map: fill-rate, not draw calls, limits phones. */
@@ -418,6 +420,7 @@ export function Scene({ model }: { model: DerivedModel }) {
   const fogFar = extent * 9;
   const shadowHalf = extent * 1.2;
   const groundSize = extent * 7;
+  const groundPlane = groundPlaneOf(project.params, false);
 
   return (
     <>
@@ -476,6 +479,7 @@ export function Scene({ model }: { model: DerivedModel }) {
             infiniteGrid
           />
         )}
+        <GroundTilt plane={groundPlane}>
         <mesh
           rotation={[-Math.PI / 2, 0, 0]}
           position={[centre[0], -0.003, centre[2]]}
@@ -491,6 +495,7 @@ export function Scene({ model }: { model: DerivedModel }) {
           <planeGeometry args={[groundSize, groundSize]} />
           <shadowMaterial transparent opacity={0.3} />
         </mesh>
+        </GroundTilt>
 
         <Suspense fallback={null}>
           {(layers.frame || assembly) &&
@@ -547,6 +552,7 @@ export function Scene({ model }: { model: DerivedModel }) {
               />
             ) : null;
           })}
+          <GroundTilt plane={groundPlane}>
           {layers.paving &&
             project.pavedAreas.map((a) => (
               <PavedAreaMesh
@@ -561,6 +567,7 @@ export function Scene({ model }: { model: DerivedModel }) {
             project.vehicles.map((v) => (
               <VehicleMesh key={v.id} vehicle={v} fit={model.vehicles.find((f) => f.vehicleId === v.id)} selected={v.id === selectedVehicleId} />
             ))}
+          </GroundTilt>
           {layers.dimensions && <DimensionLines model={model} />}
           {draggingPartition && partitionDrag?.mode === 'move' && <PartitionDragDistances partition={draggingPartition} params={project.params} />}
           {draggingPartition && partitionDrag?.mode !== 'move' && <PartitionResizeRuler partition={draggingPartition} />}
