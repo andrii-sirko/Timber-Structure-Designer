@@ -117,6 +117,12 @@ export function BuildSettingsEditor({ params }: { params: StructureParams }) {
       </Section>
 
       <Section title={t('Bracing & walls')} icon={Home} defaultOpen={false} focusKey="walls-build">
+        <Toggle
+          label={t('Strap crosses in the roof plane')}
+          description={t('Crossed Windrispenband under the roof covering from the braced wall line to the free end, so the roof carries the wind to the walls')}
+          checked={b.roofStraps}
+          onChange={(v) => set('roofStraps', v)}
+        />
         <SelectField<BraceConnector>
           label={t('Knee brace connector per end')}
           value={b.braceConnector}

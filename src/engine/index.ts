@@ -19,7 +19,7 @@ export function buildModel(project: ProjectState): DerivedModel {
   const framingC = buildFramingCanonical(canonical);
   const statics = computeStatics(canonical, framingC);
   const { bom, cutList } = computeBom(canonical, framingC);
-  const connections = computeConnections(canonical, framingC);
+  const connections = computeConnections(canonical, framingC, statics);
   const vehicles = checkAllVehicles(canonical, framingC);
   const paving = summarizePaving(project);
   const framing = relabelFraming(framingToWorld(framingC, sanitizeParams(project.params)), dir);

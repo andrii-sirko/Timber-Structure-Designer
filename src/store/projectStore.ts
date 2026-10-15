@@ -129,6 +129,8 @@ interface ProjectStoreBase {
   setWallBracing: (id: WallId, bracing: WallBracing) => void;
   /** Nail spacing along the OSB panel edges of a sheet-panel wall (mm) */
   setWallPanelNailSpacing: (id: WallId, spacing: number) => void;
+  /** Hold-down anchors at the ends of a braced wall */
+  setWallHoldDowns: (id: WallId, on: boolean) => void;
   /** A rail (Rähm) along an outer wall that carries knee braces across the rows */
   setWallRail: (id: WallId, rail: boolean) => void;
 
@@ -339,9 +341,18 @@ export const useProjectStore = create<ProjectStore>()(
 
       setWallBracing: (id, bracing) =>
         set((s) => {
-          const { bracing: _old, panelNailSpacing: spacing, ...wall } = s.project.walls[id];
+          // hold-downs belong to the bracing and go with it
+          const { bracing: _old, panelNailSpacing: spacing, holdDowns, ...base } = s.project.walls[id];
+          const wall = holdDowns && bracing !== 'none' ? { ...base, holdDowns } : base;
           const kept = bracing === 'panels' && spacing !== undefined ? { panelNailSpacing: spacing } : {};
           return { project: { ...s.project, walls: { ...s.project.walls, [id]: bracing === 'none' ? wall : { ...wall, bracing, ...kept } } } };
+        }),
+
+      setWallHoldDowns: (id, on) =>
+        set((s) => {
+          const { holdDowns: _old, ...wall } = s.project.walls[id];
+          const braced = wall.closed && (wall.bracing === 'strap' || wall.bracing === 'panels');
+          return { project: { ...s.project, walls: { ...s.project.walls, [id]: on && braced ? { ...wall, holdDowns: true } : wall } } };
         }),
 
       setWallPanelNailSpacing: (id, spacing) =>

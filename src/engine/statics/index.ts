@@ -1,4 +1,4 @@
-import type { FramingResult, PostRow, ProjectState, StaticsCheck, StaticsResult, StaticsStatus, TimberSection, Wall, WallId } from '@/types';
+import type { FramingResult, PostRow, ProjectState, StaticsCheck, StaticsFitting, StaticsResult, StaticsStatus, TimberSection, Wall, WallId } from '@/types';
 import { DECKING, floorLayout, sanitizeParams, screenPartWall, wallExtent } from '../framing';
 import { resolveScreenCladding } from '../framing/cladding';
 import { braceLayout, rowPoint, rowPostTop, type BracePlacement } from '../framing/structure';
@@ -987,6 +987,9 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     const chord = (Hd * span) / 2 / depth;
     const u = T / (straps * Rd);
     const side = own[0].id;
+    // crosses in every bay from the wall line to the free end, one per bay
+    const length = bays.reduce((sum, b) => sum + 2 * Math.hypot(axis === 'x' ? b / cos : b, depthPlane), 0) * straps;
+    const fitted = params.build.roofStraps && straps <= 2;
     return {
       id: `roof-diaphragm-${axis}`,
       element: `Roof bracing ${AXIS_LABEL[axis]}`,
@@ -995,13 +998,15 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       span: Math.round(diagonal),
       stressUtil: u,
       utilisation: u,
-      // not part of the model: a requirement at least, unbuildable beyond two straps per diagonal
-      status: straps > 2 ? 'fail' : 'warning',
-      recommendation:
-        straps > 2
+      // a requirement until the straps are fitted (build setting), unbuildable beyond two straps per diagonal
+      status: straps > 2 ? 'fail' : fitted ? statusOf(u) : 'warning',
+      ...(fitted ? { fittings: [{ kind: 'roof-straps' as const, diagonals: 2 * bays.length, strapsPerDiagonal: straps, length, nailsPerEnd: nails }] } : {}),
+      recommendation: fitted
+        ? undefined
+        : straps > 2
           ? `Brace a wall at the other end so the roof spans between two wall lines – strap crosses would need ${straps} straps per diagonal.`
           : `Fit crossed Windrispenband 40 × 2 (${straps} per diagonal) under the roof covering in every bay from wall ${side} to the free end, nailed to each member it crosses, with ${nails} Kammnägel 4.0 × 40 per strap end and anchored into the top of that wall.`,
-      detail: `The braced walls ${AXIS_LABEL[axis]} stand on one line (wall ${side}): the roof carries H_d = ${kn(Hd)} over ${fmt(span / 1000, 2)} m to it as a cantilever diaphragm. Roof covering: ${ROOF_COVERING_LOAD[covering].label} – no reliable diaphragm, so the roof plane needs strap crosses. Shear at the wall line V_d = ${kn(Hd)} (${fmt(Hd / (depth / 1000), 1)} kN/m over ${fmt(depth / 1000, 2)} m depth). Strap cross in the bay at the wall line ${fmt(bayPlane / 1000, 2)} × ${fmt(depthPlane / 1000, 2)} m (diagonal ${fmt(diagonal / 1000, 2)} m, ${fmt(angle, 0)}°): T_d = ${kn(T)} ≤ ${straps} × N_t,Rd = ${kn(straps * Rd)} (${pct(u)}). Nails: ${nails} Kammnägel 4.0 × 40 per strap end (F_v,Rd = ${kn(nailRd)} each). Chord force in the edge members N_d = ±${kn(chord)} (M_d = ${fmt((Hd * span) / 2 / 1000, 1)} kNm).`,
+      detail: `The braced walls ${AXIS_LABEL[axis]} stand on one line (wall ${side}): the roof carries H_d = ${kn(Hd)} over ${fmt(span / 1000, 2)} m to it as a cantilever diaphragm. Roof covering: ${ROOF_COVERING_LOAD[covering].label} – no reliable diaphragm, so the roof plane needs strap crosses.${fitted ? ` Fitted: ${bays.length} strap crosses, ${fmt(length / 1000, 1)} m of strap.` : ''} Shear at the wall line V_d = ${kn(Hd)} (${fmt(Hd / (depth / 1000), 1)} kN/m over ${fmt(depth / 1000, 2)} m depth). Strap cross in the bay at the wall line ${fmt(bayPlane / 1000, 2)} × ${fmt(depthPlane / 1000, 2)} m (diagonal ${fmt(diagonal / 1000, 2)} m, ${fmt(angle, 0)}°): T_d = ${kn(T)} ≤ ${straps} × N_t,Rd = ${kn(straps * Rd)} (${pct(u)}). Nails: ${nails} Kammnägel 4.0 × 40 per strap end (F_v,Rd = ${kn(nailRd)} each). Chord force in the edge members N_d = ±${kn(chord)} (M_d = ${fmt((Hd * span) / 2 / 1000, 1)} kNm).`,
     };
   };
   for (const axis of ['x', 'z'] as Axis[]) {
@@ -1106,7 +1111,9 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       const coord = OTHER[axis];
       const parts: string[] = [];
       let utilisation = 0;
+      let holdDownMissing = false;
       const recs: string[] = [];
+      const fittings: StaticsFitting[] = [];
       for (const el of walls.elements.filter((w) => w.axis === axis)) {
         const { F, how } = walls.forceOf(el.id);
         const id = el.id;
@@ -1124,9 +1131,14 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
           const T = holdDownTension(F, el);
           utilisation = Math.max(utilisation, u);
           if (statusOf(u) !== 'ok') recs.push(`Wall ${id}: close the nail spacing (down to 50 mm), sheathe both faces or lengthen the braced stretch.`);
-          if (T > 0) recs.push(`Anchor the end studs of every braced stretch of wall ${id} with a hold-down (Zuganker / hold-down angle bolted into the foundation) for T_d ≥ ${kn(T)}.`);
+          const anchored = Boolean(project.walls[id]?.holdDowns);
+          if (T > 0 && anchored) fittings.push({ kind: 'hold-down', wallId: id, count: 2, tension: T });
+          else if (T > 0) {
+            holdDownMissing = true;
+            recs.push(`Anchor the end studs of every braced stretch of wall ${id} with a hold-down (Zuganker / hold-down angle bolted into the foundation) for T_d ≥ ${kn(T)}.`);
+          }
           parts.push(
-            `Wall ${id}: F_d = ${kn(F)} (${how}) on ${fmt(el.length, 2)} m braced length. OSB/3 15 mm, ring nails 2.8 × 60 at ${s} mm along the panel edges: F_f,Rd = ${fmt(nail.Rd, 2)} kN per nail (k_mod ${fmt(nail.kmod, 2)}), f_v,Rd = F_f,Rd/s = ${fmt(fv, 1)} kN/m against v_d = ${fmt(v, 1)} kN/m (${pct(u)}, EN 1995-1-1 9.2.4.2). Hold-down T_d = F_i·h/b_i − 0.9·G = ${kn(T)} at the stretch ends (h = ${Math.round(el.height)} mm).`,
+            `Wall ${id}: F_d = ${kn(F)} (${how}) on ${fmt(el.length, 2)} m braced length. OSB/3 15 mm, ring nails 2.8 × 60 at ${s} mm along the panel edges: F_f,Rd = ${fmt(nail.Rd, 2)} kN per nail (k_mod ${fmt(nail.kmod, 2)}), f_v,Rd = F_f,Rd/s = ${fmt(fv, 1)} kN/m against v_d = ${fmt(v, 1)} kN/m (${pct(u)}, EN 1995-1-1 9.2.4.2). Hold-down T_d = F_i·h/b_i − 0.9·G = ${kn(T)} at the stretch ends (h = ${Math.round(el.height)} mm).${T > 0 && project.walls[id]?.holdDowns ? ' Hold-downs fitted at both ends.' : ''}`,
           );
           continue;
         }
@@ -1162,9 +1174,11 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       const head = tor
         ? `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)} acting at ${coord} = ${fmt(load.at / 1000, 2)} m, centre of stiffness at ${coord} = ${fmt((tor.centre ?? 0) / 1000, 2)} m: eccentricity ${fmt(Math.abs(tor.e) / 1000, 2)} m, torsion M_t = ${fmt(Math.abs(tor.Mt), 1)} kNm (rigid roof diaphragm, walls stiff in proportion to their braced length).`
         : `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)} without a bracing system.`;
-      const status = statusOf(utilisation);
+      // the wall lifts at its ends without hold-downs: a requirement at least
+      const status = holdDownMissing ? worst([statusOf(utilisation), 'warning']) : statusOf(utilisation);
       checks.push({
         ...base,
+        ...(fittings.length > 0 ? { fittings } : {}),
         element: `Braced wall ${AXIS_LABEL[axis]}`,
         elementDe: 'Wandscheibe',
         section: timber.stud,

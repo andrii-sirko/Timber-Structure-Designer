@@ -1,4 +1,4 @@
-import type { ConnectionsResult, FramingResult, HardwareItem, JoineryItem, ProjectState } from '@/types';
+import type { ConnectionsResult, FramingResult, HardwareItem, JoineryItem, ProjectState, StaticsResult } from '@/types';
 import { WALL_IDS } from '@/types';
 import { H_ANCHOR, hAnchorWidth, isHAnchor, postBoltLength } from '../statics/postBase';
 import { wallStraps } from '../framing/straps';
@@ -12,7 +12,8 @@ import { hasWallPosts } from '../framing/wallFrame';
  * Derives connector quantities (hardware mode) or traditional carpentry joints
  * (Zimmermannsverbindungen) from the generated framing.
  */
-export function computeConnections(project: ProjectState, framing: FramingResult): ConnectionsResult {
+/** `statics` adds the hardware its checks size and the model fits: roof strap crosses and hold-downs. */
+export function computeConnections(project: ProjectState, framing: FramingResult, statics?: StaticsResult): ConnectionsResult {
   const { params } = project;
   const { timber } = params;
   const members = framing.members;
@@ -145,9 +146,26 @@ export function computeConnections(project: ProjectState, framing: FramingResult
       strapNails += 2 * (2 * STRAP_NAILS_PER_END + 2 * crossings);
     }
   }
+  // strap crosses in the roof plane (roof diaphragm) – same strap, sized by the statics
+  const fittings = statics?.checks.flatMap((c) => c.fittings ?? []) ?? [];
+  for (const f of fittings) {
+    if (f.kind !== 'roof-straps') continue;
+    strapLength += f.length;
+    diagonals += f.diagonals * f.strapsPerDiagonal;
+    // both ends of every strap, plus 2 nails where it crosses a rafter
+    const rafterCrossings = Math.ceil(f.length / Math.max(framing.roof.rafterSpacing, 300));
+    strapNails += f.diagonals * f.strapsPerDiagonal * 2 * f.nailsPerEnd + 2 * rafterCrossings;
+  }
   hwm('wind-strap', 'Wind bracing strap (Windrispenband), crossed diagonals', 'Windrispenband', '40 × 2 mm, galvanised', (strapLength / 1000) * 1.1, `${diagonals} diagonals + 10 %`);
   hw('wind-strap-tensioner', 'Strap tensioner', 'Windrispenband-Spanner', 'for 40 × 2 mm', diagonals, '1 per diagonal');
   hw('wind-strap-nails', 'Connector nails', 'Kammnägel', '4.0 × 40 mm', strapNails, `${STRAP_NAILS_PER_END} per strap end + 2 per stud crossing`);
+
+  // ── Hold-downs at the ends of braced walls (tension from the statics) ──
+  const holdDowns = fittings.filter((f) => f.kind === 'hold-down');
+  if (holdDowns.length > 0) {
+    const tension = Math.max(...holdDowns.map((f) => f.tension));
+    hw('hold-down', 'Hold-down anchor (end stud → foundation)', 'Zuganker', `T_d ≥ ${tension.toFixed(1)} kN per ETA, with anchor bolt into the foundation`, holdDowns.reduce((n, f) => n + f.count, 0), '2 per braced wall, at the ends of its braced stretch');
+  }
 
   // ── Cladding (both modes): 2 stainless screws at every stud / batten crossing ──
   const claddingCrossings = framing.panels

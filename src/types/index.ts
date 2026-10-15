@@ -184,6 +184,8 @@ export interface BuildSettings {
   screenBattenSpacing: Millimeters;
   /** Pressure coefficient of a porous screen / boards with gaps for the stud bending check */
   screenCp: number;
+  /** Crossed Windrispenband in the roof plane, from the braced wall line to the free end (roof diaphragm) */
+  roofStraps: boolean;
   /** Net pressure coefficient of closed boarding for the stud bending check */
   wallCp: number;
   /** Deflection limit L/x of studs and battens under wind */
@@ -283,6 +285,8 @@ export interface Wall {
   bracing?: WallBracing;
   /** Sheet-panel bracing: nail spacing along the OSB panel edges (mm); omitted → 75 */
   panelNailSpacing?: Millimeters;
+  /** Braced wall: hold-down anchors (Zuganker) tie the ends of its braced stretches into the foundation */
+  holdDowns?: boolean;
   /** Open wall only: a rail (Rähm) between the purlin rows without studs or cladding – carries knee braces across */
   rail?: boolean;
   /** Closed wall only: a slat screen continuing the wall beside its closed stretch (same u axis as start / end) */
@@ -871,7 +875,14 @@ export interface StaticsCheck {
   status: StaticsStatus;
   recommendation?: string;
   detail: string;
+  /** Hardware this check sizes and the model fits (listed in the connections) */
+  fittings?: StaticsFitting[];
 }
+
+/** Hardware sized by a check: roof strap crosses, or hold-downs at the ends of a braced wall. */
+export type StaticsFitting =
+  | { kind: 'roof-straps'; diagonals: number; strapsPerDiagonal: number; length: Millimeters; nailsPerEnd: number }
+  | { kind: 'hold-down'; wallId: WallId; count: number; tension: number };
 
 export interface StaticsResult {
   status: StaticsStatus;

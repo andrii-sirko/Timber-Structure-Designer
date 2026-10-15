@@ -143,6 +143,7 @@ export function WallEditor() {
   const setWallScreen = useProjectStore((s) => s.setWallScreen);
   const setWallBracing = useProjectStore((s) => s.setWallBracing);
   const setWallPanelNailSpacing = useProjectStore((s) => s.setWallPanelNailSpacing);
+  const setWallHoldDowns = useProjectStore((s) => s.setWallHoldDowns);
   const setWallRail = useProjectStore((s) => s.setWallRail);
   const setWallScreenPart = useProjectStore((s) => s.setWallScreenPart);
   const setWallScreenPartExtent = useProjectStore((s) => s.setWallScreenPartExtent);
@@ -262,6 +263,14 @@ export function WallEditor() {
               step={25}
               compact
               onChange={(v) => setWallPanelNailSpacing(outerId, v)}
+            />
+          )}
+          {outerId && wall.closed && (walls[outerId].bracing === 'panels' || walls[outerId].bracing === 'strap') && (
+            <Toggle
+              label={t('Hold-downs at the wall ends')}
+              description={t('Hold-down anchors (Zuganker) tie the end studs of the braced stretch into the foundation, so the wall cannot lift')}
+              checked={Boolean(walls[outerId].holdDowns)}
+              onChange={(v) => setWallHoldDowns(outerId, v)}
             />
           )}
           {outerId && (

@@ -183,6 +183,23 @@ const entries = {
     de: 'Dacheindeckung: {cover} – keine verlässliche Scheibe, die Dachebene braucht Bandkreuze.',
     pl: 'Pokrycie: {cover} – nie jest pewną tarczą, więc płaszczyzna dachu wymaga krzyży z taśm.',
   },
+  'Fitted: {n} strap crosses, {l} m of strap.': {
+    uk: 'Встановлено: {n} хрестів зі стрічки, {l} m стрічки.',
+    de: 'Eingebaut: {n} Bandkreuze, {l} m Band.',
+    pl: 'Zamontowano: {n} krzyży z taśmy, {l} m taśmy.',
+  },
+  'Hold-downs fitted at both ends.': { uk: 'Анкерні стяжки встановлено на обох кінцях.', de: 'Zuganker an beiden Enden eingebaut.', pl: 'Kotwy rozciągane zamontowane na obu końcach.' },
+  'Hold-down anchor (end stud → foundation)': { uk: 'Анкерна стяжка (крайня стійка → фундамент)', de: 'Zuganker (Endständer → Fundament)', pl: 'Kotwa rozciągana (słupek skrajny → fundament)' },
+  'T_d ≥ {t} kN per ETA, with anchor bolt into the foundation': {
+    uk: 'T_d ≥ {t} kN за ETA, з анкерним болтом у фундамент',
+    de: 'T_d ≥ {t} kN nach ETA, mit Ankerbolzen ins Fundament',
+    pl: 'T_d ≥ {t} kN wg ETA, ze śrubą kotwiącą w fundamencie',
+  },
+  '2 per braced wall, at the ends of its braced stretch': {
+    uk: '2 на кожну жорстку стіну, на кінцях її ділянки',
+    de: '2 je ausgesteifte Wand, an den Enden ihres Abschnitts',
+    pl: '2 na każdą ścianę usztywniającą, na końcach jej odcinka',
+  },
   'Shear at the wall line V_d = {v} ({q} kN/m over {d} m depth).': {
     uk: 'Зсув на лінії стіни V_d = {v} ({q} kN/m на глибині {d} m).',
     de: 'Schub an der Wandlinie V_d = {v} ({q} kN/m über {d} m Scheibenhöhe).',

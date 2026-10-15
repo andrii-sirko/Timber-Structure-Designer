@@ -77,6 +77,18 @@ export default {
   'Sheet panels (OSB ≥ 15 mm)': { uk: 'Плити (OSB ≥ 15 mm)', de: 'Plattenwerkstoff (OSB ≥ 15 mm)', pl: 'Płyty (OSB ≥ 15 mm)' },
   'OSB nail spacing (ring nails 2.8 × 60)': { uk: 'Крок цвяхів OSB (рифлені цвяхи 2.8 × 60)', de: 'Nagelabstand OSB (Rillennägel 2,8 × 60)', pl: 'Rozstaw gwoździ OSB (gwoździe pierścieniowe 2,8 × 60)' },
   'Rail for knee braces': { uk: 'Ригель для підкосів', de: 'Rähm für Kopfbänder', pl: 'Oczep pod miecze' },
+  'Hold-downs at the wall ends': { uk: 'Анкерні стяжки на кінцях стіни', de: 'Zuganker an den Wandenden', pl: 'Kotwy rozciągane na końcach ściany' },
+  'Hold-down anchors (Zuganker) tie the end studs of the braced stretch into the foundation, so the wall cannot lift': {
+    uk: 'Анкерні стяжки кріплять крайні стійки жорсткої ділянки до фундаменту, тож стіна не відривається',
+    de: 'Zuganker verbinden die Endständer des ausgesteiften Abschnitts mit dem Fundament, damit die Wand nicht abhebt',
+    pl: 'Kotwy rozciągane łączą skrajne słupki usztywnionego odcinka z fundamentem, więc ściana się nie unosi',
+  },
+  'Strap crosses in the roof plane': { uk: 'Хрести зі стрічки в площині даху', de: 'Bandkreuze in der Dachebene', pl: 'Krzyże z taśmy w płaszczyźnie dachu' },
+  'Crossed Windrispenband under the roof covering from the braced wall line to the free end, so the roof carries the wind to the walls': {
+    uk: 'Перехресна стрічка Windrispenband під покриттям від лінії жорстких стін до вільного краю, щоб дах передавав вітер на стіни',
+    de: 'Gekreuztes Windrispenband unter der Dacheindeckung von der ausgesteiften Wandlinie bis zum freien Ende, damit das Dach den Wind zu den Wänden trägt',
+    pl: 'Skrzyżowana taśma Windrispenband pod pokryciem od linii ścian usztywniających do wolnego końca, aby dach przenosił wiatr na ściany',
+  },
   'A rail (Rähm) along the whole wall between the purlin rows, so knee braces can stiffen the frame in this plane': { uk: 'Ригель (Rähm) уздовж усієї стіни між рядами прогонів, щоб підкоси розкріплювали каркас у цій площині', de: 'Ein Rähm über die ganze Wand zwischen den Pfettenreihen, damit Kopfbänder das Tragwerk in dieser Ebene aussteifen', pl: 'Oczep (Rähm) wzdłuż całej ściany między rzędami płatwi, aby miecze usztywniały ramę w tej płaszczyźnie' },
   'Change {field} wall bracing': { uk: 'Змінити розкріплення стіни: {field}', de: 'Wandaussteifung ändern: {field}', pl: 'Zmień stężenie ściany: {field}' },
   'Change {field} wall rail': { uk: 'Змінити ригель стіни: {field}', de: 'Wandrähm ändern: {field}', pl: 'Zmień oczep ściany: {field}' },

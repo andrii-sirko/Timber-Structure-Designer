@@ -151,6 +151,7 @@ export const DEFAULT_HARDWARE_PRICE_PER_UNIT: Record<string, number> = {
   'wind-strap': 1.6, // Windrispenband 40 × 2 per m
   'wind-strap-tensioner': 6.5,
   'wind-strap-nails': 0.03,
+  'hold-down': 18, // hold-down angle (Zuganker) with anchor bolt, per piece
   'batten-screws': 0.12, // Batten screws 6 × 100
 };
 
