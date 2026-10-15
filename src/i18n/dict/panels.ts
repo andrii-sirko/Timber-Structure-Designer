@@ -332,6 +332,7 @@ export default {
   'Ground grid': { uk: 'Сітка землі', de: 'Bodenraster', pl: 'Siatka terenu' },
   'Vehicles': { uk: 'Транспортні засоби', de: 'Fahrzeuge', pl: 'Pojazdy' },
   'Paved floors': { uk: 'Мощені ділянки', de: 'Pflasterflächen', pl: 'Nawierzchnie z kostki' },
+  'Foundations (below ground)': { uk: 'Фундаменти (під землею)', de: 'Fundamente (unter Gelände)', pl: 'Fundamenty (pod ziemią)' },
   'Timber floor deck': { uk: 'Дерев’яний настил підлоги', de: 'Holzfußbodenbelag', pl: 'Podłoga drewniana' },
   'Measure': { uk: 'Вимірювання', de: 'Messen', pl: 'Pomiar' },
   'Measuring: click two points (click to exit)': { uk: 'Вимірювання: клацніть у двох точках (клацніть, щоб вийти)', de: 'Messen: zwei Punkte anklicken (klicken zum Beenden)', pl: 'Pomiar: kliknij dwa punkty (kliknij, aby wyjść)' },

@@ -881,7 +881,18 @@ export interface StaticsCheck {
 
 /** Hardware sized by a check: roof strap crosses, or hold-downs at the ends of a braced wall. */
 export type StaticsFitting =
-  | { kind: 'roof-straps'; diagonals: number; strapsPerDiagonal: number; length: Millimeters; nailsPerEnd: number }
+  | {
+      kind: 'roof-straps';
+      /** Direction of the braced walls the roof spans to; the bays run along the other plan axis */
+      axis: 'x' | 'z';
+      /** One cross per bay: start / end along the span (canonical plan mm, x for axis 'z', z for axis 'x') */
+      bays: { start: Millimeters; end: Millimeters }[];
+      diagonals: number;
+      strapsPerDiagonal: number;
+      length: Millimeters;
+      nailsPerEnd: number;
+    }
+  /** One hold-down at each end of every braced stretch of the wall (canonical wall id) */
   | { kind: 'hold-down'; wallId: WallId; count: number; tension: number };
 
 export interface StaticsResult {
@@ -1138,12 +1149,113 @@ export interface PricingResult {
   grandTotal: number;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Hardware layout (3D)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One strap diagonal lying flat on a surface. */
+export interface StrapRun {
+  /** Centre line ends on the surface (mm) */
+  a: Vec3;
+  b: Vec3;
+  /** Normal of the surface it lies on, pointing away from the timber */
+  normal: Vec3;
+  /** 'wall' on the outer stud faces of a strap-braced wall, 'roof' on the rafter tops */
+  plane: 'wall' | 'roof';
+  hostIds: string[];
+}
+
+/** Hold-down angle on the inner face of an end stud, its foot bolted into the base. */
+export interface HoldDownFixture {
+  /** Foot of the angle: on the base, at the inner face of the stud, centred on it (mm) */
+  position: Vec3;
+  /** Normal of the inner wall face, pointing into the room */
+  inward: Vec3;
+  /** Along the wall */
+  along: Vec3;
+  hostIds: string[];
+}
+
+/** Angle bracket in the corner between a post face and the purlin underside next to it. */
+export interface PostBracket {
+  /** Corner: post face × purlin underside, centred on the bracket width (mm) */
+  position: Vec3;
+  /** Horizontal, out of the post face along the purlin */
+  outward: Vec3;
+  /** Horizontal, across the post face */
+  across: Vec3;
+  width: number;
+  hostIds: string[];
+}
+
+/** Sparrenpfettenanker: one leg on the rafter flank, bent down over the purlin edge onto its flank. */
+export interface RafterAnchor {
+  /** Corner where rafter flank, purlin flank and purlin top meet (mm) */
+  position: Vec3;
+  /** Horizontal normal of the rafter flank, away from the rafter */
+  flank: Vec3;
+  /** Horizontal normal of the purlin flank, away from the purlin */
+  face: Vec3;
+  hostIds: string[];
+}
+
+/** Folded sheet-metal trim along one edge of the roof covering. */
+export interface RoofTrim {
+  kind: 'eave' | 'verge' | 'top';
+  /** Ends of the edge on the top face of the covering (mm) */
+  start: Vec3;
+  end: Vec3;
+  /** In the roof plane, from the edge into the roof */
+  inward: Vec3;
+  /** Roof plane normal (up) */
+  normal: Vec3;
+  /** How far the apron reaches down below the covering top (mm) */
+  drop: number;
+  hostIds: string[];
+}
+
+/** Concrete point foundation under a post. */
+export interface Footing {
+  shape: 'round' | 'square';
+  /** Centre of the top face (mm) */
+  top: Vec3;
+  /** Diameter or side (mm) */
+  size: number;
+  /** Top to bottom (mm) */
+  height: number;
+  hostIds: string[];
+}
+
+/** Straight piece of the concrete curb under a closed wall. */
+export interface CurbPiece {
+  /** Centre of the top face (mm) */
+  top: Vec3;
+  direction: Vec3;
+  length: number;
+  width: number;
+  height: number;
+  hostIds: string[];
+}
+
+/** Steel hardware and concrete the 3D view draws (see engine/joinery/hardware.ts), world space. */
+export interface HardwareLayout {
+  straps: StrapRun[];
+  holdDowns: HoldDownFixture[];
+  brackets: PostBracket[];
+  rafterAnchors: RafterAnchor[];
+  trims: RoofTrim[];
+  footings: Footing[];
+  curbs: CurbPiece[];
+}
+
 export interface DerivedModel {
   framing: FramingResult;
   statics: StaticsResult;
   bom: BomResult;
   cutList: CutListItem[];
   connections: ConnectionsResult;
+  /** Where the straps, hold-downs, connectors, roof trims and foundations go */
+  hardware: HardwareLayout;
   vehicles: VehicleFit[];
   paving: PavingSummary;
 }
@@ -1165,6 +1277,8 @@ export interface LayerVisibility {
   paving: boolean;
   floor: boolean;
   insulation: boolean;
+  /** Concrete footings and the wall curb, below ground */
+  foundations: boolean;
 }
 
 export interface ViewSettings {

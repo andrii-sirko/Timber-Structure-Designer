@@ -372,6 +372,16 @@ export function getGalvanisedMaterial(): THREE.MeshStandardMaterial {
   return cached('galvanised', () => new THREE.MeshStandardMaterial({ color: '#b6bcc4', roughness: 0.45, metalness: 0.6 }));
 }
 
+/** Coated steel of the roof edge trims. */
+export function getTrimMaterial(): THREE.MeshStandardMaterial {
+  return cached('trim', () => new THREE.MeshStandardMaterial({ color: '#4b5157', roughness: 0.5, metalness: 0.3 }));
+}
+
+/** Concrete footings and curb, drawn see-through below ground. */
+export function getConcreteMaterial(): THREE.MeshStandardMaterial {
+  return cached('concrete', () => new THREE.MeshStandardMaterial({ color: '#a8a29e', roughness: 0.9, transparent: true, opacity: 0.45, depthWrite: false }));
+}
+
 /** Grip bars on the edges of the selected opening. */
 export function getOpeningEdgeMaterial(active: boolean): THREE.MeshBasicMaterial {
   return cached(`opening-edge-${active}`, () =>

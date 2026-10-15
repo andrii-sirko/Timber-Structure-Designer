@@ -195,10 +195,10 @@ const entries = {
     de: 'T_d ≥ {t} kN nach ETA, mit Ankerbolzen ins Fundament',
     pl: 'T_d ≥ {t} kN wg ETA, ze śrubą kotwiącą w fundamencie',
   },
-  '2 per braced wall, at the ends of its braced stretch': {
-    uk: '2 на кожну жорстку стіну, на кінцях її ділянки',
-    de: '2 je ausgesteifte Wand, an den Enden ihres Abschnitts',
-    pl: '2 na każdą ścianę usztywniającą, na końcach jej odcinka',
+  'At both ends of every braced stretch of a wall': {
+    uk: 'На обох кінцях кожної жорсткої ділянки стіни',
+    de: 'An beiden Enden jedes ausgesteiften Wandabschnitts',
+    pl: 'Na obu końcach każdego usztywnionego odcinka ściany',
   },
   'Shear at the wall line V_d = {v} ({q} kN/m over {d} m depth).': {
     uk: 'Зсув на лінії стіни V_d = {v} ({q} kN/m на глибині {d} m).',

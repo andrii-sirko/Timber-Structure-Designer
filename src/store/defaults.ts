@@ -73,6 +73,7 @@ export const DEFAULT_LAYERS: LayerVisibility = {
   paving: true,
   floor: true,
   insulation: true,
+  foundations: false,
 };
 
 export const DEFAULT_VIEW: ViewSettings = {

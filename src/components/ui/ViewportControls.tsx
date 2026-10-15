@@ -2,6 +2,7 @@ import {
   Axis3d,
   Box,
   Camera,
+  Cylinder,
   Eraser,
   Eye,
   Grid3x3,
@@ -52,6 +53,7 @@ const LAYERS: { id: keyof LayerVisibility; label: string; icon: typeof Home }[] 
   { id: 'paving', label: 'Paved floors', icon: BrickWall },
   { id: 'floor', label: 'Timber floor deck', icon: Rows3 },
   { id: 'insulation', label: 'Insulation', icon: Layers },
+  { id: 'foundations', label: 'Foundations (below ground)', icon: Cylinder },
 ];
 
 const HIGHLIGHTS: { id: HighlightMode; label: string; icon: typeof Home }[] = [

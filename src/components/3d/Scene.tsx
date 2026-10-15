@@ -26,6 +26,7 @@ import { NeighbourDistances } from './NeighbourDistances';
 import { OpeningsEditor } from './OpeningsEditor';
 import { OpeningFixtures } from './OpeningFixtures';
 import { AnchorFixtures } from './AnchorFixtures';
+import { HardwareFixtures } from './HardwareFixtures';
 import { PanelMesh } from './PanelMesh';
 import { TimberMember } from './TimberMember';
 import { VehicleMesh } from './VehicleMesh';
@@ -153,6 +154,11 @@ export function Scene({ model }: { model: DerivedModel }) {
   const builtMembers = useMemo(
     () => (assembly ? model.framing.members.filter((m) => assembly.progress.installed.has(m.id) || assembly.progress.current.has(m.id)) : model.framing.members),
     [assembly, model.framing.members],
+  );
+  /** Hardware shows with the members / panels it is fixed to */
+  const hardwareBuilt = useCallback(
+    (ids: string[]) => !assembly || ids.some((id) => assembly.progress.installed.has(id) || assembly.progress.current.has(id)),
+    [assembly],
   );
 
   /** Place a free post where the pointer ray meets the ground (placement mode). */
@@ -524,6 +530,7 @@ export function Scene({ model }: { model: DerivedModel }) {
               );
             })}
           {layers.frame && !wireframe && <AnchorFixtures members={builtMembers} />}
+          {!wireframe && <HardwareFixtures layout={model.hardware} layers={layers} built={hardwareBuilt} />}
           {model.framing.panels.map((p) => {
             const state = assemblyState(p.id);
             const layerOn = (p.kind === 'roof' && layers.roof) || ((p.kind === 'cladding' || p.kind === 'sheathing') && layers.cladding) || (p.kind === 'floor' && layers.floor) || (p.kind === 'insulation' && layers.insulation);

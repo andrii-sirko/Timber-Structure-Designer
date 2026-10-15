@@ -21,7 +21,7 @@ import {
 } from './materials';
 import { upliftChainChecks } from './upliftChain';
 import { studWindChecks } from './studs';
-import { strapNailCapacity, strapTensionRd, wallStraps } from '../framing/straps';
+import { roofStrapBays, strapNailCapacity, strapTensionRd, wallStraps } from '../framing/straps';
 import { connectionChecks } from './connections';
 import { foundationChecks } from './foundations';
 import { EXCEPTIONAL_SNOW_FACTOR, siteSnowLoad } from './siteLoads';
@@ -964,14 +964,8 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     const span = axis === 'z' ? params.length : params.width; // the diaphragm cantilevers along the other axis
     const depth = axis === 'z' ? params.width : params.length;
     const wallAt = own[0].pos;
-    const cuts = [...new Set(grid.rows.filter((r) => r.axis === axis && r.offset > 200 && r.offset < span - 200).map((r) => r.offset))].sort((a, b) => a - b);
-    const edges = [0, ...cuts, span];
-    const bays: number[] = [];
-    for (let i = 1; i < edges.length; i++) {
-      const len = edges[i] - edges[i - 1];
-      const n = len > 1.5 * depth ? Math.ceil(len / depth) : 1;
-      for (let k = 0; k < n; k++) bays.push(len / n);
-    }
+    const strapBays = roofStrapBays(axis, params, grid);
+    const bays = strapBays.map((b) => b.end - b.start);
     const bay = wallAt <= span / 2 ? bays[0] : bays[bays.length - 1];
     // the roof slopes along Z: the depth of a Z diaphragm and the bay of an X diaphragm are sloped
     const bayPlane = axis === 'x' ? bay / cos : bay;
@@ -1000,7 +994,7 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
       utilisation: u,
       // a requirement until the straps are fitted (build setting), unbuildable beyond two straps per diagonal
       status: straps > 2 ? 'fail' : fitted ? statusOf(u) : 'warning',
-      ...(fitted ? { fittings: [{ kind: 'roof-straps' as const, diagonals: 2 * bays.length, strapsPerDiagonal: straps, length, nailsPerEnd: nails }] } : {}),
+      ...(fitted ? { fittings: [{ kind: 'roof-straps' as const, axis, bays: strapBays, diagonals: 2 * bays.length, strapsPerDiagonal: straps, length, nailsPerEnd: nails }] } : {}),
       recommendation: fitted
         ? undefined
         : straps > 2
@@ -1132,7 +1126,7 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
           utilisation = Math.max(utilisation, u);
           if (statusOf(u) !== 'ok') recs.push(`Wall ${id}: close the nail spacing (down to 50 mm), sheathe both faces or lengthen the braced stretch.`);
           const anchored = Boolean(project.walls[id]?.holdDowns);
-          if (T > 0 && anchored) fittings.push({ kind: 'hold-down', wallId: id, count: 2, tension: T });
+          if (T > 0 && anchored) fittings.push({ kind: 'hold-down', wallId: id, count: 2 * el.segments.length, tension: T });
           else if (T > 0) {
             holdDownMissing = true;
             recs.push(`Anchor the end studs of every braced stretch of wall ${id} with a hold-down (Zuganker / hold-down angle bolted into the foundation) for T_d ≥ ${kn(T)}.`);

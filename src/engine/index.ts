@@ -4,6 +4,7 @@ import { buildFramingCanonical, canonicalProject, sanitizeParams } from './frami
 export type { OpeningPreset, OpeningEdge, PresetFit } from './framing';
 import { framingToWorld, relabelFraming, relabelSides } from './orientation';
 import { computeConnections } from './joinery';
+import { hardwareLayout, hardwareToWorld } from './joinery/hardware';
 import { computeStatics } from './statics';
 import { checkAllVehicles } from './vehicles';
 import { summarizePaving } from './paving';
@@ -22,8 +23,10 @@ export function buildModel(project: ProjectState): DerivedModel {
   const connections = computeConnections(canonical, framingC, statics);
   const vehicles = checkAllVehicles(canonical, framingC);
   const paving = summarizePaving(project);
-  const framing = relabelFraming(framingToWorld(framingC, sanitizeParams(project.params)), dir);
-  if (dir === 'rear') return { framing, statics, bom, cutList, connections, vehicles, paving };
+  const worldParams = sanitizeParams(project.params);
+  const framing = relabelFraming(framingToWorld(framingC, worldParams), dir);
+  const hardware = hardwareToWorld(hardwareLayout(canonical, framingC, statics), worldParams);
+  if (dir === 'rear') return { framing, statics, bom, cutList, connections, hardware, vehicles, paving };
   const r = (t: string) => relabelSides(t, dir);
   const ro = (t: string | undefined) => (t === undefined ? undefined : r(t));
   return {
@@ -35,6 +38,7 @@ export function buildModel(project: ProjectState): DerivedModel {
     bom: { ...bom, lines: bom.lines.map((l) => ({ ...l, label: r(l.label), labelDe: r(l.labelDe) })) },
     cutList: cutList.map((c) => ({ ...c, name: r(c.name), nameDe: r(c.nameDe), notes: ro(c.notes), walls: c.walls?.map(r) })),
     connections,
+    hardware,
     vehicles: vehicles.map((v) => ({ ...v, messages: v.messages.map(r), wallCollisions: v.wallCollisions.map(r) })),
     paving,
   };

@@ -42,7 +42,8 @@ function useGeometries(): Record<Part, THREE.BufferGeometry> {
   return geometries;
 }
 
-function Instanced({ geometry, matrices }: { geometry: THREE.BufferGeometry; matrices: THREE.Matrix4[] }) {
+/** One instanced mesh per part; `shadows` off for see-through bodies. */
+export function Instanced({ geometry, matrices, material = getGalvanisedMaterial(), shadows = true }: { geometry: THREE.BufferGeometry; matrices: THREE.Matrix4[]; material?: THREE.Material; shadows?: boolean }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const redraw = useRedraw();
   useLayoutEffect(() => {
@@ -55,7 +56,7 @@ function Instanced({ geometry, matrices }: { geometry: THREE.BufferGeometry; mat
   }, [matrices, redraw]);
   if (matrices.length === 0) return null;
   // keyed by count: an InstancedMesh cannot grow after creation
-  return <instancedMesh key={matrices.length} ref={ref} args={[geometry, getGalvanisedMaterial(), matrices.length]} castShadow receiveShadow />;
+  return <instancedMesh key={matrices.length} ref={ref} args={[geometry, material, matrices.length]} castShadow={shadows} receiveShadow={shadows} />;
 }
 
 const Y = new THREE.Vector3(0, 1, 0);

@@ -1,4 +1,4 @@
-import type { StructureParams, Wall, WallId } from '@/types';
+import type { PostGrid, StructureParams, Wall, WallId } from '@/types';
 import { wallExtent } from './wallFrame';
 
 /** Windrispenband 40 × 2 mm, S250GD+Z: gross area, net area across two Ø5 mm holes (mm²). */
@@ -82,4 +82,23 @@ export function strapNailCapacity(rhok: number): number {
   const My = 0.3 * fu * d ** 2.6;
   const t1 = length - STRAP.thickness;
   return Math.min(0.4 * fh * t1 * d, 1.15 * Math.sqrt(2 * My * fh * d));
+}
+
+/**
+ * Bays of the strap crosses in the roof plane of a roof braced by walls of direction `axis` on one
+ * line: the span (x for 'z', z for 'x') is cut at the purlin rows of that direction and every piece
+ * longer than 1.5 × the depth is split again, so each cross stays roughly square (plan mm).
+ */
+export function roofStrapBays(axis: 'x' | 'z', params: StructureParams, grid: PostGrid): { start: number; end: number }[] {
+  const span = axis === 'z' ? params.length : params.width;
+  const depth = axis === 'z' ? params.width : params.length;
+  const cuts = [...new Set(grid.rows.filter((r) => r.axis === axis && r.offset > 200 && r.offset < span - 200).map((r) => r.offset))].sort((a, b) => a - b);
+  const edges = [0, ...cuts, span];
+  const bays: { start: number; end: number }[] = [];
+  for (let i = 1; i < edges.length; i++) {
+    const len = edges[i] - edges[i - 1];
+    const n = len > 1.5 * depth ? Math.ceil(len / depth) : 1;
+    for (let k = 0; k < n; k++) bays.push({ start: edges[i - 1] + (k * len) / n, end: edges[i - 1] + ((k + 1) * len) / n });
+  }
+  return bays;
 }

@@ -164,7 +164,7 @@ export function computeConnections(project: ProjectState, framing: FramingResult
   const holdDowns = fittings.filter((f) => f.kind === 'hold-down');
   if (holdDowns.length > 0) {
     const tension = Math.max(...holdDowns.map((f) => f.tension));
-    hw('hold-down', 'Hold-down anchor (end stud → foundation)', 'Zuganker', `T_d ≥ ${tension.toFixed(1)} kN per ETA, with anchor bolt into the foundation`, holdDowns.reduce((n, f) => n + f.count, 0), '2 per braced wall, at the ends of its braced stretch');
+    hw('hold-down', 'Hold-down anchor (end stud → foundation)', 'Zuganker', `T_d ≥ ${tension.toFixed(1)} kN per ETA, with anchor bolt into the foundation`, holdDowns.reduce((n, f) => n + f.count, 0), 'At both ends of every braced stretch of a wall');
   }
 
   // ── Cladding (both modes): 2 stainless screws at every stud / batten crossing ──
