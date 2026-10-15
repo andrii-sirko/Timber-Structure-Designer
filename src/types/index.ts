@@ -667,7 +667,7 @@ export interface Member {
 /** Flat sheet-like element (cladding panel, roof deck) — rendered as an oriented slab. */
 export interface Panel {
   id: string;
-  kind: 'cladding' | 'roof' | 'floor' | 'insulation';
+  kind: 'cladding' | 'roof' | 'floor' | 'insulation' | 'sheathing';
   wallId?: WallId;
   partitionId?: string;
   /** Box centre when `size` is used; outline origin when `outline` is used (mm) */

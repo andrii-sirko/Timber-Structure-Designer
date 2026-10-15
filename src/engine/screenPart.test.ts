@@ -70,3 +70,18 @@ test('screen part: kept by normalize on closed walls only', () => {
   const open = carport((p) => (p.walls.rear.closed = false));
   assert.equal(open.walls.rear.screenPart, undefined);
 });
+
+test('OSB sheathing: a panel on the outer stud faces of every sheet-panel wall, in the BOM', () => {
+  const model = buildModel(carport((p) => (p.walls.rear.bracing = 'panels')));
+  const sheathing = model.framing.panels.filter((x) => x.kind === 'sheathing');
+  assert.deepEqual(sheathing.map((x) => x.wallId), ['rear']);
+  const [osb] = sheathing;
+  assert.ok(osb.areaM2 > 3 && osb.areaM2 < 5, `closed stretch only: ${osb.areaM2} m²`);
+  // rear wall faces +Z: the sheet lies inside the cladding (z = width) and on the studs' outer faces
+  const studs = model.framing.members.filter((m) => m.wallId === 'rear' && m.category === 'stud');
+  const studOuter = Math.max(...studs.map((m) => m.start.z)) + 40;
+  assert.ok(osb.anchor.z <= studOuter + 1 && osb.anchor.z + osb.outline!.thickness <= raw.params.width, `${osb.anchor.z}`);
+  const line = model.bom.materials.find((m) => m.id === 'osb-sheathing');
+  assert.ok(line && Math.abs(line.quantity - osb.areaM2 * 1.1) < 0.01, `${line?.quantity}`);
+  assert.ok(!buildModel(carport()).framing.panels.some((x) => x.kind === 'sheathing'), 'no OSB without sheet-panel bracing');
+});

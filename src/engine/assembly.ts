@@ -252,10 +252,12 @@ export function buildAssemblySteps(model: DerivedModel, project: ProjectState): 
   push('floor:deck', 'floor-deck', undefined, [], panels.filter((p) => p.kind === 'floor').map((p) => p.id));
 
   for (const panel of panels) {
-    if (panel.kind !== 'cladding') continue;
+    if (panel.kind !== 'cladding' && panel.kind !== 'sheathing') continue;
     const partition = panel.partitionId ? project.partitions.find((p) => p.id === panel.partitionId) : undefined;
     const hostKey = panel.wallId ?? panel.partitionId ?? panel.id;
-    push(`cladding:${hostKey}`, 'cladding', partition ? partition.label : panel.wallId ? `${panel.wallId} wall` : undefined, [], [panel.id]);
+    // the OSB goes on before the boards; a slat screen beside a closed stretch is a step of its own
+    const part = panel.kind === 'sheathing' ? ':sheathing' : panel.screen && panel.wallId && project.walls[panel.wallId]?.closed ? ':screen' : '';
+    push(`cladding:${hostKey}${part}`, 'cladding', partition ? partition.label : panel.wallId ? `${panel.wallId} wall` : undefined, [], [panel.id]);
   }
 
   push('insulation', 'insulation', undefined, [], panels.filter((p) => p.kind === 'insulation').map((p) => p.id));

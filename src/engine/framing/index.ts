@@ -25,7 +25,7 @@ export { OPENING_PRESETS, FRAME_GAP, DEFAULT_INSTALL_GAP, findPreset, presetsOfT
 export type { OpeningPreset, DoorPreset, WindowPreset, DoorStyle, WindowStyle, PresetFit } from './openingCatalog';
 export { resizeOpening, resizableEdges, edgeHandleCentre, sizeChanged, OPENING_EDGES } from './openingResize';
 export type { OpeningEdge } from './openingResize';
-export { CLADDING_THICKNESS } from './walls';
+export { CLADDING_THICKNESS, SHEATHING_THICKNESS } from './walls';
 export { DECKING, FLOOR_DEFAULTS, FLOOR_LOAD_PRESETS, floorLayout, sanitizeFloor } from './floor';
 export type { DeckingSpec, FloorLayout } from './floor';
 export { INSULATION, INSULATION_DEFAULTS, MAX_INSULATION_THICKNESS, insulationThermal, sanitizeInsulation } from './insulation';
@@ -133,6 +133,7 @@ export function buildFramingCanonical(project: ProjectState): FramingResult {
     if (walls[id].closed) closedFrames.push({ frame, wall: walls[id] });
     const build = generateWallFraming(frame, walls[id], walls, params, roof);
     members.push(...build.members);
+    if (build.sheathing) panels.push(build.sheathing);
     if (build.panel) panels.push(build.panel);
     warnings.push(...build.warnings);
     // The slat screen beside a partly closed wall: framed like a screen in an open wall

@@ -526,7 +526,7 @@ export function Scene({ model }: { model: DerivedModel }) {
           {layers.frame && !wireframe && <AnchorFixtures members={builtMembers} />}
           {model.framing.panels.map((p) => {
             const state = assemblyState(p.id);
-            const layerOn = (p.kind === 'roof' && layers.roof) || (p.kind === 'cladding' && layers.cladding) || (p.kind === 'floor' && layers.floor) || (p.kind === 'insulation' && layers.insulation);
+            const layerOn = (p.kind === 'roof' && layers.roof) || ((p.kind === 'cladding' || p.kind === 'sheathing') && layers.cladding) || (p.kind === 'floor' && layers.floor) || (p.kind === 'insulation' && layers.insulation);
             // The panel being fitted always shows, even with its layer switched off to see the framing below
             return state !== 'hidden' && (layerOn || state === 'current') ? (
               <PanelMesh

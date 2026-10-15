@@ -38,7 +38,7 @@ export function settingsTargetFor(picked: PickedObject): SettingsTarget {
     case 'panel':
       if (picked.panelKind === 'roof') return { tab: 'roof', focus: 'roof' };
       if (picked.panelKind === 'insulation') return { tab: 'structure', focus: 'insulation' };
-      return picked.panelKind === 'cladding' ? { tab: 'walls', focus: 'walls' } : { tab: 'structure', focus: 'floor' };
+      return picked.panelKind === 'cladding' || picked.panelKind === 'sheathing' ? { tab: 'walls', focus: 'walls' } : { tab: 'structure', focus: 'floor' };
     case 'member':
       switch (picked.category) {
         case 'post':

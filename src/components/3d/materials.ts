@@ -272,6 +272,11 @@ export function getCladdingMaterial(cladding?: WallCladding, spaced = false): TH
   );
 }
 
+/** OSB sheathing of a shear wall (bracing with sheet panels) */
+export function getSheathingMaterial(): THREE.MeshStandardMaterial {
+  return cached('sheathing-osb', () => new THREE.MeshStandardMaterial({ color: '#c9a56b', roughness: 0.95, side: THREE.DoubleSide }));
+}
+
 /** Floor deck: boards running along the panel's local u or v axis, or plain OSB sheets. */
 export function getFloorMaterial(finish: { decking: FloorDecking; boardsAlong: 'u' | 'v' } | undefined): THREE.MeshStandardMaterial {
   const decking = finish?.decking ?? 'spruce-boards';

@@ -8,11 +8,15 @@ import { hasWallPosts, wallBays, wallExtent, wallParts, type WallFrame } from '.
 import { plateBottomLevel } from '../build';
 
 export const CLADDING_THICKNESS = 20;
+/** OSB sheathing that makes a wall a shear wall (bracing 'panels'), nailed to the outer stud faces */
+export const SHEATHING_THICKNESS = 15;
 const MIN_CRIPPLE = 80;
 
 export interface WallBuild {
   members: Member[];
   panel?: Panel;
+  /** OSB sheathing of a shear wall, between the studs and the cladding */
+  sheathing?: Panel;
   warnings: FramingWarning[];
 }
 
@@ -360,7 +364,33 @@ export function generateWallFraming(
     ...(screen ? { screen: true } : {}),
   };
 
-  return { members, panel, warnings };
+  // OSB sheathing of a shear wall: on the outer stud faces over the closed stretch, under the cladding
+  const outerWall = frame.wallId ? walls[frame.wallId] : undefined;
+  let sheathing: Panel | undefined;
+  if (!isPartition && wall.closed && outerWall?.bracing === 'panels') {
+    const st = SHEATHING_THICKNESS;
+    const studFace = Math.min(-frame.axisInset + sd / 2, -st);
+    const sheet: ProfilePoint[] = [
+      { u: frame.extent.start, v: base },
+      { u: frame.extent.end, v: base },
+      { u: frame.extent.end, v: frame.claddingTopAt(frame.extent.end) - 5 },
+      { u: frame.extent.start, v: frame.claddingTopAt(frame.extent.start) - 5 },
+    ];
+    const sheetArea = Math.max(profileArea(sheet) / 1e6 - holeArea, 0);
+    sheathing = {
+      id: `sheathing-${frame.id}`,
+      kind: 'sheathing',
+      ...ref,
+      anchor: frame.toWorld(0, 0, studFace),
+      direction: frame.u,
+      up: frame.v,
+      normal: frame.normal,
+      outline: { outer: sheet, holes, thickness: st },
+      areaM2: sheetArea,
+    };
+  }
+
+  return { members, panel, ...(sheathing ? { sheathing } : {}), warnings };
 }
 
 function round1(value: number): number {

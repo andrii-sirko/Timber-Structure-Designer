@@ -1,6 +1,7 @@
 import type { BomLine, BomResult, TimberOrderLine, StockBoardOption, CutListItem, FixtureLine, FramingResult, MaterialItem, Member, MemberCategory, Opening, ProjectState } from '@/types';
 import { DECKING } from '../framing/floor';
 import { claddingBoards } from '../framing/cladding';
+import { SHEATHING_THICKNESS } from '../framing/walls';
 import { INSULATION } from '../framing/insulation';
 import { hasWallPosts } from '../framing/wallFrame';
 import { findPreset, frameSizeFor, openingMaterials, presetMatches } from '../framing/openingCatalog';
@@ -266,6 +267,12 @@ export function collectMaterials(project: ProjectState, framing: FramingResult):
   const plateLength = framing.members.filter((m) => m.category === 'plate' && m.nameDe === 'Schwelle').reduce((sum, m) => sum + m.length, 0);
   if (plateLength > 0 && build.wallBase !== 'hung') {
     add({ id: 'bitumen-r500', priceKey: 'dpc-strip', name: 'Bitumen strip R500 under the bottom plates', nameDe: 'Bitumenbahn R500 unter der Schwelle', spec: `${project.params.timber.stud.height + 20} mm wide`, quantity: (plateLength / 1000) * 1.05, unit: 'm', note: '+5 % laps' });
+  }
+
+  // ── OSB sheathing of the braced walls (shear walls with sheet panels) ──
+  const sheathingArea = framing.panels.filter((pn) => pn.kind === 'sheathing').reduce((sum, pn) => sum + pn.areaM2, 0);
+  if (sheathingArea > 0) {
+    add({ id: 'osb-sheathing', priceKey: 'osb', name: 'OSB/3 sheathing of the braced walls', nameDe: 'OSB/3-Beplankung', spec: `${SHEATHING_THICKNESS} mm or thicker, nailed at ≤ 150 mm on every stud and plate`, quantity: sheathingArea * 1.1, unit: 'm²', note: '+10 % cutting' });
   }
 
   // ── Optional lines ──

@@ -344,6 +344,12 @@ const entries = {
   '= {n} bags of 25 kg ready-mix ({l} l each)': { uk: '= {n} мішків сухої суміші по 25 kg (по {l} l)', de: '= {n} Sack Fertigbeton à 25 kg (je {l} l)', pl: '= {n} worków gotowej mieszanki po 25 kg (po {l} l)' },
   'Bitumen strip R500 under the bottom plates': { uk: 'Бітумна стрічка R500 під нижню обв’язку', de: 'Bitumenbahn R500 unter der Schwelle', pl: 'Pasek papy R500 pod podwaliną' },
   '+{n} % laps': { uk: '+{n} % на нахлести', de: '+{n} % Überlappung', pl: '+{n} % na zakłady' },
+  'OSB/3 sheathing of the braced walls': { uk: 'Обшивка OSB/3 жорстких стін', de: 'OSB/3-Beplankung der ausgesteiften Wände', pl: 'Poszycie OSB/3 ścian usztywniających' },
+  '{t} mm or thicker, nailed at ≤ 150 mm on every stud and plate': {
+    uk: '{t} мм або товщі, цвяхи з кроком ≤ 150 мм на кожній стійці та обв’язці',
+    de: '{t} mm oder dicker, Nagelabstand ≤ 150 mm an jedem Ständer und jeder Schwelle',
+    pl: '{t} mm lub grubsze, gwoździe co ≤ 150 mm na każdym słupku i podwalinie',
+  },
   'Facade membrane behind the cladding': { uk: 'Фасадна мембрана за обшивкою', de: 'Fassadenbahn hinter der Schalung', pl: 'Membrana fasadowa za deskowaniem' },
   'UV-resistant, sd ≤ 0.1 m': { uk: 'стійка до УФ, sd ≤ 0.1 m', de: 'UV-beständig, sd ≤ 0,1 m', pl: 'odporna na UV, sd ≤ 0,1 m' },
   'Ventilation grilles': { uk: 'Вентиляційні решітки', de: 'Lüftungsgitter', pl: 'Kratki wentylacyjne' },
