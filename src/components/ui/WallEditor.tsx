@@ -3,7 +3,7 @@ import { DoorOpen, PanelsTopLeft, Plus, RectangleHorizontal, Trash2, Move3d, Spl
 import type { CladdingOrientation, Opening, OpeningType, WallBracing, WallCladding, WallId } from '@/types';
 import { isOuterWall, WALL_IDS } from '@/types';
 import { useProjectStore, useWallFrames } from '@/store';
-import { MIN_PARTITION_LENGTH, OPENING_PRESETS, findPreset, frameSizeFor, openingHost, openingLimits, openingMaterials, partitionLimits, MIN_WALL_LENGTH, presetFits, presetMatches, presetRough, presetsOfType, resolveCladding, resolveScreenCladding, hasWallPosts, CLADDING_LIMITS, screenPartExtent } from '@/engine';
+import { MIN_PARTITION_LENGTH, OPENING_PRESETS, findPreset, frameSizeFor, openingHost, openingLimits, openingMaterials, partitionLimits, MIN_WALL_LENGTH, presetFits, presetMatches, presetRough, presetsOfType, resolveCladding, resolveScreenCladding, hasWallPosts, CLADDING_LIMITS, screenPartExtent, DEFAULT_PANEL_NAIL_SPACING } from '@/engine';
 import type { OpeningPreset } from '@/engine';
 import type { WallFrame } from '@/engine/framing';
 import { useT } from '@/i18n';
@@ -142,6 +142,7 @@ export function WallEditor() {
   const setWallExtent = useProjectStore((s) => s.setWallExtent);
   const setWallScreen = useProjectStore((s) => s.setWallScreen);
   const setWallBracing = useProjectStore((s) => s.setWallBracing);
+  const setWallPanelNailSpacing = useProjectStore((s) => s.setWallPanelNailSpacing);
   const setWallRail = useProjectStore((s) => s.setWallRail);
   const setWallScreenPart = useProjectStore((s) => s.setWallScreenPart);
   const setWallScreenPartExtent = useProjectStore((s) => s.setWallScreenPartExtent);
@@ -250,6 +251,17 @@ export function WallEditor() {
                 { value: 'strap', label: t('Crossed steel straps (Windrispenband 40 × 2)') },
                 { value: 'panels', label: t('Sheet panels (OSB ≥ 15 mm)') },
               ]}
+            />
+          )}
+          {outerId && wall.closed && walls[outerId].bracing === 'panels' && (
+            <NumberField
+              label={t('OSB nail spacing (ring nails 2.8 × 60)')}
+              value={walls[outerId].panelNailSpacing ?? DEFAULT_PANEL_NAIL_SPACING}
+              min={25}
+              max={300}
+              step={25}
+              compact
+              onChange={(v) => setWallPanelNailSpacing(outerId, v)}
             />
           )}
           {outerId && (

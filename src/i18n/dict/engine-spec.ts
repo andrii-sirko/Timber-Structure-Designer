@@ -106,6 +106,108 @@ const entries = {
     de: 'Wand {side}: Beplankung (OSB ≥ 15 mm, Nagelabstand ≤ 150 mm) trägt {h}.',
     pl: 'Ściana {side}: płyty (OSB ≥ 15 mm, gwoździe co ≤ 150 mm) przenoszą {h}.',
   },
+  // ── Shear walls under a rigid roof diaphragm (position, torsion, OSB 9.2.4.2, roof bracing) ──
+  'Wind {axis}: W_k = {wk}, H_d = {hd} acting at {at}, centre of stiffness at {c}: eccentricity {e} m, torsion M_t = {mt} kNm (rigid roof diaphragm, walls stiff in proportion to their braced length).': {
+    uk: 'Вітер {axis}: W_k = {wk}, H_d = {hd} прикладено при {at}, центр жорсткості при {c}: ексцентриситет {e} m, крутний момент M_t = {mt} kNm (жорсткий диск даху, жорсткість стін пропорційна їх розкріпленій довжині).',
+    de: 'Wind {axis}: W_k = {wk}, H_d = {hd} wirkt bei {at}, Steifigkeitsmittelpunkt bei {c}: Exzentrizität {e} m, Torsionsmoment M_t = {mt} kNm (starre Dachscheibe, Wandsteifigkeit proportional zur ausgesteiften Länge).',
+    pl: 'Wiatr {axis}: W_k = {wk}, H_d = {hd} przyłożone przy {at}, środek sztywności przy {c}: mimośród {e} m, moment skręcający M_t = {mt} kNm (sztywna tarcza dachu, sztywność ścian proporcjonalna do ich stężonej długości).',
+  },
+  'The braced walls stand on one line and nothing takes the torsion M_t = {mt} kNm.': {
+    uk: 'Розкріплені стіни стоять на одній лінії, і крутний момент M_t = {mt} kNm нічим не сприймається.',
+    de: 'Die ausgesteiften Wände stehen in einer Linie, nichts nimmt das Torsionsmoment M_t = {mt} kNm auf.',
+    pl: 'Stężone ściany stoją w jednej linii i nic nie przenosi momentu skręcającego M_t = {mt} kNm.',
+  },
+  'The torsion M_t = {mt} kNm goes into the knee braces {axis} (not checked here).': {
+    uk: 'Крутний момент M_t = {mt} kNm передається на підкоси {axis} (тут не перевірено).',
+    de: 'Das Torsionsmoment M_t = {mt} kNm geht in die Kopfbänder {axis} (hier nicht nachgewiesen).',
+    pl: 'Moment skręcający M_t = {mt} kNm przechodzi na miecze {axis} (tu niesprawdzone).',
+  },
+  'Wall {side}: F_d = {f} ({how}) on {b} m braced length.': {
+    uk: 'Стіна {side}: F_d = {f} ({how}) на {b} m розкріпленої довжини.',
+    de: 'Wand {side}: F_d = {f} ({how}) auf {b} m ausgesteifter Länge.',
+    pl: 'Ściana {side}: F_d = {f} ({how}) na {b} m stężonej długości.',
+  },
+  'Wall {side}: F_d = {f} ({how}).': { uk: 'Стіна {side}: F_d = {f} ({how}).', de: 'Wand {side}: F_d = {f} ({how}).', pl: 'Ściana {side}: F_d = {f} ({how}).' },
+  'share {a} + torsion {b}': { uk: 'частка {a} + кручення {b}', de: 'Anteil {a} + Verdrehung {b}', pl: 'udział {a} + skręcanie {b}' },
+  'share {a} − torsion {b}': { uk: 'частка {a} − кручення {b}', de: 'Anteil {a} − Verdrehung {b}', pl: 'udział {a} − skręcanie {b}' },
+  'share {a}': { uk: 'частка {a}', de: 'Anteil {a}', pl: 'udział {a}' },
+  'torsion couple from the wind {axis}': { uk: 'пара сил від кручення при вітрі {axis}', de: 'Kräftepaar aus Verdrehung bei Wind {axis}', pl: 'para sił ze skręcania przy wietrze {axis}' },
+  'OSB/3 15 mm, ring nails 2.8 × 60 at {s} mm along the panel edges: F_f,Rd = {f} kN per nail (k_mod {k}), f_v,Rd = F_f,Rd/s = {fv} kN/m against v_d = {v} kN/m ({p}, EN 1995-1-1 9.2.4.2).': {
+    uk: 'OSB/3 15 mm, рифлені цвяхи 2.8 × 60 з кроком {s} mm по краях плит: F_f,Rd = {f} kN на цвях (k_mod {k}), f_v,Rd = F_f,Rd/s = {fv} kN/m проти v_d = {v} kN/m ({p}, EN 1995-1-1 9.2.4.2).',
+    de: 'OSB/3 15 mm, Rillennägel 2,8 × 60 im Abstand {s} mm an den Plattenrändern: F_f,Rd = {f} kN je Nagel (k_mod {k}), f_v,Rd = F_f,Rd/s = {fv} kN/m gegen v_d = {v} kN/m ({p}, EN 1995-1-1 9.2.4.2).',
+    pl: 'OSB/3 15 mm, gwoździe pierścieniowe 2,8 × 60 co {s} mm wzdłuż krawędzi płyt: F_f,Rd = {f} kN na gwóźdź (k_mod {k}), f_v,Rd = F_f,Rd/s = {fv} kN/m wobec v_d = {v} kN/m ({p}, EN 1995-1-1 9.2.4.2).',
+  },
+  'Hold-down T_d = F_i·h/b_i − 0.9·G = {t} at the stretch ends (h = {h} mm).': {
+    uk: 'Анкерування T_d = F_i·h/b_i − 0.9·G = {t} на кінцях ділянок (h = {h} mm).',
+    de: 'Zugverankerung T_d = F_i·h/b_i − 0.9·G = {t} an den Abschnittsenden (h = {h} mm).',
+    pl: 'Zakotwienie T_d = F_i·h/b_i − 0.9·G = {t} na końcach odcinków (h = {h} mm).',
+  },
+  'Windrispenband 40 × 2 mm, {n} × cross (flattest {a}°, diagonal {d} m): T_d = {t} ≤ N_t,Rd = {r} ({p}).': {
+    uk: 'Вітрова стрічка 40 × 2 mm, {n} × хрест (найпологіший {a}°, діагональ {d} m): T_d = {t} ≤ N_t,Rd = {r} ({p}).',
+    de: 'Windrispenband 40 × 2 mm, {n} × Kreuz (flachstes {a}°, Diagonale {d} m): T_d = {t} ≤ N_t,Rd = {r} ({p}).',
+    pl: 'Taśma wiatrowa 40 × 2 mm, {n} × krzyż (najbardziej płaski {a}°, przekątna {d} m): T_d = {t} ≤ N_t,Rd = {r} ({p}).',
+  },
+  'Wall {side}: no stretch of at least h/4 between openings for sheet panels.': {
+    uk: 'Стіна {side}: між прорізами немає ділянки шириною щонайменше h/4 для плит.',
+    de: 'Wand {side}: kein Abschnitt von mindestens h/4 zwischen den Öffnungen für Platten.',
+    pl: 'Ściana {side}: brak odcinka o szerokości co najmniej h/4 między otworami na płyty.',
+  },
+  'Wall {side} has no stretch of at least h/4 between openings for sheet panels – brace another wall or add knee braces.': {
+    uk: 'Стіна {side} не має між прорізами ділянки шириною щонайменше h/4 для плит – розкріпіть іншу стіну або додайте підкоси.',
+    de: 'Wand {side} hat keinen Abschnitt von mindestens h/4 zwischen den Öffnungen für Platten – eine andere Wand aussteifen oder Kopfbänder ergänzen.',
+    pl: 'Ściana {side} nie ma odcinka o szerokości co najmniej h/4 między otworami na płyty – stęż inną ścianę albo dodaj miecze.',
+  },
+  'Wall {side}: close the nail spacing (down to 50 mm), sheathe both faces or lengthen the braced stretch.': {
+    uk: 'Стіна {side}: зменшіть крок цвяхів (до 50 mm), обшийте обидві сторони або подовжте розкріплену ділянку.',
+    de: 'Wand {side}: Nagelabstand verringern (bis 50 mm), beidseitig beplanken oder den ausgesteiften Abschnitt verlängern.',
+    pl: 'Ściana {side}: zagęść gwoździe (do 50 mm), poszyj obie strony albo wydłuż stężony odcinek.',
+  },
+  'Anchor the end studs of every braced stretch of wall {side} with a hold-down (Zuganker / hold-down angle bolted into the foundation) for T_d ≥ {t}.': {
+    uk: 'Закріпіть крайні стійки кожної розкріпленої ділянки стіни {side} анкером на відрив (Zuganker / анкерний кутник на болтах у фундаменті) на T_d ≥ {t}.',
+    de: 'Die Endständer jedes ausgesteiften Abschnitts der Wand {side} mit einem Zuganker (Zugwinkel, in das Fundament gedübelt) für T_d ≥ {t} verankern.',
+    pl: 'Zakotw słupki skrajne każdego stężonego odcinka ściany {side} kotwą rozciąganą (Zuganker / kątownik kotwiący przykręcony do fundamentu) na T_d ≥ {t}.',
+  },
+  'Brace a wall {a} as well: the braced walls {b} stand on one line and cannot take the torsion.': {
+    uk: 'Розкріпіть також стіну {a}: розкріплені стіни {b} стоять на одній лінії й не сприймають кручення.',
+    de: 'Auch eine Wand {a} aussteifen: die ausgesteiften Wände {b} stehen in einer Linie und können die Verdrehung nicht aufnehmen.',
+    pl: 'Stęż również ścianę {a}: stężone ściany {b} stoją w jednej linii i nie przeniosą skręcania.',
+  },
+  'Roof bracing {axis}': { uk: 'Розкріплення покрівлі {axis}', de: 'Dachverband {axis}', pl: 'Stężenie dachu {axis}' },
+  'The braced walls {axis} stand on one line (wall {side}): the roof carries H_d = {h} over {l} m to it as a cantilever diaphragm.': {
+    uk: 'Розкріплені стіни {axis} стоять на одній лінії (стіна {side}): дах передає на неї H_d = {h} на довжині {l} m як консольний диск.',
+    de: 'Die ausgesteiften Wände {axis} stehen in einer Linie (Wand {side}): das Dach trägt H_d = {h} über {l} m als Kragscheibe dorthin.',
+    pl: 'Stężone ściany {axis} stoją w jednej linii (ściana {side}): dach przenosi na nią H_d = {h} na długości {l} m jako tarcza wspornikowa.',
+  },
+  'Roof covering: {cover} – no reliable diaphragm, so the roof plane needs strap crosses.': {
+    uk: 'Покриття: {cover} – не є надійним диском, тож площина даху потребує хрестів зі стрічок.',
+    de: 'Dacheindeckung: {cover} – keine verlässliche Scheibe, die Dachebene braucht Bandkreuze.',
+    pl: 'Pokrycie: {cover} – nie jest pewną tarczą, więc płaszczyzna dachu wymaga krzyży z taśm.',
+  },
+  'Shear at the wall line V_d = {v} ({q} kN/m over {d} m depth).': {
+    uk: 'Зсув на лінії стіни V_d = {v} ({q} kN/m на глибині {d} m).',
+    de: 'Schub an der Wandlinie V_d = {v} ({q} kN/m über {d} m Scheibenhöhe).',
+    pl: 'Ścinanie na linii ściany V_d = {v} ({q} kN/m na głębokości {d} m).',
+  },
+  'Strap cross in the bay at the wall line {a} × {b} m (diagonal {c} m, {deg}°): T_d = {t} ≤ {n} × N_t,Rd = {r} ({p}).': {
+    uk: 'Хрест зі стрічок у прольоті біля стіни {a} × {b} m (діагональ {c} m, {deg}°): T_d = {t} ≤ {n} × N_t,Rd = {r} ({p}).',
+    de: 'Bandkreuz im Feld an der Wandlinie {a} × {b} m (Diagonale {c} m, {deg}°): T_d = {t} ≤ {n} × N_t,Rd = {r} ({p}).',
+    pl: 'Krzyż z taśm w polu przy linii ściany {a} × {b} m (przekątna {c} m, {deg}°): T_d = {t} ≤ {n} × N_t,Rd = {r} ({p}).',
+  },
+  'Chord force in the edge members N_d = ±{n} (M_d = {m} kNm).': {
+    uk: 'Зусилля в поясах (крайніх елементах) N_d = ±{n} (M_d = {m} kNm).',
+    de: 'Gurtkraft in den Randgliedern N_d = ±{n} (M_d = {m} kNm).',
+    pl: 'Siła w pasach (elementach skrajnych) N_d = ±{n} (M_d = {m} kNm).',
+  },
+  'Brace a wall at the other end so the roof spans between two wall lines – strap crosses would need {n} straps per diagonal.': {
+    uk: 'Розкріпіть стіну на іншому кінці, щоб дах працював між двома лініями стін – хрестам знадобилося б {n} стрічок на діагональ.',
+    de: 'Eine Wand am anderen Ende aussteifen, damit das Dach zwischen zwei Wandlinien spannt – Bandkreuze bräuchten {n} Bänder je Diagonale.',
+    pl: 'Stęż ścianę na drugim końcu, aby dach pracował między dwiema liniami ścian – krzyże wymagałyby {n} taśm na przekątną.',
+  },
+  'Fit crossed Windrispenband 40 × 2 ({n} per diagonal) under the roof covering in every bay from wall {side} to the free end, nailed to each member it crosses, with {k} Kammnägel 4.0 × 40 per strap end and anchored into the top of that wall.': {
+    uk: 'Встановіть перехресну вітрову стрічку 40 × 2 ({n} на діагональ) під покриттям у кожному прольоті від стіни {side} до вільного кінця, прибиту до кожного елемента, який вона перетинає, з {k} рифленими цвяхами 4.0 × 40 на кінець стрічки й заанкерену у верх цієї стіни.',
+    de: 'Gekreuztes Windrispenband 40 × 2 ({n} je Diagonale) unter der Dacheindeckung in jedem Feld von Wand {side} bis zum freien Ende anordnen, an jedes gekreuzte Bauteil genagelt, mit {k} Kammnägeln 4,0 × 40 je Bandende und im Kopf dieser Wand verankert.',
+    pl: 'Załóż krzyżową taśmę wiatrową 40 × 2 ({n} na przekątną) pod pokryciem w każdym polu od ściany {side} do wolnego końca, przybitą do każdego przecinanego elementu, z {k} gwoździami pierścieniowymi 4,0 × 40 na koniec taśmy i zakotwioną w górze tej ściany.',
+  },
   'Wall {side}: no room for a strap cross.': { uk: 'Стіна {side}: немає місця для хреста зі стрічок.', de: 'Wand {side}: kein Platz für ein Bandkreuz.', pl: 'Ściana {side}: brak miejsca na krzyż z taśm.' },
   'Wall {side} has no stretch free of openings for a strap cross – brace another wall or add knee braces.': {
     uk: 'Стіна {side} не має ділянки без прорізів для хреста зі стрічок – розкріпіть іншу стіну або додайте підкоси.',

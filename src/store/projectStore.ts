@@ -127,6 +127,8 @@ interface ProjectStoreBase {
   setBuild: (patch: Partial<BuildSettings>) => void;
   /** Bracing of a closed wall (straps / sheet panels make it a shear wall) */
   setWallBracing: (id: WallId, bracing: WallBracing) => void;
+  /** Nail spacing along the OSB panel edges of a sheet-panel wall (mm) */
+  setWallPanelNailSpacing: (id: WallId, spacing: number) => void;
   /** A rail (Rähm) along an outer wall that carries knee braces across the rows */
   setWallRail: (id: WallId, rail: boolean) => void;
 
@@ -337,8 +339,16 @@ export const useProjectStore = create<ProjectStore>()(
 
       setWallBracing: (id, bracing) =>
         set((s) => {
-          const { bracing: _old, ...wall } = s.project.walls[id];
-          return { project: { ...s.project, walls: { ...s.project.walls, [id]: bracing === 'none' ? wall : { ...wall, bracing } } } };
+          const { bracing: _old, panelNailSpacing: spacing, ...wall } = s.project.walls[id];
+          const kept = bracing === 'panels' && spacing !== undefined ? { panelNailSpacing: spacing } : {};
+          return { project: { ...s.project, walls: { ...s.project.walls, [id]: bracing === 'none' ? wall : { ...wall, bracing, ...kept } } } };
+        }),
+
+      setWallPanelNailSpacing: (id, spacing) =>
+        set((s) => {
+          const wall = s.project.walls[id];
+          if (wall.bracing !== 'panels' || !Number.isFinite(spacing)) return {};
+          return { project: { ...s.project, walls: { ...s.project.walls, [id]: { ...wall, panelNailSpacing: Math.min(300, Math.max(25, Math.round(spacing))) } } } };
         }),
 
       setWallRail: (id, rail) =>

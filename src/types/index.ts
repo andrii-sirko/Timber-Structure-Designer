@@ -281,6 +281,8 @@ export interface Wall {
   screen?: boolean;
   /** Bracing that makes the wall a shear wall; omitted → none (boards alone never count) */
   bracing?: WallBracing;
+  /** Sheet-panel bracing: nail spacing along the OSB panel edges (mm); omitted → 75 */
+  panelNailSpacing?: Millimeters;
   /** Open wall only: a rail (Rähm) between the purlin rows without studs or cladding – carries knee braces across */
   rail?: boolean;
   /** Closed wall only: a slat screen continuing the wall beside its closed stretch (same u axis as start / end) */

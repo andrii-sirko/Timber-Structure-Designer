@@ -75,6 +75,7 @@ export default {
   'None – board cladding is no shear wall': { uk: 'Немає – дощата обшивка не є діафрагмою', de: 'Keine – Brettschalung ist keine Wandscheibe', pl: 'Brak – deskowanie nie jest tarczą' },
   'Crossed steel straps (Windrispenband 40 × 2)': { uk: 'Перехресні сталеві стрічки (Windrispenband 40 × 2)', de: 'Gekreuztes Windrispenband 40 × 2', pl: 'Krzyżowe taśmy stalowe (Windrispenband 40 × 2)' },
   'Sheet panels (OSB ≥ 15 mm)': { uk: 'Плити (OSB ≥ 15 mm)', de: 'Plattenwerkstoff (OSB ≥ 15 mm)', pl: 'Płyty (OSB ≥ 15 mm)' },
+  'OSB nail spacing (ring nails 2.8 × 60)': { uk: 'Крок цвяхів OSB (рифлені цвяхи 2.8 × 60)', de: 'Nagelabstand OSB (Rillennägel 2,8 × 60)', pl: 'Rozstaw gwoździ OSB (gwoździe pierścieniowe 2,8 × 60)' },
   'Rail for knee braces': { uk: 'Ригель для підкосів', de: 'Rähm für Kopfbänder', pl: 'Oczep pod miecze' },
   'A rail (Rähm) along the whole wall between the purlin rows, so knee braces can stiffen the frame in this plane': { uk: 'Ригель (Rähm) уздовж усієї стіни між рядами прогонів, щоб підкоси розкріплювали каркас у цій площині', de: 'Ein Rähm über die ganze Wand zwischen den Pfettenreihen, damit Kopfbänder das Tragwerk in dieser Ebene aussteifen', pl: 'Oczep (Rähm) wzdłuż całej ściany między rzędami płatwi, aby miecze usztywniały ramę w tej płaszczyźnie' },
   'Change {field} wall bracing': { uk: 'Змінити розкріплення стіни: {field}', de: 'Wandaussteifung ändern: {field}', pl: 'Zmień stężenie ściany: {field}' },

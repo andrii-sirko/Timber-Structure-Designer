@@ -453,6 +453,7 @@ export default {
   'Crosses closed wall: {walls}.': { uk: 'Перетинає закриту стіну: {walls}.', de: 'Kreuzt geschlossene Wand: {walls}.', pl: 'Przecina zamkniętą ścianę: {walls}.' },
   'Too tall: {n} mm short under the {obstacle}.': { uk: 'Занадто високий: не вистачає {n} мм під {obstacle}.', de: 'Zu hoch: {n} mm zu wenig unter {obstacle}.', pl: 'Za wysoki: brakuje {n} mm pod {obstacle}.' },
   'Tight headroom: only {n} mm under the {obstacle}.': { uk: 'Обмежена висота: лише {n} мм під {obstacle}.', de: 'Knappe Kopfhöhe: nur {n} mm unter {obstacle}.', pl: 'Mało miejsca nad głową: tylko {n} mm pod {obstacle}.' },
+  'mid {n} purlin': { uk: 'середнім прогоном {n}', de: 'der Mittelpfette {n}', pl: 'płatwią środkową {n}' },
   'Headroom {n} mm under the {obstacle}.': { uk: 'Висота {n} мм під {obstacle}.', de: 'Kopfhöhe {n} mm unter {obstacle}.', pl: 'Prześwit {n} mm pod {obstacle}.' },
 
   rafters: { uk: 'кроквами', de: 'den Sparren', pl: 'krokwiami' },

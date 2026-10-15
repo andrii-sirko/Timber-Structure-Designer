@@ -71,6 +71,25 @@ function variants(): ProjectState[] {
   for (const name of ['carport-after', 'entrance-roof-after', 'garden-shed-after']) {
     out.push(normalizeProject(JSON.parse(readFileSync(new URL(`../engine/fixtures/${name}.json`, import.meta.url), 'utf8')).project));
   }
+  // the carport without knee braces: OSB storage box + slat screen, straps, a lone braced wall, a gale
+  const carport = (patch: (p: ProjectState) => void) => {
+    const p = JSON.parse(readFileSync(new URL('../engine/fixtures/carport-after.json', import.meta.url), 'utf8')).project as ProjectState;
+    p.params.braces = false;
+    p.walls.rear = { ...p.walls.rear, end: 1750, screenPart: { start: 1750, end: 7430 }, bracing: 'panels' };
+    p.walls.front = { ...p.walls.front, bracing: 'panels' };
+    p.walls.right = { ...p.walls.right, bracing: 'panels' };
+    patch(p);
+    return normalizeProject(p);
+  };
+  out.push(carport(() => {}));
+  out.push(carport((p) => (p.walls.front.bracing = p.walls.rear.bracing = 'strap')));
+  out.push(carport((p) => (p.walls.front.bracing = p.walls.rear.bracing = undefined)));
+  out.push(carport((p) => (p.params.loads = { ...p.params.loads, windLoad: 1.6 })));
+  out.push(carport((p) => {
+    p.params.braces = true;
+    p.walls.front.bracing = p.walls.rear.bracing = undefined;
+  }));
+  out.push(carport((p) => (p.walls.right.openings = [{ id: 'o', type: 'door', x: 0, y: 0, width: 5000, height: 2000 }])));
   return out;
 }
 

@@ -26,6 +26,7 @@ import { connectionChecks } from './connections';
 import { foundationChecks } from './foundations';
 import { EXCEPTIONAL_SNOW_FACTOR, siteSnowLoad } from './siteLoads';
 import { canopyLocalCoefficients, type CanopyZones } from './windZones';
+import { distributeLateral, holdDownTension, panelNailCapacity, panelNailSpacing, shearWallElement, type LateralLoad, type WallShare } from './shearWalls';
 
 /**
  * Simplified structural verification following Eurocode 5 (EN 1995-1-1) principles:
@@ -470,17 +471,46 @@ function windShare(wall: Wall | undefined, span: number): number {
 
 /** Characteristic horizontal wind force (kN) on the structure along `axis` for velocity pressure q (kN/m²). */
 function windForce(ctx: Context, axis: Axis, q: number): number {
-  const { params, faceArea, edgeBand, planArea, canopy, tan } = ctx;
+  return windResultant(ctx, axis, q).F;
+}
+
+/**
+ * Characteristic wind force along `axis` and the plan coordinate of its line of action across it
+ * (x for wind along Z): the face of the governing wall at the centroid of its closed and slat
+ * stretches, roof friction and the roof's normal force at the centre of the roof.
+ */
+function windResultant(ctx: Context, axis: Axis, q: number): { F: number; at: number; centre: number } {
+  const { params, project, faceArea, edgeBand, planArea, canopy, tan } = ctx;
   const facing = WALLS_ALONG[OTHER[axis]]; // walls standing across the wind direction
   // Closed walls catch the full face, slat screens their board share of it
-  const faces = facing.map((id) => faceArea[id]).filter((a) => a > 0);
   const o = params.overhangs;
   const extent = axis === 'x' ? params.width + o.front + o.rear : params.length + o.left + o.right;
-  const faceM2 = faces.length > 0 ? Math.max(...faces) : (edgeBand * extent) / 1e6;
-  let F = WALL_FORCE_COEFFICIENT * q * faceM2 + ROOF_FRICTION_COEFFICIENT * q * planArea;
+  const centre = axis === 'x' ? (params.width + o.rear - o.front) / 2 : (params.length + o.right - o.left) / 2;
+  const governing = facing.filter((id) => faceArea[id] > 0).reduce<WallId | undefined>((g, id) => (g === undefined || faceArea[id] > faceArea[g] ? id : g), undefined);
+  const faceM2 = governing ? faceArea[governing] : (edgeBand * extent) / 1e6;
+  const faceAt = governing ? faceCentroid(project.walls[governing], axis === 'x' ? params.width : params.length) : centre;
+  const Fface = WALL_FORCE_COEFFICIENT * q * faceM2;
+  let Froof = ROOF_FRICTION_COEFFICIENT * q * planArea;
   // component of the roof normal force along the slope (canonical slope runs along Z)
-  if (axis === 'z') F += Math.max(canopy.down, -canopy.up) * q * planArea * tan;
-  return F;
+  if (axis === 'z') Froof += Math.max(canopy.down, -canopy.up) * q * planArea * tan;
+  const F = Fface + Froof;
+  return { F, at: F > 0 ? (Fface * faceAt + Froof * centre) / F : centre, centre };
+}
+
+/** Centroid (mm along the wall) of the wind on a wall face: closed stretch in full, slat stretches by their board share. */
+function faceCentroid(wall: Wall, span: number): number {
+  const pieces: { ext: { start: number; end: number }; w: number }[] = [];
+  const solidity = (w: Wall) => {
+    const c = resolveScreenCladding(w.cladding);
+    return c.boardWidth / (c.boardWidth + c.gap);
+  };
+  if (wall.closed) {
+    pieces.push({ ext: wallExtent(wall, span), w: 1 });
+    const screen = screenPartWall(wall, span);
+    if (screen) pieces.push({ ext: wallExtent(screen, span), w: solidity(screen) });
+  } else if (wall.screen) pieces.push({ ext: wallExtent(wall, span), w: solidity(wall) });
+  const area = pieces.reduce((s, p) => s + p.w * (p.ext.end - p.ext.start), 0);
+  return area > 0 ? pieces.reduce((s, p) => s + p.w * (p.ext.end - p.ext.start) * ((p.ext.start + p.ext.end) / 2), 0) / area : span / 2;
 }
 
 function computeChecks(ctx: Context, q: number): StaticsCheck[] {
@@ -893,6 +923,87 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
     const spanM = postShareM(post.load.row.supports);
     return { G: post.load.qvG * spanM, S: post.load.qvS * spanM, W: post.load.qvW * spanM };
   };
+  // Shear walls share the wind by position under a rigid roof (centre of stiffness + torsion)
+  const walls = (() => {
+    const wallAxes = (['x', 'z'] as Axis[]).filter((a) => ctx.lateral[a].kind === 'wall');
+    const elements = wallAxes.flatMap((a) => ctx.lateral[a].shearWalls.flatMap((sw) => shearWallElement(sw.id, project.walls[sw.id], params) ?? []));
+    const loads: LateralLoad[] = wallAxes.map((axis) => {
+      const Hd = Math.max(H[axis].windLead, H[axis].snowLead);
+      const wind = (H[axis].windLead >= H[axis].snowLead ? GAMMA_Q : GAMMA_Q * PSI0_WIND) * H[axis].Wk;
+      const r = windResultant(ctx, axis, q);
+      return { axis, H: Hd, at: Hd > 0 ? (wind * r.at + (Hd - wind) * r.centre) / Hd : r.centre };
+    });
+    const dist = distributeLateral(elements, loads);
+    /** Governing design force of a wall over both wind directions, and how it arises */
+    const forceOf = (id: WallId): { F: number; how: string } => {
+      let best = { F: 0, how: '' };
+      for (const [a, sh] of Object.entries(dist.shares[id] ?? {}) as [Axis, WallShare][]) {
+        if (sh.total <= best.F) continue;
+        const how =
+          sh.direct <= 0
+            ? `torsion couple from the wind ${AXIS_LABEL[a]}`
+            : Math.abs(sh.torsion) < 0.05
+              ? `share ${kn(sh.direct)}`
+              : `share ${kn(sh.direct)} ${sh.torsion >= 0 ? '+' : '−'} torsion ${kn(Math.abs(sh.torsion))}`;
+        best = { F: sh.total, how };
+      }
+      return best;
+    };
+    return { elements, loads, dist, forceOf };
+  })();
+  const nail = panelNailCapacity(rhok, kmodShort, loads.serviceClass);
+  /**
+   * Walls of one direction on a single line: the roof spans to them as a cantilever diaphragm.
+   * A deck of sheets is assumed to do it; a sheet or panel covering on purlins needs strap crosses.
+   */
+  const roofDiaphragmCheck = (axis: Axis, Hd: number): Omit<StaticsCheck, 'id' | 'kind' | 'loadUls' | 'loadSls' | 'deflectionUtil' | 'deflection' | 'deflectionLimit'> & { id: string } | undefined => {
+    const own = walls.elements.filter((w) => w.axis === axis && w.length > 0);
+    if (own.length === 0 || own.some((w) => w.pos !== own[0].pos)) return undefined;
+    const covering = loads.roofCovering;
+    if (covering === 'bitumen-shingles') return undefined;
+    const span = axis === 'z' ? params.length : params.width; // the diaphragm cantilevers along the other axis
+    const depth = axis === 'z' ? params.width : params.length;
+    const wallAt = own[0].pos;
+    const cuts = [...new Set(grid.rows.filter((r) => r.axis === axis && r.offset > 200 && r.offset < span - 200).map((r) => r.offset))].sort((a, b) => a - b);
+    const edges = [0, ...cuts, span];
+    const bays: number[] = [];
+    for (let i = 1; i < edges.length; i++) {
+      const len = edges[i] - edges[i - 1];
+      const n = len > 1.5 * depth ? Math.ceil(len / depth) : 1;
+      for (let k = 0; k < n; k++) bays.push(len / n);
+    }
+    const bay = wallAt <= span / 2 ? bays[0] : bays[bays.length - 1];
+    // the roof slopes along Z: the depth of a Z diaphragm and the bay of an X diaphragm are sloped
+    const bayPlane = axis === 'x' ? bay / cos : bay;
+    const depthPlane = axis === 'z' ? depth / cos : depth;
+    const diagonal = Math.hypot(bayPlane, depthPlane);
+    const angle = (Math.atan2(depthPlane, bayPlane) * 180) / Math.PI;
+    const T = (Hd * diagonal) / depth;
+    const Rd = strapTensionRd();
+    const nailRd = (kmodShort * strapNailCapacity(rhok)) / 1.3 / 1000;
+    // one tension diagonal per cross carries the shear; side-by-side straps share it
+    const straps = Math.max(1, Math.ceil(T / Rd));
+    const nails = Math.max(4, Math.ceil(T / straps / nailRd));
+    const chord = (Hd * span) / 2 / depth;
+    const u = T / (straps * Rd);
+    const side = own[0].id;
+    return {
+      id: `roof-diaphragm-${axis}`,
+      element: `Roof bracing ${AXIS_LABEL[axis]}`,
+      elementDe: 'Dachverband (Windrispenband)',
+      section: timber.rafter,
+      span: Math.round(diagonal),
+      stressUtil: u,
+      utilisation: u,
+      // not part of the model: a requirement at least, unbuildable beyond two straps per diagonal
+      status: straps > 2 ? 'fail' : 'warning',
+      recommendation:
+        straps > 2
+          ? `Brace a wall at the other end so the roof spans between two wall lines – strap crosses would need ${straps} straps per diagonal.`
+          : `Fit crossed Windrispenband 40 × 2 (${straps} per diagonal) under the roof covering in every bay from wall ${side} to the free end, nailed to each member it crosses, with ${nails} Kammnägel 4.0 × 40 per strap end and anchored into the top of that wall.`,
+      detail: `The braced walls ${AXIS_LABEL[axis]} stand on one line (wall ${side}): the roof carries H_d = ${kn(Hd)} over ${fmt(span / 1000, 2)} m to it as a cantilever diaphragm. Roof covering: ${ROOF_COVERING_LOAD[covering].label} – no reliable diaphragm, so the roof plane needs strap crosses. Shear at the wall line V_d = ${kn(Hd)} (${fmt(Hd / (depth / 1000), 1)} kN/m over ${fmt(depth / 1000, 2)} m depth). Strap cross in the bay at the wall line ${fmt(bayPlane / 1000, 2)} × ${fmt(depthPlane / 1000, 2)} m (diagonal ${fmt(diagonal / 1000, 2)} m, ${fmt(angle, 0)}°): T_d = ${kn(T)} ≤ ${straps} × N_t,Rd = ${kn(straps * Rd)} (${pct(u)}). Nails: ${nails} Kammnägel 4.0 × 40 per strap end (F_v,Rd = ${kn(nailRd)} each). Chord force in the edge members N_d = ±${kn(chord)} (M_d = ${fmt((Hd * span) / 2 / 1000, 1)} kNm).`,
+    };
+  };
   for (const axis of ['x', 'z'] as Axis[]) {
     const sys = ctx.lateral[axis];
     const Hd = Math.max(H[axis].windLead, H[axis].snowLead);
@@ -990,35 +1101,67 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
         detail: worst.detail,
       });
     } else if (sys.kind === 'wall') {
-      const Hwall = Hd / sys.shearWalls.length;
+      const tor = walls.dist.torsion[axis];
+      const load = walls.loads.find((l) => l.axis === axis)!;
+      const coord = OTHER[axis];
       const parts: string[] = [];
       let utilisation = 0;
-      let recommendation: string | undefined;
-      for (const sw of sys.shearWalls) {
-        if (sw.bracing === 'panels') {
-          parts.push(`Wall ${sw.id}: sheet panels (OSB ≥ 15 mm, nailed at ≤ 150 mm) carry ${kn(Hwall)}.`);
+      const recs: string[] = [];
+      for (const el of walls.elements.filter((w) => w.axis === axis)) {
+        const { F, how } = walls.forceOf(el.id);
+        const id = el.id;
+        if (el.bracing === 'panels') {
+          if (el.length <= 0) {
+            utilisation = Math.max(utilisation, 9.99);
+            recs.push(`Wall ${id} has no stretch of at least h/4 between openings for sheet panels – brace another wall or add knee braces.`);
+            parts.push(`Wall ${id}: no stretch of at least h/4 between openings for sheet panels.`);
+            continue;
+          }
+          const s = panelNailSpacing(project.walls[id]);
+          const v = F / el.length;
+          const fv = (nail.Rd * 1000) / s;
+          const u = v / fv;
+          const T = holdDownTension(F, el);
+          utilisation = Math.max(utilisation, u);
+          if (statusOf(u) !== 'ok') recs.push(`Wall ${id}: close the nail spacing (down to 50 mm), sheathe both faces or lengthen the braced stretch.`);
+          if (T > 0) recs.push(`Anchor the end studs of every braced stretch of wall ${id} with a hold-down (Zuganker / hold-down angle bolted into the foundation) for T_d ≥ ${kn(T)}.`);
+          parts.push(
+            `Wall ${id}: F_d = ${kn(F)} (${how}) on ${fmt(el.length, 2)} m braced length. OSB/3 15 mm, ring nails 2.8 × 60 at ${s} mm along the panel edges: F_f,Rd = ${fmt(nail.Rd, 2)} kN per nail (k_mod ${fmt(nail.kmod, 2)}), f_v,Rd = F_f,Rd/s = ${fmt(fv, 1)} kN/m against v_d = ${fmt(v, 1)} kN/m (${pct(u)}, EN 1995-1-1 9.2.4.2). Hold-down T_d = F_i·h/b_i − 0.9·G = ${kn(T)} at the stretch ends (h = ${Math.round(el.height)} mm).`,
+          );
           continue;
         }
-        const straps = wallStraps(sw.id, project.walls[sw.id], params);
+        const straps = wallStraps(id, project.walls[id], params);
         if (!straps || straps.crosses.length === 0) {
           utilisation = Math.max(utilisation, 9.99);
-          recommendation = `Wall ${sw.id} has no stretch free of openings for a strap cross – brace another wall or add knee braces.`;
-          parts.push(`Wall ${sw.id}: no room for a strap cross.`);
+          recs.push(`Wall ${id} has no stretch free of openings for a strap cross – brace another wall or add knee braces.`);
+          parts.push(`Wall ${id}: no room for a strap cross.`);
           continue;
         }
         const flattest = straps.crosses.reduce((m, c) => (c.angleDeg < m.angleDeg ? c : m));
         const cos = Math.cos((flattest.angleDeg * Math.PI) / 180);
-        const T = Hwall / (straps.crosses.length * cos); // one diagonal per cross in tension
+        const T = F / (straps.crosses.length * cos); // one diagonal per cross in tension
         const Rd = strapTensionRd();
         const nailRd = (kmodShort * strapNailCapacity(rhok)) / 1.3 / 1000;
         const nails = Math.max(4, Math.ceil(T / nailRd));
-        const holdDown = (Hwall / straps.crosses.length) * (flattest.height / Math.max(flattest.end - flattest.start, 1));
+        const holdDown = (F / straps.crosses.length) * (flattest.height / Math.max(flattest.end - flattest.start, 1));
         const u = T / Rd;
         utilisation = Math.max(utilisation, u);
         parts.push(
-          `Wall ${sw.id}: Windrispenband 40 × 2 mm, ${straps.crosses.length} × cross (flattest ${fmt(flattest.angleDeg, 0)}°, diagonal ${fmt(flattest.diagonal / 1000, 2)} m): T_d = ${kn(T)} ≤ N_t,Rd = ${kn(Rd)} (${pct(u)}). Nails: ${nails} Kammnägel 4.0 × 40 per strap end (F_v,Rd = ${kn(nailRd)} each). Hold-down at the wall ends ${kn(holdDown)} – anchor the end studs into the base.`,
+          `Wall ${id}: F_d = ${kn(F)} (${how}). Windrispenband 40 × 2 mm, ${straps.crosses.length} × cross (flattest ${fmt(flattest.angleDeg, 0)}°, diagonal ${fmt(flattest.diagonal / 1000, 2)} m): T_d = ${kn(T)} ≤ N_t,Rd = ${kn(Rd)} (${pct(u)}). Nails: ${nails} Kammnägel 4.0 × 40 per strap end (F_v,Rd = ${kn(nailRd)} each). Hold-down at the wall ends ${kn(holdDown)} – anchor the end studs into the base.`,
         );
       }
+      let torsionNote = '';
+      if (tor?.unresisted) {
+        if (ctx.lateral[OTHER[axis]].kind === 'braces') torsionNote = ` The torsion M_t = ${fmt(Math.abs(tor.Mt), 1)} kNm goes into the knee braces ${AXIS_LABEL[OTHER[axis]]} (not checked here).`;
+        else {
+          utilisation = Math.max(utilisation, 9.99);
+          recs.unshift(`Brace a wall ${AXIS_LABEL[OTHER[axis]]} as well: the braced walls ${AXIS_LABEL[axis]} stand on one line and cannot take the torsion.`);
+          torsionNote = ` The braced walls stand on one line and nothing takes the torsion M_t = ${fmt(Math.abs(tor.Mt), 1)} kNm.`;
+        }
+      }
+      const head = tor
+        ? `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)} acting at ${coord} = ${fmt(load.at / 1000, 2)} m, centre of stiffness at ${coord} = ${fmt((tor.centre ?? 0) / 1000, 2)} m: eccentricity ${fmt(Math.abs(tor.e) / 1000, 2)} m, torsion M_t = ${fmt(Math.abs(tor.Mt), 1)} kNm (rigid roof diaphragm, walls stiff in proportion to their braced length).`
+        : `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)} without a bracing system.`;
       const status = statusOf(utilisation);
       checks.push({
         ...base,
@@ -1029,9 +1172,11 @@ function computeChecks(ctx: Context, q: number): StaticsCheck[] {
         stressUtil: utilisation,
         utilisation,
         status,
-        recommendation: recommendation ?? (status !== 'ok' ? 'Brace a second wall in this plane or add knee braces.' : undefined),
-        detail: `Wind ${AXIS_LABEL[axis]}: W_k = ${kn(H[axis].Wk)}, H_d = ${kn(Hd)} on ${sys.shearWalls.length} braced walls (${kn(Hwall)} each). ${parts.join(' ')}${boardsNote}`,
+        recommendation: recs.length > 0 ? recs.join(' ') : status !== 'ok' ? 'Brace a second wall in this plane or add knee braces.' : undefined,
+        detail: `${head}${torsionNote} ${parts.join(' ')}${boardsNote}`,
       });
+      const diaphragm = roofDiaphragmCheck(axis, Hd);
+      if (diaphragm) checks.push({ ...base, ...diaphragm });
     } else {
       const canBrace = sys.rows.length > 0 || WALLS_ALONG[axis].some((id) => project.walls[id]?.closed || project.walls[id]?.screen || project.walls[id]?.rail);
       checks.push({

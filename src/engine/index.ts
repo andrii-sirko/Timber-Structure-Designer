@@ -43,6 +43,7 @@ export function buildModel(project: ProjectState): DerivedModel {
 export { buildFraming, buildFramingCanonical, canonicalProject, computeAllWallFrames, openingHost, clampOpening, openingLimits, OPENING_DEFAULTS, OPENING_PRESETS, findPreset, presetsOfType, presetMatches, presetRough, presetFits, openingFromPreset, relabelForPreset, legacyPresetRough, DEFAULT_INSTALL_GAP, openingMaterials, frameSizeFor, resizeOpening, resizableEdges, edgeHandleCentre, sizeChanged, sanitizeParams, MIN_PLAN_DIM, minWallHeight, clampPartition, defaultPartition, partitionLimits, MIN_PARTITION_LENGTH, wallExtent, screenPartExtent, screenPartWall, wallParts, MIN_WALL_LENGTH, resolveCladding, resolveScreenCladding, CLADDING_LIMITS, hasWallPosts } from './framing';
 export type { WallFrames } from './framing';
 export { computeStatics } from './statics';
+export { DEFAULT_PANEL_NAIL_SPACING } from './statics/shearWalls';
 export { autoFixStatics, costOptimizeStatics } from './statics/autofix';
 export type { AutoFixResult, AutoFixChange, CostOptimizationResult, StaticsActionResult } from './statics/autofix';
 export { computeBom } from './bom';

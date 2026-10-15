@@ -299,6 +299,7 @@ export function normalizeProject(input: unknown): ProjectState {
       ...(w.cladding && typeof w.cladding === 'object' ? { cladding: resolveCladding(w.cladding) } : {}),
       ...(w.screen === true && !w.closed ? { screen: true } : {}),
       ...(WALL_BRACINGS.includes(w.bracing as never) && w.bracing !== 'none' ? { bracing: w.bracing } : {}),
+      ...(w.bracing === 'panels' && typeof w.panelNailSpacing === 'number' && Number.isFinite(w.panelNailSpacing) ? { panelNailSpacing: Math.min(300, Math.max(25, w.panelNailSpacing)) } : {}),
       ...(w.rail === true ? { rail: true } : {}),
       ...(w.closed && w.screenPart && Number.isFinite(w.screenPart.start) && Number.isFinite(w.screenPart.end)
         ? { screenPart: { start: w.screenPart.start, end: w.screenPart.end, ...(w.screenPart.cladding && typeof w.screenPart.cladding === 'object' ? { cladding: resolveScreenCladding(w.screenPart.cladding) } : {}) } }
